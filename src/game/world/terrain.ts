@@ -12,6 +12,7 @@ import {
 } from 'three';
 import { float, texture, uv } from 'three/tsl';
 import { MeshStandardNodeMaterial } from 'three/webgpu';
+import { COLLISION } from '../../engine/collision-groups';
 import type { Physics } from '../../engine/physics';
 import type { Heightfield } from './heightfield';
 
@@ -66,7 +67,8 @@ export class Terrain {
     world.createCollider(
       rapier.ColliderDesc.heightfield(cells, cells, heights, { x: extent, y: 1, z: extent })
         .setFriction(0.9)
-        .setRestitution(0),
+        .setRestitution(0)
+        .setCollisionGroups(COLLISION.ground),
       ground,
     );
 
@@ -79,7 +81,9 @@ export class Terrain {
       [0, -half - t, half + 2 * t, t],
     ] as const) {
       world.createCollider(
-        rapier.ColliderDesc.cuboid(hx, WALL_HEIGHT, hz).setTranslation(x, WALL_HEIGHT / 2, z),
+        rapier.ColliderDesc.cuboid(hx, WALL_HEIGHT, hz)
+          .setTranslation(x, WALL_HEIGHT / 2, z)
+          .setCollisionGroups(COLLISION.ground),
         ground,
       );
     }

@@ -13,6 +13,7 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { deflateSync } from 'node:zlib';
+import { sampleCatmullRom } from '../src/game/route.ts';
 
 type Vec2 = [number, number];
 
@@ -160,29 +161,9 @@ function polylineDistance(points: Vec2[], x: number, z: number): { d: number; al
   return { d: best, along: bestAlong };
 }
 
-/** Catmull-Rom resample of a polyline into points about `step` metres apart. */
+/** Catmull-Rom resample of a polyline, shared with the game's route so both line up. */
 function smoothPolyline(points: Vec2[], step: number): Vec2[] {
-  if (points.length < 2) return points;
-  const out: Vec2[] = [];
-  for (let i = 0; i < points.length - 1; i++) {
-    const p0 = points[Math.max(0, i - 1)]!;
-    const p1 = points[i]!;
-    const p2 = points[i + 1]!;
-    const p3 = points[Math.min(points.length - 1, i + 2)]!;
-    const segLen = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
-    const n = Math.max(1, Math.ceil(segLen / step));
-    for (let k = 0; k < n; k++) {
-      const t = k / n;
-      const t2 = t * t;
-      const t3 = t2 * t;
-      const cr = (a: number, b: number, c: number, d: number): number =>
-        0.5 *
-        (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
-      out.push([cr(p0[0], p1[0], p2[0], p3[0]), cr(p0[1], p1[1], p2[1], p3[1])]);
-    }
-  }
-  out.push(points[points.length - 1]!);
-  return out;
+  return sampleCatmullRom(points, step).map(([x, z]) => [x, z]);
 }
 
 function pointInPolygon(poly: Vec2[], x: number, z: number): boolean {

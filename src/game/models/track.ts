@@ -1,5 +1,5 @@
 import { BoxGeometry, InstancedMesh, Matrix4, Quaternion, Vector3 } from 'three';
-import { MATERIALS } from './materials';
+import { CLEAT_MATERIAL } from './materials';
 
 export interface TrackShape {
   /** Lateral position of the track centre. */
@@ -34,7 +34,7 @@ export class TrackCleats {
     this.perimeter = 2 * shape.length + 2 * Math.PI * shape.radius;
     this.count = Math.round(this.perimeter / CLEAT_PITCH);
     const cleat = new BoxGeometry(shape.width + 0.04, 0.09, CLEAT_PITCH * 0.55);
-    this.mesh = new InstancedMesh(cleat, MATERIALS.cleat, this.count);
+    this.mesh = new InstancedMesh(cleat, CLEAT_MATERIAL, this.count);
     this.mesh.castShadow = true;
     this.mesh.receiveShadow = true;
     this.update(0);

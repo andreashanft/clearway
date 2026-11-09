@@ -51,8 +51,15 @@ You can combine them, for example `?debug&webgl`.
 | `npm run lint`    | Lints with ESLint (strict, type-aware rules)             |
 | `npm run format`  | Formats every file with Prettier                         |
 | `npm run icons`   | Regenerates the app icons from `public/icon.svg`         |
+| `npm run terrain` | Bakes level terrain from `levels/<id>.terrain.json`      |
 
 The build uses a relative base path, so you can host `dist/` from any folder on any static host.
+
+To see where distances along a level's route fall, for example when placing obstacles, run:
+
+```bash
+node scripts/route-report.ts hollow-creek 90 150 210
+```
 
 ## Project structure
 

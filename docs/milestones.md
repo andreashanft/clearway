@@ -73,3 +73,42 @@ Measured on a desktop browser with WebGPU: 24–35 draw calls and 15–20k trian
 - **Terrain is baked from a recipe.** The heightmap stays a hand-editable 8-bit PNG as the brief asks, but a script generates it, the colour map and the props from slopes, hills, channels and fields, and flattens the route and building pads.
 - **The Bruiser runs on four hidden ray-cast wheels.** Front and rear wheels steer in opposite directions and a yaw assist lets it pivot like a crawler.
 - **All props share one `BatchedMesh`.** Each prop is culled on its own and there is one material, which keeps draw calls low.
+
+## Milestone 3: destroy
+
+### What works
+
+- Parametric buildings in seven styles: shed, house, open hay barn, stone barn, fuel kiosk, octagonal silo and fence. Each is built from pre-fractured pieces (wall panels with windows and doors, roof slabs, gables, chimneys, posts, hay bales, silo rings) and sits on a concrete foundation.
+- The four strengths from the brief: shed 100, house 250, brick 600 and concrete 1500 HP.
+- Impact damage of ½ × mass × speed² along the contact normal, scaled at 3,500 J per HP, with a 3 m/s minimum and a 0.4 s cooldown per vehicle and building. Concrete ignores every vehicle except the Tumbler.
+- At 50% HP the pieces shift and darken so seams open up. At 0 HP every piece becomes a physics chunk thrown away from the hit, and the vehicle smashes on through at 80% of its speed.
+- After 4 s each chunk turns into non-colliding rubble, and a settled building is baked back into a single mesh. At most 200 chunks fly at once.
+- TNT crates that the Bruiser lights on first contact, with a 10 s fuse shown as a ring that shrinks from cyan to red. The blast deals 800 damage within 8 m, pushes bodies away and sets off nearby crates.
+- The fuel kiosk explodes when destroyed and takes the nearby fence with it.
+- Dust, debris, fireballs, smoke, a ground shockwave and a light flash.
+- Trees topple and bushes flatten as vehicles drive through them or explosions go off.
+- Hollow Creek's obstacles at the brief's route distances (90, 150, 210, 330, 390 and 450 m), eight more farm buildings for free roam, and two TNT crates by the stone barn.
+- A vehicle that ends up below the terrain is put back on top of it.
+
+### Stubbed
+
+- Obstacles aren't linked to the Hauler yet; milestone 4 adds it.
+- Hit-stop and camera shake arrive in milestone 7. The game already sends `impact` events for them.
+
+### How to test
+
+1. Run `npm run dev` and drive the Bruiser into the tool shed at 30 km/h or faster. One ram brings it down.
+2. Ram the farmhouse twice. After the first ram its seams open and dust rises.
+3. Ram the fuel kiosk and watch it explode and flatten the fence beside it.
+4. Push a TNT crate against the stone barn (east of the creek) and back off. The ring counts down for 10 s.
+5. Drive through trees and bushes.
+
+`npm test` includes headless destruction tests that run real Rapier physics: cracking, collapse, rubble conversion and concrete immunity.
+
+### Deviations
+
+- **Blasts do full damage within 2 m, and concrete takes double damage from explosions.** With 800 TNT damage and 1500 HP concrete, one crate can't drop a concrete building. Level 2's concrete signal box has only one crate, so the brief needs one crate to be enough. A crate against a concrete wall now deals 1,600.
+- **3,500 J per HP.** The brief says "scaled to HP" without a scale. At this value a shed falls to one ram at 30 km/h and a house to two rams at the 37 km/h a short run-up gives.
+- **The Bruiser's push mode halves its impact damage.** The brief names the action but not its effect. Push mode lifts the blade so it nudges crates instead of ramming them.
+- **Kiosk blast: 450 damage within 9 m.** The brief says "small radius". This size reaches the fence the level design says it damages.
+- **Buildings share one batched mesh and vehicles one vertex-attribute material.** Each intact or flattened building is a single draw; a vehicle is about five. A frame costs 15–35 draws and under 30k triangles on Hollow Creek.

@@ -12,11 +12,11 @@
     "maxHeight": 30
   },
   "hauler": {
-    "speed": 3.0,
+    "speed": 3,
     "startDelay": 5,
     "route": [
       [-220.8, 147.2],
-      [-164.0, 124.9],
+      [-164, 124.9],
       [-114.1, 90.3],
       [-68.1, 51.2],
       [-15.6, 20.9],
@@ -27,6 +27,147 @@
       [226.9, -147.2]
     ]
   },
-  "player": { "vehicle": "bruiser" },
-  "vehicles": [{ "type": "bruiser", "pos": [-174.2, 83.4], "yaw": 60 }]
+  "player": {
+    "vehicle": "bruiser"
+  },
+  "vehicles": [
+    {
+      "type": "bruiser",
+      "pos": [-174.2, 83.4],
+      "yaw": 60
+    }
+  ],
+  "buildings": [
+    {
+      "id": "tool-shed",
+      "style": "shed",
+      "strength": "shed",
+      "pos": [-138.8, 110.5],
+      "size": [6, 3.8, 5],
+      "yaw": 35
+    },
+    {
+      "id": "farmhouse",
+      "style": "house",
+      "strength": "house",
+      "pos": [-94.2, 70.4],
+      "size": [11, 8, 9],
+      "yaw": 42
+    },
+    {
+      "id": "fuel-kiosk",
+      "style": "kiosk",
+      "strength": "shed",
+      "pos": [-43.8, 37.9],
+      "size": [8, 4.6, 8],
+      "yaw": 29,
+      "explodes": true
+    },
+    {
+      "id": "kiosk-fence",
+      "style": "fence",
+      "strength": "shed",
+      "pos": [-39.3, 41.9],
+      "size": [10, 1.2, 0.3],
+      "yaw": 29
+    },
+    {
+      "id": "hay-barn",
+      "style": "barn",
+      "strength": "house",
+      "pos": [60.1, -21.8],
+      "size": [12, 7, 9],
+      "yaw": 32
+    },
+    {
+      "id": "stone-barn",
+      "style": "stone-barn",
+      "strength": "concrete",
+      "pos": [112.2, -51.7],
+      "size": [13, 7.5, 10],
+      "yaw": 32
+    },
+    {
+      "id": "silo-west",
+      "style": "silo",
+      "strength": "brick",
+      "pos": [158.9, -89.4],
+      "size": [6, 13, 6],
+      "yaw": 38,
+      "group": "twin-silos"
+    },
+    {
+      "id": "silo-east",
+      "style": "silo",
+      "strength": "brick",
+      "pos": [164.5, -85.4],
+      "size": [6, 13, 6],
+      "yaw": 38,
+      "group": "twin-silos"
+    },
+    {
+      "id": "farm-shed",
+      "style": "shed",
+      "strength": "shed",
+      "pos": [-199.5, 118.4],
+      "size": [7, 4, 6],
+      "yaw": 20
+    },
+    {
+      "id": "cottage",
+      "style": "house",
+      "strength": "house",
+      "pos": [-114.9, 62.3],
+      "size": [8, 6.5, 7],
+      "yaw": 132
+    },
+    {
+      "id": "chicken-coop",
+      "style": "shed",
+      "strength": "shed",
+      "pos": [-70.6, 74.8],
+      "size": [4, 2.8, 3],
+      "yaw": 41
+    },
+    {
+      "id": "paddock-fence",
+      "style": "fence",
+      "strength": "shed",
+      "pos": [-83.8, 42.9],
+      "size": [14, 1.2, 0.3],
+      "yaw": 128
+    },
+    {
+      "id": "workshop",
+      "style": "house",
+      "strength": "house",
+      "pos": [23.6, -26.1],
+      "size": [9, 6, 8],
+      "yaw": 29
+    },
+    {
+      "id": "tool-store",
+      "style": "shed",
+      "strength": "shed",
+      "pos": [109.1, -22.7],
+      "size": [5, 3.5, 4],
+      "yaw": 32
+    },
+    {
+      "id": "grain-store",
+      "style": "shed",
+      "strength": "shed",
+      "pos": [181, -81],
+      "size": [7, 4.5, 6],
+      "yaw": 39
+    }
+  ],
+  "tnt": [
+    {
+      "pos": [129.4, -47.2]
+    },
+    {
+      "pos": [144.2, -54.7]
+    }
+  ]
 }

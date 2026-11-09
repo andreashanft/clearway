@@ -1,3 +1,4 @@
+import type { BuildingDefinition } from './world/buildings';
 import type { LightingPreset } from './world/lighting';
 
 /** A ground position in metres: [x, z]. Heights always come from the terrain. */
@@ -34,6 +35,8 @@ export interface LevelDefinition {
   };
   readonly player: { readonly vehicle: VehicleType };
   readonly vehicles: readonly VehicleSpawn[];
+  readonly buildings?: readonly BuildingDefinition[];
+  readonly tnt?: readonly { readonly pos: GroundPoint }[];
 }
 
 // Level definitions are `<id>.json`; dotted names such as `<id>.props.json` are assets.

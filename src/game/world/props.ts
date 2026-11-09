@@ -40,9 +40,28 @@ export interface PropsFile {
 export interface PropInstance {
   readonly id: number;
   readonly type: string;
-  readonly x: number;
-  readonly z: number;
+  readonly position: Vector3;
   readonly scale: number;
+  readonly yaw: number;
+  state: 'standing' | 'falling' | 'down';
+}
+
+interface Fall {
+  readonly prop: PropInstance;
+  readonly axis: Vector3;
+  progress: number;
+  readonly duration: number;
+  /** How far the prop tips over (trees) or squashes (bushes and rocks). */
+  readonly kind: 'topple' | 'flatten';
+}
+
+/** Rough trunk or body radius per prop type, at scale 1. */
+const PROP_RADIUS: Readonly<Record<string, number>> = { tree: 0.6, pine: 0.5, bush: 1.2, rock: 1 };
+const GRID = 16;
+const UP_AXIS = new Vector3(0, 1, 0);
+
+function gridKey(x: number, z: number): string {
+  return `${Math.floor(x / GRID)}:${Math.floor(z / GRID)}`;
 }
 
 /** Paints a geometry one flat colour through a vertex colour attribute. */
@@ -149,11 +168,87 @@ export class Props {
   /** Every placed prop, so gameplay can find and knock them over later. */
   readonly instances: PropInstance[] = [];
   private batch: BatchedMesh | null = null;
+  private readonly grid = new Map<string, PropInstance[]>();
+  private readonly falls: Fall[] = [];
+  private readonly matrix = new Matrix4();
+  private readonly quat = new Quaternion();
+  private readonly tilt = new Quaternion();
+  private readonly scaleVec = new Vector3();
 
   constructor(file: PropsFile, field: Heightfield) {
     this.group.name = 'props';
     this.buildInstances(file.props, field);
     for (const strip of file.water) this.group.add(this.buildWater(strip));
+  }
+
+  /**
+   * Knocks over standing props within `radius` of (x, z): trees topple away along
+   * (dirX, dirZ), bushes and rocks are flattened. Returns how many were hit.
+   */
+  knock(x: number, z: number, radius: number, dirX: number, dirZ: number): number {
+    let hits = 0;
+    const cx = Math.floor(x / GRID);
+    const cz = Math.floor(z / GRID);
+    for (let i = cx - 1; i <= cx + 1; i++) {
+      for (let j = cz - 1; j <= cz + 1; j++) {
+        for (const prop of this.grid.get(`${i}:${j}`) ?? []) {
+          if (prop.state !== 'standing') continue;
+          const reach = radius + (PROP_RADIUS[prop.type] ?? 1) * prop.scale;
+          const dx = prop.position.x - x;
+          const dz = prop.position.z - z;
+          if (dx * dx + dz * dz > reach * reach) continue;
+          let fx = dirX;
+          let fz = dirZ;
+          if (Math.hypot(fx, fz) < 0.1) {
+            fx = dx;
+            fz = dz;
+          }
+          const len = Math.hypot(fx, fz) || 1;
+          const topple = prop.type === 'tree' || prop.type === 'pine';
+          prop.state = 'falling';
+          this.falls.push({
+            prop,
+            // Tipping about this horizontal axis rotates the top towards (fx, fz).
+            axis: new Vector3(fz / len, 0, -fx / len),
+            progress: 0,
+            duration: topple ? 0.9 : 0.35,
+            kind: topple ? 'topple' : 'flatten',
+          });
+          hits++;
+        }
+      }
+    }
+    return hits;
+  }
+
+  /** Animates falling props. */
+  update(dt: number): void {
+    if (!this.batch || this.falls.length === 0) return;
+    for (let i = this.falls.length - 1; i >= 0; i--) {
+      const fall = this.falls[i];
+      if (!fall) continue;
+      fall.progress = Math.min(1, fall.progress + dt / fall.duration);
+      // Ease in, like a tree gathering speed as it goes over.
+      const t = fall.progress * fall.progress;
+      const { prop } = fall;
+      this.quat.setFromAxisAngle(UP_AXIS, prop.yaw);
+      this.scaleVec.setScalar(prop.scale);
+      if (fall.kind === 'topple') {
+        this.tilt.setFromAxisAngle(fall.axis, t * (Math.PI / 2 - 0.12));
+        this.quat.premultiply(this.tilt);
+      } else {
+        this.scaleVec.set(
+          prop.scale * (1 + 0.3 * t),
+          prop.scale * (1 - 0.72 * t),
+          prop.scale * (1 + 0.3 * t),
+        );
+      }
+      this.batch.setMatrixAt(prop.id, this.matrix.compose(prop.position, this.quat, this.scaleVec));
+      if (fall.progress >= 1) {
+        prop.state = 'down';
+        this.falls.splice(i, 1);
+      }
+    }
   }
 
   dispose(): void {
@@ -197,7 +292,19 @@ export class Props {
       batch.setMatrixAt(id, matrix.compose(position, rotation, scale));
       const shade = 0.88 + ((k * 37) % 25) / 100;
       batch.setColorAt(id, tint.setRGB(shade, shade, shade));
-      this.instances.push({ id, type: prop.type, x: prop.x, z: prop.z, scale: prop.scale });
+      const instance: PropInstance = {
+        id,
+        type: prop.type,
+        position: position.clone(),
+        scale: prop.scale,
+        yaw: (prop.yaw * Math.PI) / 180,
+        state: 'standing',
+      };
+      this.instances.push(instance);
+      const key = gridKey(prop.x, prop.z);
+      const cell = this.grid.get(key);
+      if (cell) cell.push(instance);
+      else this.grid.set(key, [instance]);
     });
     batch.castShadow = true;
     batch.receiveShadow = true;

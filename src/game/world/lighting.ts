@@ -56,6 +56,10 @@ const PRESETS: Record<LightingPreset, PresetValues> = {
 };
 
 const SHADOW_MAP_SIZE = 1024;
+/** Distance from the camera focus to the sun light. */
+const SUN_DISTANCE = 150;
+/** Half the depth of the shadow-casting slab, along the sun direction. */
+const SHADOW_DEPTH = 45;
 
 /**
  * Sky colour, ambient fill and one shadow-casting sun. The sun's shadow box follows the
@@ -82,8 +86,9 @@ export class Lighting {
     this.sun.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
     this.sun.shadow.bias = -0.0004;
     this.sun.shadow.normalBias = 0.04;
-    this.sun.shadow.camera.near = 1;
-    this.sun.shadow.camera.far = 400;
+    // The sun sits SUN_DISTANCE from the focus; only a slab around the focus casts shadows.
+    this.sun.shadow.camera.near = SUN_DISTANCE - SHADOW_DEPTH;
+    this.sun.shadow.camera.far = SUN_DISTANCE + SHADOW_DEPTH;
     this.sun.target = this.target;
     this.setShadowSize(this.shadowHalfSize);
     scene.add(this.hemi, this.sun, this.target);
@@ -111,7 +116,7 @@ export class Lighting {
     const x = Math.round(focus.x / texel) * texel;
     const z = Math.round(focus.z / texel) * texel;
     this.target.position.set(x, focus.y, z);
-    this.sun.position.copy(this.target.position).addScaledVector(this.direction, 150);
+    this.sun.position.copy(this.target.position).addScaledVector(this.direction, SUN_DISTANCE);
     this.target.updateMatrixWorld();
   }
 }

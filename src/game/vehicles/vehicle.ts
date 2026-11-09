@@ -5,6 +5,7 @@ import type {
 } from '@dimforge/rapier3d-compat';
 import { Group, Quaternion, Vector3 } from 'three';
 import type { ControlFrame } from '../../engine/input/controls';
+import { COLLISION, WHEEL_RAY_GROUPS } from '../../engine/collision-groups';
 import { InterpolatedPose } from '../../engine/interpolation';
 import type { Physics } from '../../engine/physics';
 import { PointToDrive, stickToHeading, type DriveOutput } from '../drive';
@@ -28,6 +29,8 @@ export interface VehicleSpec {
   readonly name: string;
   /** Kilograms. */
   readonly mass: number;
+  /** Multiplies impact damage against buildings (default 1). */
+  readonly damageMultiplier?: number;
   readonly chassis: BoxCollider;
   /** Extra massless collision boxes, such as a blade. */
   readonly extraColliders?: readonly BoxCollider[];
@@ -101,6 +104,8 @@ export abstract class Vehicle {
   yawRate = 0;
   /** True while at least one wheel touches the ground. */
   grounded = false;
+  /** Velocity just before the latest physics step, for measuring impacts. */
+  readonly preStepVelocity = new Vector3();
   /** The current drive request after control mapping, for animation and debug. */
   drive: DriveOutput = { steer: 0, throttle: 0 };
   braking = false;
@@ -139,7 +144,8 @@ export abstract class Vehicle {
             z: 0,
             w: 1,
           })
-          .setFriction(0.6),
+          .setFriction(0.6)
+          .setCollisionGroups(COLLISION.vehicle),
         this.body,
       ),
     );
@@ -151,7 +157,8 @@ export abstract class Vehicle {
           rapier.ColliderDesc.cuboid(ex, ey, ez)
             .setTranslation(px, py, pz)
             .setDensity(0)
-            .setFriction(0.5),
+            .setFriction(0.5)
+            .setCollisionGroups(COLLISION.vehicle),
           this.body,
         ),
       );
@@ -194,6 +201,11 @@ export abstract class Vehicle {
     return this.root.position;
   }
 
+  /** Multiplies impact damage against buildings; 0 means this vehicle can't damage. */
+  get damageMultiplier(): number {
+    return this.spec.damageMultiplier ?? 1;
+  }
+
   /** Whether Action can fire now, whether its effect is on, and its charge (0–1). */
   get actionState(): ActionState {
     return { ready: true, active: false, charge: 1 };
@@ -233,7 +245,9 @@ export abstract class Vehicle {
 
   /** Advances the wheel controller. Call once per fixed step before the world steps. */
   step(dt: number): void {
-    this.controller.updateVehicle(dt);
+    this.controller.updateVehicle(dt, undefined, WHEEL_RAY_GROUPS);
+    const v = this.body.linvel();
+    this.preStepVelocity.set(v.x, v.y, v.z);
     this.readMotion();
     this.recoverIfFlipped(dt);
   }

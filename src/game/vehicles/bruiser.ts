@@ -61,6 +61,11 @@ export class Bruiser extends Vehicle {
     this.root.add(this.model.root);
   }
 
+  /** The raised blade pushes more gently. */
+  override get damageMultiplier(): number {
+    return this.pushMode ? 0.5 : 1;
+  }
+
   override get actionState(): ActionState {
     return { ready: true, active: this.pushMode, charge: 1 };
   }

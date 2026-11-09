@@ -1,6 +1,7 @@
-import { BoxGeometry, CylinderGeometry, Group, type MeshStandardMaterial } from 'three';
+import { BoxGeometry, CylinderGeometry, Group, Mesh, type MeshStandardMaterial } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { createReadyGlow, MATERIALS } from './materials';
+import { FINISH } from './finish';
+import { createReadyGlow } from './materials';
 import { ModelBuilder } from './model-builder';
 import { TrackCleats } from './track';
 
@@ -30,7 +31,7 @@ const cyl = (rTop: number, rBottom: number, h: number, seg = 14): CylinderGeomet
 
 /** Builds the Bruiser bulldozer: squat body, wide blade, chunky tracks, black band. */
 export function buildBruiserModel(): BruiserModel {
-  const m = MATERIALS;
+  const m = FINISH;
   const b = new ModelBuilder();
   const sideways: [number, number, number] = [0, 0, Math.PI / 2];
 
@@ -103,7 +104,8 @@ export function buildBruiserModel(): BruiserModel {
     rotate: [Math.PI / 2 - 0.35, 0, 0],
   });
 
-  const root = b.build('bruiser');
+  const root = new Group();
+  root.add(b.build('bruiser-body'));
 
   // Blade assembly: curved plate, cutting edge, side plates, push arms and the glow strip.
   const bladeGlow = createReadyGlow();
@@ -128,8 +130,12 @@ export function buildBruiserModel(): BruiserModel {
     at: [0.6, 1.25, 2.55],
     rotate: [Math.PI / 2 - 0.35, 0, 0],
   });
-  bladeBuilder.add(box(3.6, 0.07, 0.07), bladeGlow, { at: [0, 1.36, 3.27] });
-  const blade = bladeBuilder.build('bruiser-blade');
+  const blade = new Group();
+  blade.name = 'bruiser-blade';
+  blade.add(bladeBuilder.build('bruiser-blade-body'));
+  const glowStrip = new Mesh(box(3.6, 0.07, 0.07), bladeGlow);
+  glowStrip.position.set(0, 1.36, 3.27);
+  blade.add(glowStrip);
   root.add(blade);
 
   const leftTrack = new TrackCleats({
