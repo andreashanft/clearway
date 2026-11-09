@@ -1,0 +1,32 @@
+{
+  "id": "hollow-creek",
+  "index": 1,
+  "name": "Hollow Creek",
+  "setting": "Farmland, morning",
+  "lighting": "morning",
+  "terrain": {
+    "heightmap": "hollow-creek.height.png",
+    "colourmap": "hollow-creek.colour.png",
+    "props": "hollow-creek.props.json",
+    "metersPerPixel": 4,
+    "maxHeight": 30
+  },
+  "hauler": {
+    "speed": 3.0,
+    "startDelay": 5,
+    "route": [
+      [-220.8, 147.2],
+      [-164.0, 124.9],
+      [-114.1, 90.3],
+      [-68.1, 51.2],
+      [-15.6, 20.9],
+      [38.2, -6.8],
+      [89.5, -38.7],
+      [139.9, -71.2],
+      [187.8, -108.9],
+      [226.9, -147.2]
+    ]
+  },
+  "player": { "vehicle": "bruiser" },
+  "vehicles": [{ "type": "bruiser", "pos": [-174.2, 83.4], "yaw": 60 }]
+}

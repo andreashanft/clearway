@@ -22,6 +22,7 @@ export class DebugOverlay {
   private frames = 0;
   private elapsed = 0;
   private worstFrame = 0;
+  private readonly readouts: (() => string)[] = [];
 
   constructor(
     parent: HTMLElement,
@@ -68,11 +69,17 @@ export class DebugOverlay {
       `GPU     ${renderer.backend.toUpperCase()}  ${width}×${height} @${renderer.pixelRatio.toFixed(2)}x`,
       `DRAW    ${drawCalls} calls  ${formatCount(triangles)} tris`,
       `PHYSICS ${physics.lastStepMs.toFixed(2)} ms  ${physics.bodyCount} bodies`,
+      ...this.readouts.map((read) => read()).filter((line) => line.length > 0),
     ].join('\n');
 
     this.frames = 0;
     this.elapsed = 0;
     this.worstFrame = 0;
+  }
+
+  /** Adds a line of live text, read every refresh. */
+  addReadout(read: () => string): void {
+    this.readouts.push(read);
   }
 
   addToggle(label: string, value: boolean, onChange: (value: boolean) => void): void {

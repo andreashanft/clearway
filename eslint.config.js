@@ -31,6 +31,12 @@ export default tseslint.config(
     },
   },
   {
+    // The terrain baker indexes typed arrays in hot loops; bounds are checked by construction.
+    files: ['scripts/**/*.ts'],
+    languageOptions: { globals: { ...globals.node } },
+    rules: { '@typescript-eslint/no-non-null-assertion': 'off', 'no-console': 'off' },
+  },
+  {
     files: ['eslint.config.js'],
     extends: [tseslint.configs.disableTypeChecked],
     languageOptions: { globals: { ...globals.node } },

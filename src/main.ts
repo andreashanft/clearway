@@ -3,11 +3,17 @@ import './ui/tokens.css';
 import './ui/base.css';
 import { registerSW } from 'virtual:pwa-register';
 import { DebugOverlay } from './debug/overlay';
+import { EventBus } from './engine/events';
 import { parseFlags } from './engine/flags';
+import { InputManager } from './engine/input/input-manager';
 import { GameLoop } from './engine/loop';
 import { loadRapier, Physics } from './engine/physics';
 import { Renderer } from './engine/renderer';
-import { Sandbox } from './game/sandbox';
+import type { GameEvents } from './game/events';
+import { Game } from './game/game';
+import { findLevel, LEVELS } from './game/level-data';
+import { CameraGestures } from './ui/touch-controls/camera-gestures';
+import { TouchControls } from './ui/touch-controls/touch-controls';
 
 async function boot(): Promise<void> {
   const flags = parseFlags(window.location.search);
@@ -19,25 +25,49 @@ async function boot(): Promise<void> {
     loadRapier(),
   ]);
   const physics = new Physics(rapier);
-  const sandbox = new Sandbox(physics);
-  renderer.onResize((viewport) => sandbox.setViewport(viewport));
+  const bus = new EventBus<GameEvents>();
+  const input = new InputManager(canvas);
+  const touchControls = new TouchControls(ui, input.touch, bus);
+  new CameraGestures(canvas, input.touch);
+  input.onSourceChange((source) => {
+    touchControls.setVisible(source === 'touch');
+  });
+
+  const level = (flags.level ? findLevel(flags.level) : undefined) ?? LEVELS[0];
+  if (!level) throw new Error('No levels found');
+  const game = new Game(physics, input, bus);
+  await game.load(level);
+  renderer.onResize((viewport) => {
+    game.setViewport(viewport);
+  });
 
   let overlay: DebugOverlay | null = null;
   const loop = new GameLoop({
+    beginFrame() {
+      game.beginFrame();
+    },
     step(dt) {
-      sandbox.step(dt);
+      game.step(dt);
       physics.step(dt);
-      sandbox.afterStep();
+      game.afterStep();
     },
     render(alpha, frameSeconds) {
-      sandbox.render(alpha);
-      renderer.render(sandbox.scene, sandbox.camera);
+      game.render(alpha, frameSeconds);
+      renderer.render(game.scene, game.camera.camera);
       overlay?.update(frameSeconds);
     },
   });
 
   if (flags.debug) {
+    // Handy for poking at the game from the browser console.
+    Object.assign(window, { clearway: { game, physics, renderer, input, loop } });
     overlay = new DebugOverlay(ui, { renderer, physics, clock: loop.clock });
+    overlay.addReadout(() => {
+      const v = game.activeVehicle;
+      if (!v) return '';
+      const kmh = (v.forwardSpeed * 3.6).toFixed(0).padStart(4);
+      return `VEHICLE ${v.spec.name} ${kmh} km/h  steer ${v.drive.steer.toFixed(2)}  throttle ${v.drive.throttle.toFixed(2)}`;
+    });
   }
 
   loop.start();

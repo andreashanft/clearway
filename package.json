@@ -12,14 +12,15 @@
     "dev": "vite --host",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p scripts",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
-    "icons": "pwa-assets-generator"
+    "icons": "pwa-assets-generator",
+    "terrain": "node scripts/build-terrain.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",
@@ -30,6 +31,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@types/node": "24.19.2",
     "@types/three": "0.187.0",
     "@vite-pwa/assets-generator": "2.0.0",
     "eslint": "10.13.0",

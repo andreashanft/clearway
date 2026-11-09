@@ -1,6 +1,8 @@
 import { FixedStepClock, type FixedStepClockOptions } from './clock';
 
 export interface LoopHandlers {
+  /** Runs once per rendered frame before any simulation steps, for example to read input. */
+  beginFrame?(frameSeconds: number): void;
   /** Runs one fixed simulation step of `dt` seconds. */
   step(dt: number): void;
   /** Draws a frame; `alpha` (0–1) interpolates between the last two steps. */
@@ -59,6 +61,7 @@ export class GameLoop {
       this.lastTime < 0 ? 0 : Math.min((time - this.lastTime) / 1000, MAX_FRAME_SECONDS);
     this.lastTime = time;
 
+    this.handlers.beginFrame?.(frameSeconds);
     const { steps, alpha } = this.clock.advance(frameSeconds);
     for (let i = 0; i < steps; i++) this.handlers.step(this.clock.stepSeconds);
     this.handlers.render(alpha, frameSeconds);
