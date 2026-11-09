@@ -71,7 +71,7 @@ export class DebugOverlay {
 
     this.statsEl.textContent = [
       `FPS     ${fps.toFixed(0).padStart(4)}   avg ${avgMs.toFixed(1)} ms  max ${(this.worstFrame * 1000).toFixed(1)} ms`,
-      `GPU     ${renderer.backend.toUpperCase()}  ${width}×${height} @${renderer.pixelRatio.toFixed(2)}x`,
+      `GPU     ${renderer.backend.toUpperCase()}  ${width}×${height} @${renderer.pixelRatio.toFixed(2)}x  scale ${Math.round(renderer.renderScale * 100)}%`,
       `DRAW    ${drawCalls} calls  ${formatCount(triangles)} tris`,
       physics ? `PHYSICS ${physics.lastStepMs.toFixed(2)} ms  ${physics.bodyCount} bodies` : '',
       ...this.readouts.map((read) => read()).filter((line) => line.length > 0),

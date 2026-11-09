@@ -6,11 +6,19 @@ import { HAULER, sweepRoute } from '../src/game/hauler/route-sweep';
 import type { LevelDefinition } from '../src/game/level-data';
 import { Route } from '../src/game/route';
 import { footprintOf } from '../src/game/world/footprint';
+import { beaconPositions } from '../src/game/world/pickups';
 
 const LEVELS = join(import.meta.dirname, '..', 'levels');
 const levels = readdirSync(LEVELS)
   .filter((f) => /^[a-z-]+\.json$/.test(f))
   .map((f) => JSON.parse(readFileSync(join(LEVELS, f), 'utf8')) as LevelDefinition);
+
+/** Beacons per level, from the design brief's secrets. */
+const BEACONS: Readonly<Record<string, number>> = {
+  'hollow-creek': 30,
+  'ferrow-junction': 40,
+  'cinder-quarry': 50,
+};
 
 describe.each(levels)('$name', (level) => {
   const route = new Route(level.hauler.route);
@@ -75,6 +83,22 @@ describe.each(levels)('$name', (level) => {
       const lz = dx * Math.sin(f.yaw) + dz * Math.cos(f.yaw);
       expect(Math.abs(lx)).toBeLessThan(f.halfX - 2);
       expect(Math.abs(lz)).toBeLessThan(f.halfZ - 2);
+    }
+  });
+
+  it('has the brief’s beacons and a relay dish, clear of every building', () => {
+    const beacons = (level.beacons?.trails ?? []).flatMap((t) => beaconPositions(t));
+    expect(beacons.length).toBe(BEACONS[level.id]);
+    expect(level.relayDish).toBeDefined();
+    for (const [x, z] of beacons) {
+      for (const b of level.buildings ?? []) {
+        const f = footprintOf(b);
+        const dx = x - f.x;
+        const dz = z - f.z;
+        const lx = Math.abs(dx * Math.cos(f.yaw) - dz * Math.sin(f.yaw)) - f.halfX;
+        const lz = Math.abs(dx * Math.sin(f.yaw) + dz * Math.cos(f.yaw)) - f.halfZ;
+        expect(Math.max(lx, lz), `beacon ${x}, ${z} in ${b.id}`).toBeGreaterThan(1);
+      }
     }
   });
 

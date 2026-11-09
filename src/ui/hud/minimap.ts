@@ -6,6 +6,7 @@ type Frame = GameEvents['hud:frame'];
 const ALARM = '#FF3D5A';
 const HAZARD = '#FFD23F';
 const TNT = '#FF7A2E';
+const SIGNAL = '#2EE6FF';
 
 /**
  * The mini-map: a north-up 2D drawing of the play area with the route, obstacles,
@@ -86,6 +87,12 @@ export class Minimap {
       ctx.fillStyle = TNT;
       const s = 3 * ratio;
       ctx.fillRect(px(c.x) - s, pz(c.z) - s, s * 2, s * 2);
+    }
+    ctx.fillStyle = SIGNAL;
+    for (const b of frame.beacons) {
+      ctx.beginPath();
+      ctx.arc(px(b.x), pz(b.z), 1.5 * ratio, 0, Math.PI * 2);
+      ctx.fill();
     }
     for (const v of frame.vehicles) dot(ctx, px(v.x), pz(v.z), 3 * ratio, HAZARD, '#0B1430');
     if (frame.hauler)

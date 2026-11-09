@@ -20,7 +20,8 @@ export type BuildingStyle =
   | 'crusher'
   | 'chimney'
   | 'hut'
-  | 'container';
+  | 'container'
+  | 'bales';
 
 /** Every style, for tests and tools. */
 export const BUILDING_STYLES: readonly BuildingStyle[] = [
@@ -43,6 +44,7 @@ export const BUILDING_STYLES: readonly BuildingStyle[] = [
   'chimney',
   'hut',
   'container',
+  'bales',
 ];
 
 /** One pre-fractured part of a building: it stands in place until the building collapses. */
@@ -885,6 +887,28 @@ export function buildShape(style: BuildingStyle, size: Vec3, seed: number): Buil
         set.add(parts, [-w / 2 + sectionW * (k + 0.5), h / 2, 0]);
       }
       return { pieces: set.pieces, foundation: null, debrisColour: colour };
+    }
+
+    case 'bales': {
+      // A stack of square hay bales, two layers, tucked against a wall.
+      const bale: Vec3 = [1.5, 0.9, 1];
+      const across = Math.max(1, Math.floor(w / 1.6));
+      const deep = Math.max(1, Math.floor(d / 1.1));
+      const layers = Math.max(1, Math.round(h / 0.92));
+      for (let layer = 0; layer < layers; layer++) {
+        for (let i = 0; i < across - layer; i++) {
+          for (let j = 0; j < deep; j++) {
+            const x = -w / 2 + 0.8 + i * 1.6 + layer * 0.8;
+            const z = -d / 2 + 0.55 + j * 1.1;
+            set.add(
+              [box(bale, '#D8B45A'), box([bale[0] + 0.02, 0.06, 0.1], '#B99440', [0, 0, 0.3])],
+              [x, 0.45 + layer * 0.92, z],
+              [0, (rand() - 0.5) * 0.2, 0],
+            );
+          }
+        }
+      }
+      return { pieces: set.pieces, foundation: null, debrisColour: '#D8B45A' };
     }
 
     case 'fence': {

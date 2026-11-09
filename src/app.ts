@@ -1,5 +1,7 @@
 import { PhysicsLines } from './debug/physics-lines';
 import { DebugOverlay } from './debug/overlay';
+import { AudioEngine } from './engine/audio';
+import { DynamicResolution } from './engine/dynamic-resolution';
 import { EventBus } from './engine/events';
 import type { LaunchFlags } from './engine/flags';
 import { InputManager } from './engine/input/input-manager';
@@ -8,6 +10,7 @@ import { Physics, type Rapier } from './engine/physics';
 import type { Renderer } from './engine/renderer';
 import { browserStorage, load, save, type Storage } from './engine/save';
 import { CAMPAIGN, campaignLevel } from './game/campaign';
+import { type AudioScene, GameAudio } from './game/audio/game-audio';
 import type { GameEvents } from './game/events';
 import { Game } from './game/game';
 import { findLevel, type LevelDefinition, LEVELS } from './game/level-data';
@@ -59,6 +62,44 @@ const VEHICLE_NAMES: Readonly<Record<string, string>> = {
   railbed: 'Railbed',
 };
 
+/** The part of the Battery Status API this uses. */
+interface BatteryLike extends EventTarget {
+  readonly charging: boolean;
+}
+
+/** The sound scene for each step of the flow; settings and help keep the scene they opened over. */
+function audioSceneFor(flow: Flow, returnTo: Flow): AudioScene {
+  switch (flow) {
+    case 'briefing':
+    case 'countdown':
+      return 'briefing';
+    case 'playing':
+      return 'playing';
+    case 'paused':
+      return 'paused';
+    case 'failed':
+      return 'failed';
+    case 'results':
+      return 'results';
+    case 'settings':
+    case 'help':
+      return returnTo === 'paused' ? 'paused' : 'menu';
+    default:
+      return 'menu';
+  }
+}
+
+/** Beacon and relay dish lines for the pause screen. */
+function pickupText(
+  p: { found: number; total: number; dish: boolean; dishExists: boolean } | undefined,
+): { beacons: string; dish: string } {
+  if (!p) return { beacons: '–', dish: '–' };
+  return {
+    beacons: p.total > 0 ? `${p.found} / ${p.total}` : '–',
+    dish: !p.dishExists ? '–' : p.dish ? 'FOUND' : 'NOT FOUND',
+  };
+}
+
 /** Device pixel ratio cap and shadow map size for each graphics quality. */
 const QUALITY: Readonly<Record<GraphicsQuality, { dpr: number; shadows: number }>> = {
   low: { dpr: 1, shadows: 0 },
@@ -78,6 +119,9 @@ export class App {
   readonly loop: GameLoop;
   private readonly hud: Hud;
   private readonly touchControls: TouchControls;
+  private readonly audio = new AudioEngine();
+  private readonly dynamicResolution = new DynamicResolution();
+  private readonly sound: GameAudio;
   private readonly screenLayer: HTMLElement;
   private readonly storage: Storage | null = browserStorage();
   private data: SaveData;
@@ -108,6 +152,11 @@ export class App {
     this.touchControls = new TouchControls(ui, this.input.touch, this.bus);
     new CameraGestures(renderer.three.domElement, this.input.touch);
     this.hud = new Hud(ui, this.bus, this.commands);
+    this.sound = new GameAudio(this.audio, this.bus);
+    // Every menu and HUD button clicks.
+    ui.addEventListener('click', (event) => {
+      if (event.target instanceof Element && event.target.closest('button')) this.sound.click();
+    });
     this.screenLayer = h('div', { class: 'cw-screens' });
     ui.append(this.screenLayer);
     this.input.onSourceChange((source) => {
@@ -139,6 +188,10 @@ export class App {
           game.render(alpha, frameSeconds);
           this.hud.update(frameSeconds);
         }
+        if (this.flow === 'playing') {
+          const scale = this.dynamicResolution.update(frameSeconds);
+          if (scale !== null) renderer.renderScale = scale;
+        }
         this.screen?.update?.();
         this.physicsLines?.update();
         if (!this.sceneHidden) renderer.render(game.scene, game.camera.camera);
@@ -148,7 +201,28 @@ export class App {
 
     this.bindEvents();
     this.applySettings();
+    this.capFrameRateOnBattery();
     if (flags.debug) this.createDebugTools();
+  }
+
+  /**
+   * Renders at most 60 fps on battery: the simulation runs at 60 Hz anyway, so a 120 Hz
+   * screen only adds interpolated frames. Where the Battery API is missing (Safari,
+   * Firefox), phones and tablets count as on battery.
+   */
+  private capFrameRateOnBattery(): void {
+    this.loop.maxFps = matchMedia('(pointer: coarse)').matches ? 60 : 0;
+    const nav = navigator as Navigator & { getBattery?: () => Promise<BatteryLike> };
+    nav
+      .getBattery?.()
+      .then((battery) => {
+        const apply = (): void => {
+          this.loop.maxFps = battery.charging ? 0 : 60;
+        };
+        apply();
+        battery.addEventListener('chargingchange', apply);
+      })
+      .catch(() => undefined);
   }
 
   get currentGame(): Game | null {
@@ -331,8 +405,7 @@ export class App {
           countdown: session?.countdown ?? null,
           obstaclesCleared: session?.obstacles.filter((o) => o.cleared).length ?? 0,
           obstaclesTotal: session?.obstacles.length ?? 0,
-          beacons: '–',
-          dish: 'NOT FOUND',
+          ...pickupText(this.game?.pickupProgress),
         }),
         {
           resume: () => this.resume(),
@@ -392,6 +465,7 @@ export class App {
     save(SAVE_SCHEMA, this.storage, this.data);
     const next = CAMPAIGN[level.index];
     this.setFlow('results');
+    if (medal) this.sound.music.stinger('medal');
     this.show(
       resultsScreen(
         {
@@ -488,7 +562,12 @@ export class App {
       this.physicsLines?.dispose();
       this.physicsLines = null;
       this.input.reset();
-      this.hud.reset(level.name, level.buildings?.length ?? 0);
+      this.hud.reset(
+        level.name,
+        level.buildings?.length ?? 0,
+        (level.beacons?.trails ?? []).reduce((sum, trail) => sum + trail.count, 0),
+        level.relayDish !== undefined,
+      );
       this.level = level;
       this.dirty = false;
       this.physics = new Physics(this.rapier);
@@ -504,6 +583,7 @@ export class App {
       game.setViewport(this.renderer.viewport);
       game.setShadowQuality(this.quality().shadows);
       game.setPatternMarkings(this.data.settings.patternMarkings);
+      game.setFullShake(this.data.settings.fullShake);
       const session = game.levelSession;
       if (session) session.invincible = this.invincible;
       this.loop.start();
@@ -521,6 +601,7 @@ export class App {
 
   private setFlow(flow: Flow): void {
     this.flow = flow;
+    this.sound.setScene(audioSceneFor(flow, this.returnTo));
     const inLevel = flow === 'playing' || flow === 'countdown' || flow === 'paused';
     this.hud.setVisible(inLevel);
     document.getElementById('app')?.classList.toggle('is-paused', flow === 'paused');
@@ -582,6 +663,9 @@ export class App {
     this.game?.setShadowQuality(quality.shadows);
     this.game?.setSteeringAssist(s.steeringAssist);
     this.game?.setPatternMarkings(s.patternMarkings);
+    this.game?.setFullShake(s.fullShake);
+    this.audio.setVolumes({ music: s.music, sfx: s.sfx, voice: s.voice });
+    this.sound.tension = s.tensionMusic;
   }
 
   private bindEvents(): void {
@@ -589,7 +673,9 @@ export class App {
     this.bus.on('session:results', (results) => this.onResults(results));
     this.bus.on('impact', ({ strength }) => {
       // Not every browser has vibrate (Safari on iOS doesn't).
-      if (this.data.settings.haptics && strength > 0.3 && 'vibrate' in navigator) {
+      // Browsers only allow vibration after the player has touched the page.
+      const touched = navigator.userActivation.hasBeenActive;
+      if (this.data.settings.haptics && strength > 0.3 && touched && 'vibrate' in navigator) {
         navigator.vibrate(Math.round(20 + strength * 60));
       }
     });

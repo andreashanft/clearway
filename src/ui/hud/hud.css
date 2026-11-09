@@ -59,6 +59,19 @@
   line-height: 1;
 }
 
+/* A beacon just lit: the counter flashes in signal cyan. */
+.cw-hud__counter.is-flash {
+  animation: cw-hud-flash 0.7s ease-out;
+}
+
+@keyframes cw-hud-flash {
+  from {
+    box-shadow:
+      0 0 0 2px var(--cw-signal),
+      0 0 20px var(--cw-signal);
+  }
+}
+
 .cw-hud__level {
   display: none;
 }
@@ -400,7 +413,7 @@
   }
 }
 
-/* iPad and desktop: larger panels, the level name and a bigger mini-map. */
+/* iPad and desktop: larger panels and a bigger mini-map. */
 @media (min-width: 1000px) and (min-height: 700px) {
   .cw-hud {
     --pad: 28px;
@@ -426,12 +439,9 @@
     font-size: 26px;
   }
 
-  .cw-hud__level {
-    display: flex;
-  }
-
+  /* Narrows between iPad and desktop widths so the counters fit beside it. */
   .cw-hud__top {
-    width: 500px;
+    width: clamp(320px, calc(100vw - 680px), 500px);
   }
 
   .cw-hud__route {
@@ -462,6 +472,13 @@
 
   .cw-hud__finish {
     top: calc(196px + env(safe-area-inset-top));
+  }
+}
+
+/* Desktop: room for the level name next to the counters. */
+@media (min-width: 1400px) and (min-height: 700px) {
+  .cw-hud__level {
+    display: flex;
   }
 }
 

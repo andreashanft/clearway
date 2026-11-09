@@ -44,6 +44,13 @@ export function verticalFov(aspect: number): number {
  * vehicle in its direction of travel. Zoom moves between three presets and the view
  * rotates in 45° steps.
  */
+/** Trauma lost per second, so a full-strength shake settles in under a second. */
+const SHAKE_DECAY = 1.5;
+/** Shake offset per metre of visible ground, at full trauma. */
+const SHAKE_PER_SPAN = 0.022;
+/** Largest roll at full trauma, radians. */
+const SHAKE_ROLL = 0.025;
+
 export class FollowCamera {
   readonly camera = new PerspectiveCamera(SHORT_SIDE_FOV, 1, 1, 1500);
   /** The point the camera looks at, after smoothing and look-ahead. */
@@ -56,6 +63,12 @@ export class FollowCamera {
   private distanceCurrent = presetDistance(DEFAULT_ZOOM);
   private placed = false;
   private interest: Vector3 | null = null;
+  /** Shake energy, 0–1; the offset grows with its square so small knocks stay subtle. */
+  private trauma = 0;
+  private shakeTime = 0;
+  private readonly shakeOffset = new Vector3();
+  /** 1 for full camera shake, lower for the reduced-shake setting. */
+  shakeScale = 1;
 
   /** Current (smoothed) yaw of the camera rig; 0 looks north. */
   get yaw(): number {
@@ -117,7 +130,14 @@ export class FollowCamera {
     this.applyTransform();
   }
 
+  /** Adds shake for a hit or blast of `strength` (0–1). */
+  shake(strength: number): void {
+    this.trauma = Math.min(1, this.trauma + strength * this.shakeScale);
+  }
+
   update(dt: number, target: Vector3, velocity: Vector3): void {
+    this.trauma = Math.max(0, this.trauma - dt * SHAKE_DECAY);
+    this.shakeTime += dt;
     if (!this.placed) {
       this.snapTo(target);
       return;
@@ -153,5 +173,18 @@ export class FollowCamera {
       this.focus.z + Math.cos(this.yawCurrent) * horizontal,
     );
     this.camera.lookAt(this.focus);
+    if (this.trauma <= 0) return;
+    // Layered sines make a cheap, smooth noise; move the camera sideways and up a little
+    // and roll it slightly, so the view jolts without losing its target.
+    const t = this.shakeTime;
+    const amount = this.trauma * this.trauma * (0.25 + this.viewSpan * SHAKE_PER_SPAN);
+    this.shakeOffset.set(
+      (Math.sin(t * 37.3) * 0.6 + Math.sin(t * 71.9) * 0.4) * amount,
+      (Math.sin(t * 43.7 + 1.3) * 0.6 + Math.sin(t * 89.1) * 0.4) * amount,
+      0,
+    );
+    this.shakeOffset.applyQuaternion(this.camera.quaternion);
+    this.camera.position.add(this.shakeOffset);
+    this.camera.rotateZ(Math.sin(t * 29.3 + 0.7) * this.trauma * this.trauma * SHAKE_ROLL);
   }
 }

@@ -45,6 +45,14 @@ export function labelFor(id: string): string {
  * clear, free roam, results, or failure. It reads the Hauler and buildings and reports
  * progress on the event bus.
  */
+/** What the session needs to know about the level's pickups for the medal. */
+export interface PickupCounts {
+  readonly beaconsFound: number;
+  readonly beaconsTotal: number;
+  readonly dishFound: boolean;
+  readonly dishExists: boolean;
+}
+
 export class LevelSession {
   phase: Phase = 'countdown';
   readonly obstacles: ObstacleState[];
@@ -90,16 +98,19 @@ export class LevelSession {
     return Math.max(0, travel + (this.phase === 'countdown' ? this.delayLeft : 0));
   }
 
+  /** Beacon and relay dish counts, when the level has pickups. */
+  pickups: PickupCounts | null = null;
+
   get stats(): LevelStats {
     return {
       pathCleared: this.clearTime !== null,
       clearTime: this.clearTime,
       buildingsDestroyed: this.buildings.list.filter((b) => b.destroyed).length,
       buildingsTotal: this.buildings.list.length,
-      beaconsFound: 0,
-      beaconsTotal: 0,
-      dishFound: false,
-      dishExists: false,
+      beaconsFound: this.pickups?.beaconsFound ?? 0,
+      beaconsTotal: this.pickups?.beaconsTotal ?? 0,
+      dishFound: this.pickups?.dishFound ?? false,
+      dishExists: this.pickups?.dishExists ?? false,
     };
   }
 

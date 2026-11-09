@@ -264,5 +264,47 @@
     "crushers-ab": "Only the Tumbler or TNT drops concrete. Chain rolls within 2 seconds.",
     "crusher-c-chimney": "Both crusher C and the chimney must fall. TNT waits by the Bruiser.",
     "huts": "Any vehicle clears the huts. Leave the crushers in time."
+  },
+  "beacons": {
+    "trails": [
+      {
+        "points": [
+          [-132, -106],
+          [60, -106]
+        ],
+        "count": 12
+      },
+      {
+        "points": [
+          [-86, -46],
+          [70, -46]
+        ],
+        "count": 12
+      },
+      {
+        "points": [
+          [-70, 44],
+          [60, 44]
+        ],
+        "count": 10
+      },
+      {
+        "points": [
+          [6, -92],
+          [38, -90]
+        ],
+        "count": 6
+      },
+      {
+        "points": [
+          [-120, 110],
+          [120, 110]
+        ],
+        "count": 10
+      }
+    ]
+  },
+  "relayDish": {
+    "pos": [-112, -42]
   }
 }

@@ -160,6 +160,14 @@
       "pos": [181, -81],
       "size": [7, 4.5, 6],
       "yaw": 39
+    },
+    {
+      "id": "hay-bales",
+      "style": "bales",
+      "strength": "shed",
+      "pos": [126.4, -47.1],
+      "size": [5, 1.8, 3.4],
+      "yaw": 32
     }
   ],
   "tnt": [
@@ -195,5 +203,36 @@
     "hay-barn": "Leave the farmhouse early: the hay barn is a long drive.",
     "stone-barn": "Only TNT drops concrete. Light a crate by touching it with the Bruiser, then push it against the barn.",
     "twin-silos": "Both silos must fall. Take the hill to the north-west for speed."
+  },
+  "beacons": {
+    "trails": [
+      {
+        "points": [
+          [-170.9, -21.1],
+          [-115.2, -34.6],
+          [-60.5, -48.1]
+        ],
+        "count": 12
+      },
+      {
+        "points": [
+          [-250.5, -65.5],
+          [-120.5, -83.5]
+        ],
+        "count": 8
+      },
+      {
+        "points": [
+          [120.6, 64.2],
+          [143.6, 74.2],
+          [165.6, 84.2]
+        ],
+        "count": 10
+      }
+    ]
+  },
+  "relayDish": {
+    "pos": [126.4, -47.1],
+    "hiddenBy": "hay-bales"
   }
 }

@@ -65,8 +65,14 @@ export interface GameEvents {
     vehicles: { x: number; z: number }[];
     obstacles: { x: number; z: number; cleared: boolean }[];
     crates: { x: number; z: number; lit: boolean }[];
+    /** Beacons still to light. */
+    beacons: { x: number; z: number }[];
     cameraYaw: number;
   };
+  /** The player lit a beacon. */
+  'pickup:beacon': { found: number; total: number };
+  /** The player found the relay dish. */
+  'pickup:dish': { x: number; y: number; z: number };
   /** A short tutorial or context hint. */
   hint: { text: string };
   /** The last obstacle fell `seconds` after the Hauler started. */

@@ -1,4 +1,5 @@
 import type { BuildingDefinition } from './world/buildings';
+import type { BeaconTrail, RelayDishDefinition } from './world/pickups';
 import type { LightingPreset } from './world/lighting';
 
 /** A ground position in metres: [x, z]. Heights always come from the terrain. */
@@ -58,6 +59,10 @@ export interface LevelDefinition {
   readonly tnt?: readonly { readonly pos: GroundPoint }[];
   readonly rail?: RailLine;
   readonly routeGap?: RouteGap;
+  /** Pickups lit by driving or walking past, for silver and gold. */
+  readonly beacons?: { readonly trails: readonly BeaconTrail[] };
+  /** The hidden relay dish, needed for gold. */
+  readonly relayDish?: RelayDishDefinition;
   /** The brief's route distance for each obstacle, keyed by building id or group. */
   readonly targets?: Readonly<Record<string, number>>;
   /** One-line goal shown on the briefing screen. */

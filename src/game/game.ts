@@ -20,6 +20,7 @@ import { Fishtail } from './vehicles/fishtail';
 import { DECK_HEIGHT, Railbed } from './vehicles/railbed';
 import type { Machine as Vehicle } from './vehicles/vehicle';
 import { footprintOf } from './world/footprint';
+import { Pickups } from './world/pickups';
 import { Rails } from './world/rails';
 import { RouteLine } from './world/route-line';
 
@@ -35,6 +36,14 @@ const HAULER_BLAST_DAMAGE = 1200;
 /** Slow motion after the Hauler is destroyed: speed and real seconds. */
 const FAIL_SLOWMO_SCALE = 0.25;
 const FAIL_SLOWMO_SECONDS = 2.2;
+/** Hit-stop: hits at least this strong (0–1) freeze the action for a moment. */
+const HIT_STOP_THRESHOLD = 0.3;
+const HIT_STOP_BASE = 0.03;
+const HIT_STOP_EXTRA = 0.07;
+/** Simulation speed during hit-stop: nearly frozen, so it reads as a beat, not a stall. */
+const HIT_STOP_SCALE = 0.05;
+/** Shake multiplier with the reduced-shake setting. */
+const REDUCED_SHAKE = 0.35;
 /** How often the HUD hears about the Hauler, per second. */
 const STATUS_RATE = 10;
 
@@ -101,6 +110,8 @@ export class Game {
   private railbed: Railbed | null = null;
   private rails: Rails | null = null;
   private readonly lockedBy = new Map<Vehicle, string>();
+  private pickups: Pickups | null = null;
+  private hitStopLeft = 0;
   private readonly subscriptions: (() => void)[] = [];
   private def: LevelDefinition | null = null;
   private modeValue: GameMode = 'play';
@@ -196,9 +207,24 @@ export class Game {
     this.world?.lighting.setShadowMapSize(size);
   }
 
-  /** Multiplier on simulation speed, used for the slow motion after a failure. */
+  /** Multiplier on simulation speed: hit-stop after a big hit, slow motion after a failure. */
   get timeScale(): number {
+    if (this.hitStopLeft > 0) return HIT_STOP_SCALE;
     return this.slowmoLeft > 0 ? FAIL_SLOWMO_SCALE : 1;
+  }
+
+  /** Full camera shake, or the reduced amount for players who prefer less motion. */
+  setFullShake(full: boolean): void {
+    this.camera.shakeScale = full ? 1 : REDUCED_SHAKE;
+  }
+
+  /** A hard hit or a blast: freeze the action for a beat and shake the camera. */
+  private onImpact(strength: number): void {
+    if (this.modeValue !== 'play') return;
+    this.camera.shake(strength * 0.7);
+    if (strength >= HIT_STOP_THRESHOLD) {
+      this.hitStopLeft = Math.max(this.hitStopLeft, HIT_STOP_BASE + HIT_STOP_EXTRA * strength);
+    }
   }
 
   async load(def: LevelDefinition): Promise<void> {
@@ -217,6 +243,9 @@ export class Game {
       this.bus,
     );
     this.destruction = destruction;
+    const pickups = new Pickups(def.beacons?.trails ?? [], def.relayDish ?? null, field);
+    this.pickups = pickups;
+    this.scene.add(pickups.group);
 
     const route = new Route(def.hauler.route);
     this.route = route;
@@ -285,6 +314,7 @@ export class Game {
       this.options.difficulty,
     );
     this.session = session;
+    session.pickups = pickups;
     destruction.watchHauler(hauler, () => {
       if (this.modeValue !== 'play') return;
       const next = session.next;
@@ -297,8 +327,12 @@ export class Game {
       if (session.haulerContact()) this.destroyHauler();
     });
     this.subscriptions.push(
+      this.bus.on('impact', ({ strength }) => {
+        this.onImpact(strength);
+      }),
       this.bus.on('building:destroyed', ({ id }) => {
         session.buildingDestroyed(id);
+        pickups.onBuildingDestroyed(id);
         for (const vehicle of this.vehicles) {
           if (vehicle.locked && this.lockedBy.get(vehicle) === id) {
             vehicle.locked = false;
@@ -407,6 +441,7 @@ export class Game {
       else pilot.idle(dt);
     }
     if (playing) this.session?.step(dt);
+    if (playable) this.collectPickups();
     this.hauler?.step(dt);
     this.loopAttract();
     this.checkGaps();
@@ -422,12 +457,15 @@ export class Game {
   }
 
   render(alpha: number, frameSeconds: number): void {
+    // Hit-stop counts down in real time, whatever the simulation speed.
+    this.hitStopLeft = Math.max(0, this.hitStopLeft - frameSeconds);
     for (const vehicle of this.vehicles) vehicle.render(alpha, frameSeconds);
     this.pilot?.render(alpha, frameSeconds);
     this.hauler?.render(alpha, frameSeconds);
     this.destruction?.render(alpha, frameSeconds, this.camera.camera);
     this.routeLine?.update(frameSeconds, this.hauler?.state === 'rolling' ? this.hauler.speed : 0);
     this.rails?.update(frameSeconds, this.railbed?.snapped ?? false);
+    this.pickups?.update(frameSeconds);
     const effects = this.effects;
     if (effects) {
       for (const vehicle of this.vehicles) {
@@ -472,6 +510,8 @@ export class Game {
   }
 
   dispose(): void {
+    this.pickups?.dispose();
+    this.pickups = null;
     this.rails?.dispose();
     this.rails = null;
     this.railbed = null;
@@ -542,6 +582,36 @@ export class Game {
       obstaclesLeft: session.obstacles.filter((o) => !o.cleared).length,
       buildingsLeft: destruction.buildings.list.filter((b) => !b.destroyed).length,
     });
+  }
+
+  /** Lights beacons and finds the relay dish near the player. */
+  private collectPickups(): void {
+    const { pickups } = this;
+    const player = this.player;
+    if (!pickups || !player) return;
+    const found = pickups.collect(player.position);
+    if (found.beacons > 0) {
+      this.bus.emit('pickup:beacon', {
+        found: pickups.beaconsFound,
+        total: pickups.beaconsTotal,
+      });
+    }
+    if (found.dish) {
+      const p = player.position;
+      this.bus.emit('pickup:dish', { x: p.x, y: p.y, z: p.z });
+      this.hint('Relay dish found.');
+    }
+  }
+
+  /** Beacons lit, out of how many, and whether the dish is found, for the pause screen. */
+  get pickupProgress(): { found: number; total: number; dish: boolean; dishExists: boolean } {
+    const p = this.pickups;
+    return {
+      found: p?.beaconsFound ?? 0,
+      total: p?.beaconsTotal ?? 0,
+      dish: p?.dishFound ?? false,
+      dishExists: p?.dishExists ?? false,
+    };
   }
 
   /** Clears a bridged gap, or fails the level when the Hauler reaches an open one. */
@@ -627,6 +697,7 @@ export class Game {
       crates: (destruction?.crates ?? [])
         .filter((c) => !c.exploded)
         .map((c) => ({ x: c.position.x, z: c.position.z, lit: c.lit })),
+      beacons: this.pickups?.unlitBeacons([]) ?? [],
       cameraYaw: this.camera.yaw,
     });
   }

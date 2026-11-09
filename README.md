@@ -74,8 +74,8 @@ index.html            Page shell: the canvas and the UI layer
 public/               App icons
 src/
   main.ts             Boot: renderer, physics, fixed-step loop
-  engine/             Renderer, physics, loop, events, launch flags
-  game/               Gameplay (levels, Hauler, vehicles, destruction)
+  engine/             Renderer, physics, loop, audio, input, save, events
+  game/               Gameplay (levels, Hauler, vehicles, destruction, sound)
   ui/                 Design tokens, fonts, screens and HUD
   debug/              The ?debug overlay
 tests/                Unit tests (Vitest)
@@ -96,6 +96,8 @@ The game uses these pinned versions:
 | Tests           | `vitest`                                                           | 5.0.5   |
 | Lint and format | `eslint` 10.13.0, `typescript-eslint` 8.72.1, `prettier` 3.9.10    |         |
 | Fonts           | `@fontsource` Big Shoulders Display, Space Grotesk, JetBrains Mono | 5.3.0   |
+
+Sound and music are synthesised at run time with the Web Audio API, so the game ships no audio files.
 
 ## Licence
 

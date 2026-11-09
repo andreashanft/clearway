@@ -266,5 +266,52 @@
     "terrace-b": "Clear terrace B on both sides of the street before the Hauler arrives.",
     "signal-box": "Only TNT drops concrete here. The Bruiser and a crate wait in the goods yard.",
     "warehouses": "Both warehouses must fall. Leave the signal box early."
+  },
+  "beacons": {
+    "trails": [
+      {
+        "points": [
+          [-287, 54.5],
+          [-234.6, 51.1],
+          [-183.1, 42.9],
+          [-132.3, 29.7],
+          [-81.2, 12.9]
+        ],
+        "count": 12
+      },
+      {
+        "points": [
+          [-285.6, 112.5],
+          [-228.2, 108.8],
+          [-171.2, 99.7],
+          [-115.5, 85.2],
+          [-62.2, 67.7]
+        ],
+        "count": 12
+      },
+      {
+        "points": [
+          [-32.7, 53.1],
+          [-7.3, 123.7],
+          [18, 194.3]
+        ],
+        "count": 8
+      },
+      {
+        "points": [
+          [159.5, 28.9],
+          [196.4, 29.1],
+          [226.4, 8.2],
+          [191.7, 13.9],
+          [159.5, 28.9]
+        ],
+        "count": 8
+      }
+    ]
+  },
+  "relayDish": {
+    "pos": [-89.6, -43.4],
+    "height": 7,
+    "on": "station"
   }
 }

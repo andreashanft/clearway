@@ -236,3 +236,72 @@ Measured on a desktop browser with WebGPU: 24–35 draw calls and 15–20k trian
 - **The quarry floor ends at y = 245 on the level map, not 255**, so the last straight runs on the second terrace instead of along the edge of the floor.
 - **The conveyor gantry's belt runs 3.8–6.3 m above the ground** and spans 32 m, so a boost off the spoil heap hits it rather than flying over.
 - **The site cabins fall to a plain drop off the rim.** A boost from the rim carries the Liftoff over them, so the hint says to drive off at a moderate speed.
+
+## Milestone 7: polish
+
+### What works
+
+- **Beacons and relay dishes.** Hollow Creek has 30 beacons along its hedgerows and a dish under hay bales behind the stone barn. Ferrow Junction has 40 in the back lanes, beside the rails and round the goods yard, and a dish on the station roof. Cinder Quarry has 50 on the rim, the terraces, the floor and the spoil heap, and a dish on a rock ledge that only a long Liftoff boost reaches.
+  - Drive or walk past a beacon to light it: it chimes, turns green and counts on the HUD, with each beacon in a quick run chiming a note higher.
+  - The mini-map shows the beacons still to find, and the free-roam strip lists what gold still needs.
+  - The pause screen, results, medals and the save all count beacons and the dish.
+- **Hit-stop and camera shake.** Hard hits and blasts freeze the action for 30–100 ms and shake the camera in proportion to the impact. The **Camera shake** setting switches between full and reduced shake.
+- **Sound and dynamic music**, all synthesised with Web Audio:
+  - A funk/surf loop (drums, bass, organ stabs and a twangy lead) that speeds up from 104 to 144 beats per minute and adds layers as the countdown shrinks. An alarm beeps on the beat in the last seconds before an impact. **Tension music** off keeps an even pace.
+  - Stingers for Path clear, a failure and a medal; the music fades on failure and muffles in menus and pause.
+  - Engine hum per machine that follows speed, skid, boost and roll loops, the Hauler's drone growing as it gets close, hits, collapses, blasts, lit fuses, beacon chimes, a radio squelch before crew hints, and button clicks.
+  - Music, effects and voice volumes from Settings. Audio starts on the first tap or key press and suspends while the page is hidden.
+- **Performance.**
+  - Dynamic resolution drops the render scale by 10% steps when frames take longer than 18 ms and raises it below 14 ms, down to half resolution. On a 60 Hz display, it tries a step up after 6 steady seconds and backs off for twice as long if that fails.
+  - Rendering caps at 60 fps on battery (phones and tablets, and laptops that report it).
+  - The debug overlay shows the render scale.
+
+### Measured
+
+These numbers come from the built-in browser on a desktop with `?debug`:
+
+| Scene                                           | Backend | Draw calls | Triangles | CPU per frame                 |
+| ----------------------------------------------- | ------- | ---------- | --------- | ----------------------------- |
+| Cinder Quarry, four crushers collapsing at once | WebGPU  | about 50   | about 26k | 2.1 ms median, 9 ms 95th pct. |
+| Ferrow Junction, the high street                | WebGL2  | 24         | about 33k | not measured                  |
+| Ferrow Junction, the shop, pub and rail cutting | WebGPU  | 59         | about 45k | not measured                  |
+
+Every scene is well inside the phone budget of 150 draw calls and 300k triangles.
+
+### Stubbed
+
+- **Voice lines.** Crew hints show as text, with a radio squelch on the voice volume, but nothing is spoken: there are no recorded lines yet.
+- **The failure replay ("Watch again").** The Hauler's explosion plays in slow motion as a freeze-frame, then the fail screen offers Retry and Quit.
+
+### How to test on devices
+
+The brief asks for a check on a real iPhone, an Android phone, an iPad and a desktop browser at every milestone. Real devices weren't available while building, so work through this list on each one:
+
+1. Start the dev server with `npm run dev`; it listens on your local network.
+2. On each device, open the **Network** address that Vite prints, such as `http://192.168.1.20:5173/`.
+3. Play each level to a medal with touch only (phones and iPad) and with the keyboard only (desktop).
+4. Check that sound starts after the first tap and stops when you switch apps.
+5. Add `?debug` and watch the frame rate and render scale in Cinder Quarry while the crushers fall.
+6. For the installed app, build with `npm run build`, host `dist/` on any static host with HTTPS, add it to the home screen, and check that it launches fullscreen in landscape.
+
+### Acceptance checklist
+
+This is where each item in the code brief's checklist stands:
+
+| Item                                                                | Status                                                                                                             |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| All 3 levels can be finished with touch only and with keyboard only | Keyboard and touch controls work in the browser and in phone emulation. A full touch-only run needs a real device. |
+| Hauler arrivals within ±10% of the brief                            | Verified: every obstacle within 0.1%, checked by unit tests.                                                       |
+| The Hauler touching any obstacle fails the level; rubble never does | Verified in play; unit tests cover the rubble conversion.                                                          |
+| Every screen reachable and matching the mocks at all four sizes     | Verified in milestone 5 at phone landscape, phone portrait and desktop; the HUD counters adapt at iPad widths.     |
+| Medals, best times and settings persist across reloads              | Verified.                                                                                                          |
+| 60 fps on an iPhone 13-class phone in Level 3's busiest moment      | Budgets met on desktop and dynamic resolution in place. Needs a real-device run.                                   |
+| Installs to the home screen and launches fullscreen in landscape    | Manifest and service worker in place. Needs a real-device run.                                                     |
+| No _Blast Corps_ names, art or audio in the repo                    | Verified: every name, model, sound and piece of music is original.                                                 |
+
+### Deviations
+
+- **Sound is synthesised with Web Audio, not played through Howler.js.** The brief suggests Howler with free sound effects. Synthesis needs no downloaded files, which keeps the repository free of third-party audio and its licences, and Howler's main features (sprite sheets and file decoding) don't apply. The engine handles the iOS unlock-on-tap itself.
+- **The Ferrow Junction dish falls when the station falls.** The brief puts it on the station roof, reached by a ramp of stacked containers. Buildings can't stack yet, so destroy the station and collect the dish from the rubble, which gold needs anyway.
+- **The Hollow Creek dish peeks out of the hay bales.** It can only be collected once the bales fall, and the glimpse hints at where it is.
+- **The HUD shows the level name only from 1400 px wide.** Between iPad and desktop widths, the obstacles and beacons counters need the room beside the route panel.

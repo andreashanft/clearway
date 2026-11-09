@@ -20,6 +20,7 @@ export class Hud {
   private readonly obstaclesStat = stat('OBSTACLES', '–');
   private readonly levelStat = stat('LEVEL', '');
   private readonly buildingsStat = stat('BUILDINGS', '–');
+  private readonly beaconsStat = stat('BEACONS', '–', 'signal');
   private readonly routePanel = h('div', { class: 'cw-hud__route cw-glass' });
   private readonly routeLabel = h('div', { class: 'cw-hud__route-label', text: 'HAULER STARTING' });
   private readonly routeTimer = h('div', { class: 'cw-hud__route-timer' });
@@ -49,6 +50,10 @@ export class Hud {
   private bannerLeft = 0;
   private hintLeft = 0;
   private buildingsTotal = 0;
+  private buildingsLeft = 0;
+  private beaconsTotal = 0;
+  private beaconsFound = 0;
+  private dishPending = false;
   private actionLabel = 'ACTION';
 
   constructor(parent: HTMLElement, bus: GameBus, commands: CommandBus) {
@@ -59,10 +64,16 @@ export class Hud {
     });
     this.levelStat.classList.add('cw-hud__level');
     this.buildingsStat.hidden = true;
-    for (const s of [this.obstaclesStat, this.buildingsStat, this.levelStat]) {
+    for (const s of [this.obstaclesStat, this.buildingsStat, this.beaconsStat, this.levelStat]) {
       s.classList.add('cw-glass', 'cw-hud__counter');
     }
-    this.counters.append(pause, this.obstaclesStat, this.buildingsStat, this.levelStat);
+    this.counters.append(
+      pause,
+      this.obstaclesStat,
+      this.buildingsStat,
+      this.beaconsStat,
+      this.levelStat,
+    );
 
     this.routePanel.append(
       h('div', { class: 'cw-hud__route-head' }, this.routeLabel, this.routeTimer),
@@ -168,10 +179,8 @@ export class Hud {
           this.buildingsStat,
           `${this.buildingsTotal - s.buildingsLeft} / ${this.buildingsTotal}`,
         );
-        this.roamText.textContent =
-          s.buildingsLeft > 0
-            ? `No timer. Wreck ${s.buildingsLeft} more building${s.buildingsLeft === 1 ? '' : 's'} for gold.`
-            : 'No timer. Every building is down.';
+        this.buildingsLeft = s.buildingsLeft;
+        this.updateRoamText();
         if (s.countdown !== null && s.next !== null) {
           this.routeLabel.textContent = `NEXT IMPACT · ${s.next.toUpperCase()}`;
           this.routeTimer.textContent = formatClock(s.countdown);
@@ -206,6 +215,19 @@ export class Hud {
         this.context.hidden = context === null;
         if (context) this.context.replaceChildren(chip('E', 'hazard'), ` ${context.label}`);
       }),
+      bus.on('pickup:beacon', ({ found, total }) => {
+        this.beaconsFound = found;
+        setStat(this.beaconsStat, `${found} / ${total}`);
+        // Restart the flash on the next frame, so back-to-back beacons each flash.
+        this.beaconsStat.classList.remove('is-flash');
+        requestAnimationFrame(() => this.beaconsStat.classList.add('is-flash'));
+        if (found === total) this.showHint('Every beacon is lit.');
+        this.updateRoamText();
+      }),
+      bus.on('pickup:dish', () => {
+        this.dishPending = false;
+        this.updateRoamText();
+      }),
       bus.on('hint', ({ text }) => {
         this.showHint(text);
       }),
@@ -233,8 +255,28 @@ export class Hud {
     );
   }
 
+  /** What is left for gold, in the free-roam strip. */
+  private updateRoamText(): void {
+    const left: string[] = [];
+    const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+    if (this.buildingsLeft > 0) left.push(plural(this.buildingsLeft, 'building'));
+    const beaconsLeft = this.beaconsTotal - this.beaconsFound;
+    if (beaconsLeft > 0) left.push(plural(beaconsLeft, 'beacon'));
+    if (this.dishPending) left.push('the relay dish');
+    this.roamText.textContent =
+      left.length === 0
+        ? 'No timer. Everything is done: finish for gold.'
+        : `No timer. For gold: ${left.join(', ')}.`;
+  }
+
   /** Sets up for a fresh attempt at a level. */
-  reset(levelName: string, buildingsTotal: number): void {
+  reset(levelName: string, buildingsTotal: number, beaconsTotal = 0, dishExists = false): void {
+    this.beaconsTotal = beaconsTotal;
+    this.beaconsFound = 0;
+    this.buildingsLeft = buildingsTotal;
+    this.dishPending = dishExists;
+    this.beaconsStat.hidden = beaconsTotal === 0;
+    setStat(this.beaconsStat, `0 / ${beaconsTotal}`);
     this.routePanel.hidden = false;
     this.obstaclesStat.hidden = false;
     this.buildingsStat.hidden = true;
