@@ -1,0 +1,81 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: var(--cw-ground);
+  color: var(--cw-ink);
+  font-family: var(--cw-font-body);
+  -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  /* No pinch zoom, pull-to-refresh, text selection or callouts on the game view. */
+  touch-action: none;
+  overscroll-behavior: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  height: 100dvh;
+}
+
+#scene {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#ui {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+#ui > * {
+  pointer-events: auto;
+}
+
+.cw-boot-error {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: var(--cw-space-3);
+  padding: var(--cw-space-5);
+  text-align: center;
+  background: var(--cw-ground);
+}
+
+.cw-boot-error h1 {
+  margin: 0;
+  font-family: var(--cw-font-display);
+  font-weight: 900;
+  font-size: 44px;
+  text-transform: uppercase;
+  color: var(--cw-alarm);
+}
+
+.cw-boot-error p {
+  margin: 0;
+  max-width: 36ch;
+  color: var(--cw-ink-soft);
+}

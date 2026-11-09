@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+dist-ssr/
+dev-dist/
+*.tsbuildinfo
+
+# Test and coverage output
+coverage/
+test-results/
+playwright-report/
+.vitest/
+
+# Caches
+.cache/
+.vite/
+.eslintcache
+.stylelintcache
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Environment files (keep the example)
+.env
+.env.*
+!.env.example
+
+# Local HTTPS certificates for device testing
+*.pem
+*.key
+*.crt
+
+# Editors and operating systems
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Claude Code local settings
+.claude/settings.local.json

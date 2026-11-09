@@ -1,0 +1,45 @@
+{
+  "name": "clearway",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Clearway: a browser demolition-puzzle game prototype. Clear the Hauler's route before it hits anything.",
+  "license": "GPL-3.0-or-later",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "vite --host",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
+    "icons": "pwa-assets-generator"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "0.21.0",
+    "@fontsource/big-shoulders-display": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "@fontsource/space-grotesk": "5.3.0",
+    "three": "0.187.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@types/three": "0.187.0",
+    "@vite-pwa/assets-generator": "2.0.0",
+    "eslint": "10.13.0",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.13.0",
+    "prettier": "3.9.10",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.72.1",
+    "vite": "8.3.5",
+    "vite-plugin-pwa": "2.0.0",
+    "vitest": "5.0.5"
+  }
+}
