@@ -1,0 +1,270 @@
+{
+  "id": "ferrow-junction",
+  "index": 2,
+  "name": "Ferrow Junction",
+  "setting": "Rail town, dusk",
+  "lighting": "dusk",
+  "terrain": {
+    "heightmap": "ferrow-junction.height.png",
+    "colourmap": "ferrow-junction.colour.png",
+    "props": "ferrow-junction.props.json",
+    "metersPerPixel": 2,
+    "maxHeight": 24
+  },
+  "hauler": {
+    "speed": 4,
+    "startDelay": 5,
+    "route": [
+      [-306.3, 83.9],
+      [-257.1, 82.3],
+      [-208.2, 76.9],
+      [-159.9, 67.4],
+      [-112.6, 54],
+      [-65.9, 38.3],
+      [-19.5, 22],
+      [27.5, 7.4],
+      [75.6, -3],
+      [124, -12.3],
+      [171.8, -24],
+      [218.3, -40.1],
+      [263.1, -60.3],
+      [306.3, -83.9]
+    ]
+  },
+  "player": {
+    "vehicle": "fishtail"
+  },
+  "vehicles": [
+    {
+      "type": "fishtail",
+      "pos": [-274.6, 74.1],
+      "yaw": 108
+    },
+    {
+      "type": "bruiser",
+      "pos": [131, 10.7],
+      "yaw": -12
+    }
+  ],
+  "buildings": [
+    {
+      "id": "terrace-a-north",
+      "style": "terrace",
+      "strength": "house",
+      "pos": [-201, 70.8],
+      "size": [11, 8.5, 8],
+      "yaw": 190,
+      "group": "terrace-a"
+    },
+    {
+      "id": "terrace-a-south",
+      "style": "terrace",
+      "strength": "house",
+      "pos": [-193.5, 79.4],
+      "size": [11, 8.5, 8],
+      "yaw": 10,
+      "group": "terrace-a"
+    },
+    {
+      "id": "corner-shop",
+      "style": "shop",
+      "strength": "brick",
+      "pos": [-124.4, 51.9],
+      "size": [10, 7.5, 9],
+      "yaw": 197,
+      "group": "shop-pub"
+    },
+    {
+      "id": "pub",
+      "style": "shop",
+      "strength": "brick",
+      "pos": [-113.4, 60.3],
+      "size": [12, 8, 10],
+      "yaw": 17,
+      "group": "shop-pub"
+    },
+    {
+      "id": "terrace-b-north",
+      "style": "terrace",
+      "strength": "house",
+      "pos": [47.9, -2.4],
+      "size": [11, 8.5, 8],
+      "yaw": 191,
+      "group": "terrace-b"
+    },
+    {
+      "id": "terrace-b-south",
+      "style": "terrace",
+      "strength": "house",
+      "pos": [55.8, 6],
+      "size": [11, 8.5, 8],
+      "yaw": 12,
+      "group": "terrace-b"
+    },
+    {
+      "id": "signal-box",
+      "style": "signal-box",
+      "strength": "concrete",
+      "pos": [145, -14.4],
+      "size": [6, 8, 5],
+      "yaw": 13
+    },
+    {
+      "id": "warehouse-west",
+      "style": "warehouse",
+      "strength": "brick",
+      "pos": [222.7, -49.5],
+      "size": [16, 9, 12],
+      "yaw": 203,
+      "group": "warehouses"
+    },
+    {
+      "id": "warehouse-east",
+      "style": "warehouse",
+      "strength": "brick",
+      "pos": [239.1, -41.2],
+      "size": [16, 9, 12],
+      "yaw": 24,
+      "group": "warehouses"
+    },
+    {
+      "id": "terrace-1",
+      "style": "terrace",
+      "strength": "house",
+      "pos": [-262.2, 67.6],
+      "size": [11, 8.5, 8],
+      "yaw": 183
+    },
+    {
+      "id": "terrace-2",
+      "style": "terrace",
+      "strength": "house",
+      "pos": [-243, 96.2],
+      "size": [11, 8.5, 8],
+      "yaw": 5
+    },
+    {
+      "id": "terrace-3",
+      "style": "terrace",
+      "strength": "house",
+      "pos": [-153.8, 82.4],
+      "size": [11, 8.5, 8],
+      "yaw": 14
+    },
+    {
+      "id": "terrace-4",
+      "style": "terrace",
+      "strength": "house",
+      "pos": [-90.7, 31],
+      "size": [11, 8.5, 8],
+      "yaw": 199
+    },
+    {
+      "id": "terrace-5",
+      "style": "terrace",
+      "strength": "house",
+      "pos": [13.2, 27.1],
+      "size": [11, 8.5, 8],
+      "yaw": 17
+    },
+    {
+      "id": "terrace-6",
+      "style": "terrace",
+      "strength": "house",
+      "pos": [83.9, -19.9],
+      "size": [11, 8.5, 8],
+      "yaw": 191
+    },
+    {
+      "id": "station",
+      "style": "station",
+      "strength": "brick",
+      "pos": [-89.6, -43.4],
+      "size": [20, 7, 8],
+      "yaw": -70
+    },
+    {
+      "id": "yard-shed",
+      "style": "warehouse",
+      "strength": "brick",
+      "pos": [188.1, 2.4],
+      "size": [12, 7, 10],
+      "yaw": 17
+    },
+    {
+      "id": "container-1",
+      "style": "container",
+      "strength": "brick",
+      "pos": [156, 5],
+      "size": [6, 2.6, 2.4],
+      "yaw": 104
+    },
+    {
+      "id": "container-2",
+      "style": "container",
+      "strength": "brick",
+      "pos": [160.9, 7.4],
+      "size": [6, 2.6, 2.4],
+      "yaw": 104
+    },
+    {
+      "id": "container-3",
+      "style": "container",
+      "strength": "brick",
+      "pos": [186.3, -51.7],
+      "size": [6, 2.6, 2.4],
+      "yaw": 19
+    }
+  ],
+  "tnt": [
+    {
+      "pos": [139.2, 0.7]
+    }
+  ],
+  "rail": {
+    "points": [
+      [-116.2, -156],
+      [-99.3, -109],
+      [-82.4, -61.9],
+      [-65.5, -14.9],
+      [-48.7, 32.2],
+      [-31.8, 79.3],
+      [-14.9, 126.3],
+      [2, 173.4],
+      [18.8, 220.5]
+    ],
+    "railbed": 350,
+    "slot": 200
+  },
+  "routeGap": {
+    "id": "rail-cutting",
+    "from": 260,
+    "to": 268.8
+  },
+  "targets": {
+    "terrace-a": 100,
+    "shop-pub": 180,
+    "rail-cutting": 260,
+    "terrace-b": 360,
+    "signal-box": 460,
+    "warehouses": 540
+  },
+  "description": "Clear 5 obstacles and bridge the rail cutting before the Hauler reaches them.",
+  "hints": {
+    "start": "Hold Action to skid. The Fishtail’s tail does the damage.",
+    "terrace-a": "Skid past the terraces so the tail swings into them.",
+    "shop-pub": "Brick. Build speed down the high street, then skid into the shop and the pub.",
+    "rail-cutting": "The Hauler can’t cross the cutting. Fetch the Railbed from down the line and park it in the glowing slot.",
+    "terrace-b": "Skid along terrace B on both sides of the street.",
+    "signal-box": "Concrete. Bring the TNT crate from the goods yard with the Bruiser.",
+    "warehouses": "Brick warehouses: skid hard into both, or ram them with the Bruiser."
+  },
+  "tips": {
+    "terrace-a": "Hold Action to skid. Only the tail hits hard, so swing it into the houses.",
+    "shop-pub": "Skid downhill for extra speed. Both the shop and the pub must fall.",
+    "rail-cutting": "Leave the Fishtail by the rails, enter the Railbed and stop it in the glowing slot.",
+    "terrace-b": "Clear terrace B on both sides of the street before the Hauler arrives.",
+    "signal-box": "Only TNT drops concrete here. The Bruiser and a crate wait in the goods yard.",
+    "warehouses": "Both warehouses must fall. Leave the signal box early."
+  }
+}

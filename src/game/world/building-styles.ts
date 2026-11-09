@@ -1,7 +1,49 @@
 import { type BufferGeometry, ConeGeometry, Euler, Quaternion, Vector3 } from 'three';
 import { box, gable, merge, paint, place, shade, type Vec3 } from '../models/geometry';
 
-export type BuildingStyle = 'shed' | 'house' | 'barn' | 'stone-barn' | 'kiosk' | 'silo' | 'fence';
+export type BuildingStyle =
+  | 'shed'
+  | 'house'
+  | 'barn'
+  | 'stone-barn'
+  | 'kiosk'
+  | 'silo'
+  | 'fence'
+  | 'terrace'
+  | 'shop'
+  | 'signal-box'
+  | 'warehouse'
+  | 'station'
+  | 'cabin'
+  | 'gantry'
+  | 'hangar'
+  | 'crusher'
+  | 'chimney'
+  | 'hut'
+  | 'container';
+
+/** Every style, for tests and tools. */
+export const BUILDING_STYLES: readonly BuildingStyle[] = [
+  'shed',
+  'house',
+  'barn',
+  'stone-barn',
+  'kiosk',
+  'silo',
+  'fence',
+  'terrace',
+  'shop',
+  'signal-box',
+  'warehouse',
+  'station',
+  'cabin',
+  'gantry',
+  'hangar',
+  'crusher',
+  'chimney',
+  'hut',
+  'container',
+];
 
 /** One pre-fractured part of a building: it stands in place until the building collapses. */
 export interface Piece {
@@ -463,6 +505,386 @@ export function buildShape(style: BuildingStyle, size: Vec3, seed: number): Buil
       place(cone, [0, 0, 0], [0, Math.PI / sides, 0]);
       set.add([cone], [0, ringH * rings + radius * 0.4, 0]);
       return { pieces: set.pieces, foundation: foundation(w, d), debrisColour: '#D9D6CC' };
+    }
+
+    case 'terrace': {
+      // A row of narrow houses sharing side walls, each with its own colours and chimney.
+      const units = Math.max(2, Math.round(w / 5.5));
+      const unitW = w / units;
+      const eave = h * 0.64;
+      const wallColours = ['#B98C6A', '#C9A27E', '#A87A5A', '#BE9573'];
+      const roofColours = ['#6F4A3A', '#5F6466', '#7A5240', '#4E5A63'];
+      const doorColours = ['#2E4A6B', '#6B2E2E', '#2E5B3A'];
+      for (let u = 0; u < units; u++) {
+        const unit = new PieceSet();
+        const colour = wallColours[u % wallColours.length] ?? '#B98C6A';
+        const face = {
+          colour,
+          thickness: 0.3,
+          panelWidth: unitW,
+          windowRows: 2,
+          windowSize: [1.1, 1.1] as const,
+          doorPanel: 0,
+          doorColour: doorColours[u % doorColours.length] ?? '#2E4A6B',
+          rand,
+        };
+        unit.addAll(wall(unitW, eave, face), [0, 0, d / 2 - 0.15], 0);
+        unit.addAll(wall(unitW, eave, { ...face, doorPanel: -1 }), [0, 0, -d / 2 + 0.15], Math.PI);
+        // Only the two end houses have exposed side walls.
+        if (u === 0 || u === units - 1) {
+          const side = u === 0 ? -1 : 1;
+          unit.addAll(
+            wall(d - 0.6, eave, { ...face, panelWidth: 3.2, windowRows: 0, doorPanel: -1 }),
+            [side * (unitW / 2 - 0.15), 0, 0],
+            side * (Math.PI / 2),
+          );
+        }
+        unit.addAll(
+          gableRoof(unitW, d, eave, h, {
+            colour: roofColours[u % roofColours.length] ?? '#6F4A3A',
+            overhang: 0.3,
+            segmentWidth: unitW + 0.6,
+            gableColour: colour,
+          }),
+          [0, 0, 0],
+          0,
+        );
+        unit.add([box([0.7, 1.6, 0.7], '#8F5A44')], [unitW * 0.3, h - 0.2, 0]);
+        set.addAll(unit, [-w / 2 + unitW * (u + 0.5), 0, 0], 0);
+      }
+      return { pieces: set.pieces, foundation: foundation(w, d), debrisColour: '#B98C6A' };
+    }
+
+    case 'shop': {
+      // A brick corner shop with flats above, a striped awning and a fascia sign.
+      const eave = h * 0.82;
+      set.addAll(
+        walls(w, d, eave, {
+          colour: '#9C5A44',
+          thickness: 0.35,
+          panelWidth: 3,
+          windowRows: 2,
+          windowSize: [1.3, 1.2],
+          doorPanel: 0,
+          doorColour: '#2E4A6B',
+          trim: '#EDE6D6',
+          rand,
+        }),
+        [0, 0, 0],
+        0,
+      );
+      set.addAll(flatRoof(w, d, eave, '#4E4A48', 3), [0, 0, 0], 0);
+      const stripes = Math.max(2, Math.round(w / 1.2));
+      const stripeW = w / stripes;
+      for (let k = 0; k < stripes; k++) {
+        set.add(
+          [box([stripeW, 0.12, 1.4], k % 2 === 0 ? '#2E7D5B' : '#EDE6D6')],
+          [-w / 2 + stripeW * (k + 0.5), 3.1, d / 2 + 0.6],
+          [0.35, 0, 0],
+        );
+      }
+      set.add(
+        [box([w * 0.7, 0.6, 0.15], '#1F3A5F'), box([w * 0.6, 0.3, 0.17], '#FFD23F')],
+        [0, 3.8, d / 2 + 0.1],
+      );
+      return { pieces: set.pieces, foundation: foundation(w, d), debrisColour: '#9C5A44' };
+    }
+
+    case 'signal-box': {
+      // A concrete base, a glazed operating room on top and a slate roof.
+      const base = h * 0.45;
+      const room = h * 0.35;
+      set.addAll(
+        walls(w, d, base, {
+          colour: '#A8A49A',
+          thickness: 0.5,
+          panelWidth: 2.4,
+          windowRows: 0,
+          doorPanel: 0,
+          doorColour: '#3A414B',
+          rand,
+        }),
+        [0, 0, 0],
+        0,
+      );
+      set.addAll(
+        walls(w, d, room, {
+          colour: '#C8C4B8',
+          thickness: 0.3,
+          panelWidth: 2.2,
+          windowRows: 1,
+          windowSize: [1.6, 1.4],
+          doorPanel: -1,
+          trim: '#5E3822',
+          rand,
+        }),
+        [0, base, 0],
+        0,
+      );
+      set.addAll(
+        gableRoof(w, d, base + room, h, {
+          colour: '#4E5458',
+          overhang: 0.5,
+          segmentWidth: 2.4,
+          gableColour: '#C8C4B8',
+        }),
+        [0, 0, 0],
+        0,
+      );
+      return { pieces: set.pieces, foundation: foundation(w, d), debrisColour: '#A8A49A' };
+    }
+
+    case 'warehouse': {
+      const eave = h * 0.72;
+      set.addAll(
+        walls(w, d, eave, {
+          colour: '#8A4E3C',
+          thickness: 0.35,
+          panelWidth: 4,
+          windowRows: 1,
+          windowSize: [1.6, 0.9],
+          doorPanel: Math.floor(Math.max(1, Math.round(w / 4)) / 2),
+          doorSize: [4, 4.2],
+          doorColour: '#4E5A63',
+          trim: '#C9BFA8',
+          rand,
+        }),
+        [0, 0, 0],
+        0,
+      );
+      set.addAll(
+        gableRoof(w, d, eave, h, {
+          colour: '#7F8A93',
+          overhang: 0.4,
+          segmentWidth: 4,
+          gableColour: '#8A4E3C',
+          thickness: 0.18,
+        }),
+        [0, 0, 0],
+        0,
+      );
+      return { pieces: set.pieces, foundation: foundation(w, d), debrisColour: '#8A4E3C' };
+    }
+
+    case 'station': {
+      // A small station building with a platform canopy on posts along the front.
+      const eave = h * 0.6;
+      set.addAll(
+        walls(w, d, eave, {
+          colour: '#C9B48A',
+          thickness: 0.35,
+          panelWidth: 3.2,
+          windowRows: 1,
+          doorPanel: 1,
+          trim: '#6B2E2E',
+          rand,
+        }),
+        [0, 0, 0],
+        0,
+      );
+      set.addAll(
+        gableRoof(w, d, eave, h, {
+          colour: '#5F6466',
+          overhang: 0.6,
+          segmentWidth: 3.4,
+          gableColour: '#C9B48A',
+        }),
+        [0, 0, 0],
+        0,
+      );
+      for (let k = 0; k <= 4; k++) {
+        set.add([box([0.2, 3.4, 0.2], '#3A414B')], [-w / 2 + (w * k) / 4, 1.7, d / 2 + 3]);
+      }
+      set.add([box([w + 1, 0.2, 4], '#6F7476')], [0, 3.5, d / 2 + 2]);
+      return { pieces: set.pieces, foundation: foundation(w, d + 4), debrisColour: '#C9B48A' };
+    }
+
+    case 'cabin': {
+      // A site cabin: a ribbed steel box on blocks, with windows and a door.
+      const colour = rand() > 0.5 ? '#D9DCE0' : '#3E6C8F';
+      set.addAll(
+        walls(w, d, h - 0.6, {
+          colour,
+          thickness: 0.15,
+          panelWidth: 2.2,
+          windowRows: 1,
+          windowSize: [1.0, 0.7],
+          doorPanel: 0,
+          doorColour: '#2B3038',
+          trim: '#8E95A0',
+          rand,
+        }),
+        [0, 0.3, 0],
+        0,
+      );
+      set.addAll(flatRoof(w, d, h - 0.3, '#8E95A0', 2.2), [0, 0, 0], 0);
+      for (const x of [-w / 2 + 0.4, w / 2 - 0.4]) {
+        set.add([box([0.5, 0.3, d - 0.4], '#5E5A54')], [x, 0.15, 0]);
+      }
+      return { pieces: set.pieces, foundation: null, debrisColour: colour };
+    }
+
+    case 'gantry': {
+      // A conveyor on steel trestles, rising gently along its length, low enough to hit
+      // from a jump, with a belt and a side rail.
+      const slope = Math.atan2(h * 0.28, w);
+      const legs = Math.max(2, Math.round(w / 6));
+      for (let k = 0; k < legs; k++) {
+        const x = -w / 2 + 1 + ((w - 2) * k) / (legs - 1);
+        const legH = h * (0.42 + 0.28 * (k / (legs - 1)));
+        set.add(
+          [
+            box([0.35, legH, 0.35], '#3A414B', [0, 0, -d / 2 + 0.25]),
+            box([0.35, legH, 0.35], '#3A414B', [0, 0, d / 2 - 0.25]),
+            box([0.2, 0.2, d], '#FFC21A'),
+          ],
+          [x, legH / 2, 0],
+        );
+      }
+      const segments = Math.max(2, Math.round(w / 4));
+      const segW = w / segments / Math.cos(slope);
+      for (let k = 0; k < segments; k++) {
+        const x = -w / 2 + (w / segments) * (k + 0.5);
+        const y = h * (0.42 + 0.28 * ((k + 0.5) / segments)) + 0.3;
+        set.add(
+          [
+            box([segW, 0.5, d], '#6E7177'),
+            box([segW, 0.1, d - 0.6], '#2B3038', [0, 0.3, 0]),
+            box([segW, 0.6, 0.08], '#FFC21A', [0, 0.55, d / 2 - 0.04]),
+          ],
+          [x, y, 0],
+          [0, 0, slope],
+        );
+      }
+      return { pieces: set.pieces, foundation: null, debrisColour: '#6E7177' };
+    }
+
+    case 'hangar': {
+      // Low walls under an arched roof of curved segments, with big doors at the front.
+      const wallH = h * 0.4;
+      set.addAll(
+        walls(w, d, wallH, {
+          colour: '#7F8A93',
+          thickness: 0.3,
+          panelWidth: 4,
+          windowRows: 0,
+          doorPanel: -1,
+          rand,
+        }),
+        [0, 0, 0],
+        0,
+      );
+      const arcs = 6;
+      const rise = h - wallH;
+      const bays = Math.max(1, Math.round(w / 5));
+      for (let k = 0; k < arcs; k++) {
+        const a0 = Math.PI - (Math.PI * k) / arcs;
+        const a1 = Math.PI - (Math.PI * (k + 1)) / arcs;
+        const z0 = (Math.cos(a0) * d) / 2;
+        const z1 = (Math.cos(a1) * d) / 2;
+        const y0 = wallH + Math.sin(a0) * rise;
+        const y1 = wallH + Math.sin(a1) * rise;
+        const length = Math.hypot(z1 - z0, y1 - y0);
+        const tilt = Math.atan2(y1 - y0, z1 - z0);
+        for (let j = 0; j < bays; j++) {
+          set.add(
+            [box([w / bays - 0.02, 0.22, length + 0.05], k % 2 === 0 ? '#9AA3AD' : '#8E97A1')],
+            [-w / 2 + (w / bays) * (j + 0.5), (y0 + y1) / 2, (z0 + z1) / 2],
+            [-tilt, 0, 0],
+          );
+        }
+      }
+      set.add([box([w * 0.7, wallH * 0.95, 0.2], '#C9A227')], [0, wallH * 0.48, d / 2 + 0.1]);
+      return { pieces: set.pieces, foundation: foundation(w, d), debrisColour: '#9AA3AD' };
+    }
+
+    case 'crusher': {
+      // A heavy concrete block with a steel hopper on top and a discharge chute.
+      const base = h * 0.65;
+      set.addAll(
+        walls(w, d, base, {
+          colour: '#9E9A90',
+          thickness: 0.8,
+          panelWidth: 3,
+          windowRows: 0,
+          doorPanel: -1,
+          rand,
+        }),
+        [0, 0, 0],
+        0,
+      );
+      set.addAll(flatRoof(w, d, base, '#8A867C', 3), [0, 0, 0], 0);
+      set.add(
+        [
+          box([w * 0.7, h * 0.3, d * 0.7], '#C9A227'),
+          box([w * 0.5, 0.4, d * 0.5], '#2B3038', [0, h * 0.16, 0]),
+        ],
+        [0, h * 0.82, 0],
+      );
+      set.add([box([1.4, 0.4, 3], '#5D6470')], [w * 0.2, h * 0.35, d / 2 + 1.2], [0.5, 0, 0]);
+      return { pieces: set.pieces, foundation: foundation(w, d), debrisColour: '#9E9A90' };
+    }
+
+    case 'chimney': {
+      // A tall chimney in tapering courses, with a sooty band near the top.
+      const courses = Math.max(3, Math.round(h / 4));
+      const courseH = h / courses;
+      for (let c = 0; c < courses; c++) {
+        const width = w * (1 - 0.35 * (c / courses));
+        const colour = c === courses - 1 ? '#3A3836' : '#A8988A';
+        set.add(
+          [
+            shade(box([width, courseH, width], colour), 0.95 + rand() * 0.08),
+            box([width + 0.1, 0.15, width + 0.1], '#8E7F72', [0, courseH / 2 - 0.08, 0]),
+          ],
+          [0, courseH * (c + 0.5), 0],
+        );
+      }
+      return { pieces: set.pieces, foundation: foundation(w, d), debrisColour: '#A8988A' };
+    }
+
+    case 'hut': {
+      set.addAll(
+        walls(w, d, h * 0.7, {
+          colour: rand() > 0.5 ? '#9A7A55' : '#7F8A6A',
+          thickness: 0.15,
+          panelWidth: 2,
+          windowRows: 1,
+          windowSize: [0.7, 0.6],
+          doorPanel: 0,
+          rand,
+        }),
+        [0, 0, 0],
+        0,
+      );
+      set.addAll(
+        gableRoof(w, d, h * 0.7, h, {
+          colour: '#6E7177',
+          overhang: 0.25,
+          segmentWidth: 2.5,
+          gableColour: '#856745',
+          thickness: 0.12,
+        }),
+        [0, 0, 0],
+        0,
+      );
+      return { pieces: set.pieces, foundation: null, debrisColour: '#9A7A55' };
+    }
+
+    case 'container': {
+      // A shipping container in three sections, with corrugation ribs.
+      const colour =
+        ['#B4553E', '#3E6C8F', '#2E7D5B', '#C9A227'][Math.floor(rand() * 4)] ?? '#B4553E';
+      const sectionW = w / 3;
+      for (let k = 0; k < 3; k++) {
+        const parts = [box([sectionW, h, d], colour)];
+        for (let r = 0; r < Math.floor(sectionW / 0.6); r++) {
+          const x = -sectionW / 2 + 0.3 + r * 0.6;
+          parts.push(shade(box([0.08, h - 0.2, d + 0.04], colour, [x, 0, 0]), 0.85));
+        }
+        set.add(parts, [-w / 2 + sectionW * (k + 0.5), h / 2, 0]);
+      }
+      return { pieces: set.pieces, foundation: null, debrisColour: colour };
     }
 
     case 'fence': {

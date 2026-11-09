@@ -195,3 +195,44 @@ Measured on a desktop browser with WebGPU: 24–35 draw calls and 15–20k trian
 - **Medal count on the title and campaign counts bronze 1, silver 2 and gold 3**, out of 9 for three levels. The mocks show "1/9" next to a silver medal, which doesn't add up under either reading.
 - **"Watch again" is left out of the fail screen** until milestone 7 adds the replay.
 - **Next level goes to the campaign map**, as the mock's link does, where the newly unlocked level shows NEXT UP.
+
+## Milestone 6: vehicles and levels
+
+### What works
+
+- **Pilot on foot.** Press E (or the context button) to get out, walk at 12 km/h and climb into any unlocked vehicle within reach. The context pill names what Enter does, such as "Enter Railbed".
+- **Fishtail**, the Ferrow Junction starter. Hold Action to skid: the armoured tail does 1.8× damage while skidding and 0.9× otherwise, and the cab only 0.4×. The auto-skid setting skids on hard turns, and skids leave ghost trails.
+- **Liftoff**, the Cinder Quarry starter. It reaches 110 km/h, and Action fires a 1-second boost that recharges in 3 seconds. Landing on a roof does 14× damage and ramming does 2.5×.
+- **Tumbler.** Action curls it into a 90 km/h roll for 1.5 seconds. Rolls that hit within 2 seconds of each other do 25% more damage per hit, up to three times. It's the only vehicle that damages concrete, and it stays locked in its hangar until the hangar falls.
+- **Railbed.** It drives only along its rails. Stop it within 3 m of the glowing slot and it locks in, folds down two side plates and bridges the rail cutting; the slot turns green. The Hauler crosses only a bridged cutting, and an open one ends the run.
+- **Twelve new building styles:** terrace row, corner shop, signal box, warehouse, station, site cabin, conveyor gantry, hangar, crusher, chimney, workers' hut and shipping container.
+- **Ferrow Junction** (640 m at 4 m/s, dusk) and **Cinder Quarry** (760 m at 5 m/s, noon), with every obstacle at the brief's distance, hints, fail tips and briefing text. The campaign unlocks them in order, and the briefing lists every machine, including the Railbed and the locked Tumbler.
+- **Terrain baker additions:** rounded-rectangle pits for the quarry terraces, channels cut after the road is levelled (the rail cutting), per-channel colours, and trees kept out of the pit.
+- **Level checks in the unit tests:** each level's route length and Hauler time match the campaign, no vehicle or crate starts in the Hauler's path, a locked vehicle starts inside the building that frees it, and the Railbed slot sits across the route gap.
+
+### Stubbed
+
+- Beacons and the relay dish (on the station roof in Ferrow Junction and on a ledge in Cinder Quarry), sound and music, hit-stop and camera shake, and the failure replay arrive in milestone 7.
+- The station and the stacked containers are scenery until the relay dish needs them.
+
+### How to test
+
+1. Open `/?level=ferrow-junction`, or earn a medal on Hollow Creek to unlock it.
+2. Hold Space to skid the Fishtail's tail into terrace A on both sides of the street.
+3. Drive south along the rails to the Railbed, press E to get out and E again to climb in. Drive it into the glowing slot over the cutting and watch the plates fold down.
+4. Open `/?level=cinder-quarry`. Drive the Liftoff off the rim onto the site cabins, then boost off the spoil heap beside the road into the conveyor gantry.
+5. Land on the hangar roof, switch to the freed Tumbler and roll it into the crushers twice in quick succession.
+6. Run `npm test` for the level layout checks.
+
+### Deviations
+
+- **The rail crosses the route at 260 m**, as the obstacle table requires. The level map draws the crossing at x ≈ 201, which on a 640 m route falls at about 310 m, so the rail moves to x ≈ 174 and the campaign thumbnail follows it.
+- **The Railbed tops out at 45 km/h, not 30 km/h.** The shop and pub fall at about 0:50 and the Hauler reaches the cutting at 1:10. At 30 km/h, driving the Railbed 150 m alone takes 21 seconds, which leaves no time to reach it. At 45 km/h the run takes 14 seconds.
+- **Drive to the Railbed rather than walk.** The brief's "walk to the Railbed 150 m down the line" takes 45 seconds at the pilot's 12 km/h. Drive the Fishtail there and get out beside it.
+- **The Railbed folds down side plates.** Its 3 m deck is narrower than the cutting that a 2 m heightmap can draw, so two hinged plates span the banks once it locks in. The deck sits flush with the road, within 0.1 m.
+- **The rail cutting counts as an obstacle.** It has a number, an outline and a place in the obstacle count, and it clears when the Railbed locks in.
+- **The Tumbler stands about 5.5 m tall, not 12 m.** At 12 m it would not fit in a hangar the Liftoff can land on, and it would hide the road at the closest zoom.
+- **Landings are measured from the wheels.** Ray-cast wheels touch a roof without the chassis ever colliding, so the vehicle reports a touchdown on a building with its fall speed, and the building takes damage as if hit from above.
+- **The quarry floor ends at y = 245 on the level map, not 255**, so the last straight runs on the second terrace instead of along the edge of the floor.
+- **The conveyor gantry's belt runs 3.8–6.3 m above the ground** and spans 32 m, so a boost off the spoil heap hits it rather than flying over.
+- **The site cabins fall to a plain drop off the rim.** A boost from the rim carries the Liftoff over them, so the hint says to drive off at a moderate speed.

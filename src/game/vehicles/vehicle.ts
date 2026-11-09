@@ -3,7 +3,7 @@ import type {
   DynamicRayCastVehicleController,
   RigidBody,
 } from '@dimforge/rapier3d-compat';
-import { Group, Quaternion, Vector3 } from 'three';
+import { Group, type Object3D, Quaternion, Vector3 } from 'three';
 import type { ControlFrame } from '../../engine/input/controls';
 import { COLLISION, WHEEL_RAY_GROUPS } from '../../engine/collision-groups';
 import { InterpolatedPose } from '../../engine/interpolation';
@@ -71,6 +71,54 @@ export interface VehicleSpec {
   };
 }
 
+/** The parts of a vehicle spec that every machine shares, wheeled or rail-bound. */
+export interface MachineSpec {
+  readonly type: VehicleType;
+  readonly name: string;
+  /** Kilograms. */
+  readonly mass: number;
+  readonly chassis: BoxCollider;
+}
+
+/**
+ * Anything the player can drive. Wheeled vehicles extend `Vehicle`; the Railbed, which
+ * runs on rails, implements this directly.
+ */
+export interface Machine {
+  readonly spec: MachineSpec;
+  readonly root: Group;
+  readonly body: RigidBody;
+  readonly colliders: readonly Collider[];
+  readonly actionLabel: string;
+  readonly actionState: ActionState;
+  readonly damageMultiplier: number;
+  readonly heading: number;
+  readonly position: Vector3;
+  readonly preStepVelocity: Vector3;
+  forwardSpeed: number;
+  locked: boolean;
+  drive: DriveOutput;
+  routeAssist: ((x: number, z: number) => number | null) | null;
+  /** True while it is a bridge the Hauler may drive over, like the parked Railbed. */
+  readonly bridging?: boolean;
+  /** A touchdown on something after a jump, for the destruction system to consume. */
+  landing?: { readonly collider: Collider; readonly speed: number } | null;
+  /** Damage multiplier for a hit made with one of this machine's colliders. */
+  impactMultiplier(collider: Collider, normal?: { x: number; y: number; z: number }): number;
+  /** Called after this machine's hit damaged a building. */
+  onImpact?(damage: number): void;
+  /** Ghost trails and similar ground effects. */
+  emitTrails?(frameSeconds: number, spawn: (at: Vector3) => void): void;
+  place(x: number, groundY: number, z: number, heading: number): void;
+  control(frame: ControlFrame, cameraYaw: number, dt: number): void;
+  idle(dt: number): void;
+  step(dt: number): void;
+  afterStep(): void;
+  render(alpha: number, frameSeconds: number): void;
+  velocity(out: Vector3): Vector3;
+  dispose(): void;
+}
+
 export interface ActionState {
   readonly ready: boolean;
   readonly active: boolean;
@@ -84,7 +132,7 @@ const FLIP_RECOVER_SECONDS = 1.5;
  * A drivable vehicle: a Rapier rigid body on a ray-cast wheel controller, with the
  * point-to-drive and classic control schemes, arcade assists and an interpolated model.
  */
-export abstract class Vehicle {
+export abstract class Vehicle implements Machine {
   readonly root = new Group();
   /** Height of the body origin above flat ground at rest. */
   abstract readonly rideHeight: number;
@@ -104,6 +152,14 @@ export abstract class Vehicle {
   yawRate = 0;
   /** True while at least one wheel touches the ground. */
   grounded = false;
+  /**
+   * Set on the step the wheels touch down after a jump: what they landed on and how fast
+   * the vehicle was falling. The destruction system reads and clears it.
+   */
+  landing: { readonly collider: Collider; readonly speed: number } | null = null;
+  private fallSpeed = 0;
+  /** A locked vehicle can't be entered (the Tumbler until its hangar falls). */
+  locked = false;
   /** Velocity just before the latest physics step, for measuring impacts. */
   readonly preStepVelocity = new Vector3();
   /**
@@ -206,6 +262,11 @@ export abstract class Vehicle {
     return this.root.position;
   }
 
+  /** By default every collider hits with the vehicle's damage multiplier. */
+  impactMultiplier(_collider: Collider, _normal?: { x: number; y: number; z: number }): number {
+    return this.damageMultiplier;
+  }
+
   /** Multiplies impact damage against buildings; 0 means this vehicle can't damage. */
   get damageMultiplier(): number {
     return this.spec.damageMultiplier ?? 1;
@@ -262,9 +323,13 @@ export abstract class Vehicle {
     this.pose.capture();
   }
 
+  /** Wheel meshes, by wheel index, that follow suspension, steering and spin. */
+  protected readonly wheelMeshes: (Object3D | undefined)[] = [];
+
   /** Interpolates the model and runs visual animation. */
   render(alpha: number, frameSeconds: number): void {
     this.pose.apply(alpha);
+    this.updateWheelMeshes();
     this.animate(frameSeconds);
   }
 
@@ -272,6 +337,22 @@ export abstract class Vehicle {
     this.physics.world.removeVehicleController(this.controller);
     this.physics.world.removeRigidBody(this.body);
     this.root.removeFromParent();
+  }
+
+  private updateWheelMeshes(): void {
+    const { controller } = this;
+    this.wheelMeshes.forEach((mesh, i) => {
+      if (!mesh) return;
+      const connection = controller.wheelChassisConnectionPointCs(i)?.y ?? 0;
+      const suspension = controller.wheelSuspensionLength(i) ?? 0;
+      mesh.position.y = connection - suspension;
+      mesh.rotation.set(
+        controller.wheelRotation(i) ?? 0,
+        controller.wheelSteering(i) ?? 0,
+        0,
+        'YXZ',
+      );
+    });
   }
 
   /** Per-frame visual animation (tracks, glows, moving parts). */
@@ -359,9 +440,19 @@ export abstract class Vehicle {
     this.forwardSpeed = v.x * this.tmpForward.x + v.y * this.tmpForward.y + v.z * this.tmpForward.z;
     this.yawRate = this.body.angvel().y;
     let contact = false;
+    let ground: Collider | null = null;
     for (let i = 0; i < this.controller.numWheels(); i++) {
-      if (this.controller.wheelIsInContact(i)) contact = true;
+      if (!this.controller.wheelIsInContact(i)) continue;
+      contact = true;
+      ground ??= this.controller.wheelGroundObject(i);
     }
+    // Wheels touch roofs only with their rays, so a landing never collides with the
+    // chassis. Track the fall instead and report the touchdown.
+    if (!contact) this.fallSpeed = Math.max(this.fallSpeed, -v.y);
+    else if (!this.grounded && ground && this.fallSpeed > 0) {
+      this.landing = { collider: ground, speed: this.fallSpeed };
+    }
+    if (contact) this.fallSpeed = 0;
     this.grounded = contact;
   }
 

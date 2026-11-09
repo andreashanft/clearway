@@ -10,6 +10,14 @@ import { HAULER } from './route-sweep';
 
 export type HaulerState = 'waiting' | 'rolling' | 'stalled' | 'parked' | 'destroyed';
 
+/** A route gap: across it the Hauler rides on the bridge deck, if there is one. */
+export interface HaulerGap {
+  readonly from: number;
+  readonly to: number;
+  readonly deckHeight: number;
+  bridged(): boolean;
+}
+
 /** Speed multiplier once the path is clear and the Hauler heads for the safe zone. */
 export const SAFE_ZONE_SPEEDUP = 2.5;
 
@@ -33,6 +41,8 @@ export class Hauler {
   state: HaulerState = 'waiting';
   /** Distance of the nose along the route, in metres. */
   distance = 0;
+  /** Route gaps the Hauler must cross on a bridge. */
+  gaps: HaulerGap[] = [];
   /** Seconds left on an easy-mode stall. */
   private stallLeft = 0;
   private speedFactor = 1;
@@ -205,6 +215,10 @@ export class Hauler {
     const extra = Math.min(0, distance);
     const x = s.x + s.dx * extra;
     const z = s.z + s.dz * extra;
-    return new Vector3(x, this.field.heightAt(x, z), z);
+    let y = this.field.heightAt(x, z);
+    for (const gap of this.gaps) {
+      if (distance > gap.from - 3 && distance < gap.to + 3 && gap.bridged()) y = gap.deckHeight;
+    }
+    return new Vector3(x, y, z);
   }
 }

@@ -1,7 +1,7 @@
 /**
  * Bakes each level's terrain from a recipe into the files the game loads:
  *
- *   levels/<id>.terrain.json  (input)  hills, slopes, channels, fields, scatter rules
+ *   levels/<id>.terrain.json  (input)  hills, slopes, pits, channels, fields, scatter rules
  *   levels/<id>.json          (input)  route and building footprints to flatten
  *   levels/<id>.height.png    (output) 8-bit grayscale heightmap
  *   levels/<id>.colour.png    (output) RGB ground colour texture
@@ -26,8 +26,31 @@ interface Recipe {
   noise?: { amplitude: number; scale: number };
   hills?: { at: Vec2; radius: number; height: number }[];
   terraces?: { at: Vec2; radii: number[]; heights: number[]; blend: number }[];
+  /**
+   * Rounded rectangles flattened to a fixed height, applied in order: list the outer
+   * level first to dig a stepped pit such as a quarry.
+   */
+  pits?: {
+    min: Vec2;
+    max: Vec2;
+    radius: number;
+    height: number;
+    blend: number;
+    /** Ground colours of the pit floor, mixed by noise like grass. */
+    colours?: [string, string];
+  }[];
   ramps?: { from: Vec2; to: Vec2; width: number; rise: number }[];
-  channels?: { points: Vec2[]; width: number; bank: number; depth: number; water?: number }[];
+  channels?: {
+    points: Vec2[];
+    width: number;
+    bank: number;
+    depth: number;
+    water?: number;
+    /** Cut after the route and pads are levelled, so the channel breaks the road. */
+    afterRoute?: boolean;
+    bankColour?: string;
+    bedColour?: string;
+  }[];
   route?: { width: number; blend: number; smoothing: number; colour: string };
   pads?: { at: Vec2; size: Vec2; yaw?: number; blend: number }[];
   padBlend?: number;
@@ -50,6 +73,8 @@ interface Recipe {
     minSpacing: number;
     scale: [number, number];
     keepOut: number;
+    /** Keep these props out of every pit, such as trees around a quarry. */
+    outsidePits?: boolean;
   }[];
   rows?: { type: string; points: Vec2[]; spacing: number; scale: [number, number] }[];
 }
@@ -166,6 +191,20 @@ function smoothPolyline(points: Vec2[], step: number): Vec2[] {
   return sampleCatmullRom(points, step).map(([x, z]) => [x, z]);
 }
 
+/** Signed distance from a point to a rounded rectangle: negative inside. */
+function roundedRectDistance(
+  rect: { min: Vec2; max: Vec2; radius: number },
+  x: number,
+  z: number,
+): number {
+  const cx = (rect.min[0] + rect.max[0]) / 2;
+  const cz = (rect.min[1] + rect.max[1]) / 2;
+  const qx = Math.abs(x - cx) - ((rect.max[0] - rect.min[0]) / 2 - rect.radius);
+  const qz = Math.abs(z - cz) - ((rect.max[1] - rect.min[1]) / 2 - rect.radius);
+  const outside = Math.hypot(Math.max(qx, 0), Math.max(qz, 0));
+  return outside + Math.min(Math.max(qx, qz), 0) - rect.radius;
+}
+
 function pointInPolygon(poly: Vec2[], x: number, z: number): boolean {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -274,6 +313,10 @@ function bake(id: string): void {
     if (recipe.noise) {
       h += recipe.noise.amplitude * fbm(x / recipe.noise.scale, z / recipe.noise.scale, seed);
     }
+    for (const pit of recipe.pits ?? []) {
+      const d = roundedRectDistance(pit, x, z);
+      h = lerp(h, pit.height, 1 - smoothstep(-pit.blend, pit.blend, d));
+    }
     for (const t of recipe.terraces ?? []) {
       const d = Math.hypot(x - t.at[0], z - t.at[1]);
       // Rings from the outside in: each ring sets a level, blended at its edge.
@@ -312,6 +355,8 @@ function bake(id: string): void {
   const channels = (recipe.channels ?? []).map((c) => ({
     ...c,
     points: smoothPolyline(c.points, 3),
+    bankRgb: hexToRgb(c.bankColour ?? recipe.colours.bank),
+    bedRgb: hexToRgb(c.bedColour ?? recipe.colours.bed),
   }));
   const pads = buildPads(recipe, level);
   const padTargets = pads.map((p) => natural(p.at[0], p.at[1]));
@@ -331,11 +376,11 @@ function bake(id: string): void {
         h = lerp(h, Math.max(h, target), w);
       }
     }
-    for (const c of channels) {
+    const cut = (c: (typeof channels)[number]): void => {
       const { d } = polylineDistance(c.points, x, z);
-      const w = 1 - smoothstep(c.width / 2, c.width / 2 + c.bank, d);
-      h -= c.depth * w;
-    }
+      h -= c.depth * (1 - smoothstep(c.width / 2, c.width / 2 + c.bank, d));
+    };
+    for (const c of channels) if (!c.afterRoute) cut(c);
     if (route.length > 1 && recipe.route) {
       const { d, along } = polylineDistance(route, x, z);
       const w =
@@ -351,6 +396,7 @@ function bake(id: string): void {
       const w = 1 - smoothstep(0, pad.blend, Math.hypot(ex, ez));
       if (w > 0) h = lerp(h, padTargets[i] ?? h, w);
     });
+    for (const c of channels) if (c.afterRoute) cut(c);
     return clamp(h, 0, maxHeight);
   };
 
@@ -388,9 +434,14 @@ function bake(id: string): void {
   const grassA = hexToRgb(recipe.colours.grass[0]);
   const grassB = hexToRgb(recipe.colours.grass[1]);
   const slopeCol = hexToRgb(recipe.colours.slope);
-  const bankCol = hexToRgb(recipe.colours.bank);
-  const bedCol = hexToRgb(recipe.colours.bed);
   const roadCol = hexToRgb(recipe.route?.colour ?? '#c8b48a');
+  const pits = (recipe.pits ?? [])
+    .filter((pit) => pit.colours)
+    .map((pit) => ({
+      ...pit,
+      a: hexToRgb(pit.colours?.[0] ?? '#000000'),
+      b: hexToRgb(pit.colours?.[1] ?? '#000000'),
+    }));
   const fields = (recipe.fields ?? []).map((f) => ({
     ...f,
     a: hexToRgb(f.colours[0]),
@@ -407,6 +458,11 @@ function bake(id: string): void {
       // Fine speckle so flat areas don't look plastic.
       const speckle = (hash(u, v, seed + 7) - 0.5) * 10;
       col = [col[0] + speckle, col[1] + speckle, col[2] + speckle * 0.6];
+
+      for (const pit of pits) {
+        const w = 1 - smoothstep(-pit.blend, pit.blend, roundedRectDistance(pit, x, z));
+        if (w > 0) col = mixRgb(col, mixRgb(pit.a, pit.b, clamp(0.5 + n, 0, 1)), w);
+      }
 
       const e = 1.5;
       const slope =
@@ -428,14 +484,25 @@ function bake(id: string): void {
         const { d } = polylineDistance(c.points, x, z);
         col = mixRgb(
           col,
-          bankCol,
+          c.bankRgb,
           1 - smoothstep(c.width / 2 + c.bank * 0.4, c.width / 2 + c.bank, d),
         );
-        col = mixRgb(col, bedCol, 1 - smoothstep(c.width / 2 - 1, c.width / 2 + 1, d));
+        col = mixRgb(col, c.bedRgb, 1 - smoothstep(c.width / 2 - 1, c.width / 2 + 1, d));
       }
       if (route.length > 1 && recipe.route) {
         const { d } = polylineDistance(route, x, z);
         const roadW = recipe.route.width / 2;
+        // A road cut by a channel shows the channel, not the road surface.
+        const inCut = channels.some(
+          (c) => c.afterRoute && polylineDistance(c.points, x, z).d < c.width / 2 + c.bank * 0.6,
+        );
+        if (inCut) {
+          const o = (v * csize + u) * 3;
+          colourPixels[o] = clamp(Math.round(col[0]), 0, 255);
+          colourPixels[o + 1] = clamp(Math.round(col[1]), 0, 255);
+          colourPixels[o + 2] = clamp(Math.round(col[2]), 0, 255);
+          continue;
+        }
         const tread = hash(Math.floor(x / 2), Math.floor(z / 2), seed + 3) * 18 - 9;
         const dirt: [number, number, number] = [
           roadCol[0] + tread,
@@ -483,6 +550,9 @@ function bake(id: string): void {
       const x = lerp(x0, x1, rand());
       const z = lerp(z0, z1, rand());
       if (blocked(x, z, rule.keepOut)) continue;
+      if (rule.outsidePits && recipe.pits?.some((pit) => roundedRectDistance(pit, x, z) < 4)) {
+        continue;
+      }
       if (props.some((p) => Math.hypot(p.x - x, p.z - z) < rule.minSpacing)) continue;
       props.push({
         type: rule.type,

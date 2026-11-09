@@ -43,6 +43,7 @@ export class Hud {
   private readonly vehicleSpeed = h('div', { class: 'cw-label' });
   private readonly vehicleAction = h('div', { class: 'cw-hud__vehicle-action' });
   private readonly keys = h('div', { class: 'cw-hud__keys cw-glass' });
+  private readonly context = h('div', { class: 'cw-hud__context' });
   private readonly ticks = new Map<string, { element: HTMLElement; label: string }>();
   private readonly unsubscribe: (() => void)[] = [];
   private bannerLeft = 0;
@@ -132,7 +133,9 @@ export class Hud {
       this.finish,
       this.vehicleCard,
       this.keys,
+      this.context,
     );
+    this.context.hidden = true;
     parent.append(this.element);
 
     this.unsubscribe.push(
@@ -198,6 +201,10 @@ export class Hud {
       }),
       bus.on('path:cleared', ({ seconds }) => {
         this.bannerChip.textContent = `CLEARED IN ${formatClock(seconds)}`;
+      }),
+      bus.on('context', (context) => {
+        this.context.hidden = context === null;
+        if (context) this.context.replaceChildren(chip('E', 'hazard'), ` ${context.label}`);
       }),
       bus.on('hint', ({ text }) => {
         this.showHint(text);

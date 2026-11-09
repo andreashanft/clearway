@@ -132,6 +132,7 @@ export class LevelSession {
   /** Call when a building falls; clears its obstacle once every member is down. */
   buildingDestroyed(buildingId: string): void {
     for (const obstacle of this.obstacles) {
+      if (obstacle.memberIds.length === 0) continue;
       if (obstacle.cleared || !obstacle.memberIds.includes(buildingId)) continue;
       const down = obstacle.memberIds.every((id) =>
         this.buildings.list.some((b) => b.def.id === id && b.destroyed),
@@ -140,6 +141,19 @@ export class LevelSession {
       obstacle.cleared = true;
       this.bus.emit('obstacle:cleared', { id: obstacle.id });
     }
+    this.checkPathClear();
+  }
+
+  /** Clears an obstacle that isn't a building, such as a bridged route gap. */
+  clearObstacle(id: string): void {
+    const obstacle = this.obstacles.find((o) => o.id === id);
+    if (!obstacle || obstacle.cleared) return;
+    obstacle.cleared = true;
+    this.bus.emit('obstacle:cleared', { id });
+    this.checkPathClear();
+  }
+
+  private checkPathClear(): void {
     if (
       (this.phase === 'clearing' || this.phase === 'countdown') &&
       this.obstacles.every((o) => o.cleared)

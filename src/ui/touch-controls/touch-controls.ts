@@ -18,6 +18,7 @@ export class TouchControls {
   private readonly brakeButton: HTMLButtonElement;
   private readonly gasButton: HTMLButtonElement;
   private readonly reverseButton: HTMLButtonElement;
+  private readonly contextButton: HTMLButtonElement;
   private classic = false;
   private stickPointer: number | null = null;
   private originX = 0;
@@ -40,13 +41,20 @@ export class TouchControls {
     this.actionButton = button('cw-touch__action', 'ACTION');
     this.gasButton = button('cw-touch__gas', 'GAS');
     this.reverseButton = button('cw-touch__reverse', 'REV');
+    this.contextButton = button('cw-touch__context', 'EXIT');
+    this.contextButton.hidden = true;
     this.element.append(
       this.zone,
       this.brakeButton,
       this.gasButton,
       this.reverseButton,
       this.actionButton,
+      this.contextButton,
     );
+    this.contextButton.addEventListener('pointerdown', (event) => {
+      event.preventDefault();
+      touch.pressEnterExit();
+    });
     parent.append(this.element);
 
     this.zone.addEventListener('pointerdown', this.onStickDown);
@@ -93,6 +101,16 @@ export class TouchControls {
     this.unsubscribe.push(
       bus.on('vehicle:changed', ({ actionLabel }) => {
         this.actionButton.textContent = actionLabel;
+        // On foot there is no Action.
+        this.actionButton.hidden = actionLabel === '';
+      }),
+      bus.on('context', (context) => {
+        this.contextButton.hidden = context === null;
+        if (context) {
+          this.contextButton.textContent =
+            context.action === 'exit' ? 'EXIT' : context.label.toUpperCase();
+          this.contextButton.classList.toggle('is-enter', context.action === 'enter');
+        }
       }),
       bus.on('action:state', ({ ready, active, charge }) => {
         this.actionButton.classList.toggle('is-active', active);

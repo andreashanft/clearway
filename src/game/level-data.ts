@@ -11,6 +11,25 @@ export interface VehicleSpawn {
   readonly pos: GroundPoint;
   /** Heading in degrees; 0 faces north (−z), 90 faces east (+x). */
   readonly yaw: number;
+  /** The vehicle can't be entered until this building falls (the Tumbler in its hangar). */
+  readonly lockedBy?: string;
+}
+
+/** A rail line with the Railbed on it and the slot where it bridges the route. */
+export interface RailLine {
+  readonly points: readonly GroundPoint[];
+  /** Railbed start, as a distance along the rails. */
+  readonly railbed: number;
+  /** Slot position, as a distance along the rails. */
+  readonly slot: number;
+}
+
+/** A stretch of route the Hauler can only cross over the parked Railbed. */
+export interface RouteGap {
+  readonly id: string;
+  /** Route distances (Hauler nose) where the gap starts and ends. */
+  readonly from: number;
+  readonly to: number;
 }
 
 export interface LevelDefinition {
@@ -37,6 +56,8 @@ export interface LevelDefinition {
   readonly vehicles: readonly VehicleSpawn[];
   readonly buildings?: readonly BuildingDefinition[];
   readonly tnt?: readonly { readonly pos: GroundPoint }[];
+  readonly rail?: RailLine;
+  readonly routeGap?: RouteGap;
   /** The brief's route distance for each obstacle, keyed by building id or group. */
   readonly targets?: Readonly<Record<string, number>>;
   /** One-line goal shown on the briefing screen. */

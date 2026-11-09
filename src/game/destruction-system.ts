@@ -11,16 +11,17 @@ import type { Heightfield } from './world/heightfield';
 import type { Props } from './world/props';
 import { ColliderRegistry } from './world/registry';
 import { TNT_DAMAGE, TNT_RADIUS, TntCrate } from './world/tnt';
-import type { Vehicle } from './vehicles/vehicle';
+import type { Machine as Vehicle } from './vehicles/vehicle';
 
 type Owner =
   | { readonly kind: 'building'; readonly building: Building }
   | { readonly kind: 'vehicle'; readonly vehicle: Vehicle }
   | { readonly kind: 'tnt'; readonly crate: TntCrate }
-  | { readonly kind: 'hauler' };
+  | { readonly kind: 'hauler' }
+  | { readonly kind: 'pilot' };
 
 /** What hit the Hauler, for the fail message. */
-export type HaulerHit = 'building' | 'vehicle' | 'tnt' | 'explosion';
+export type HaulerHit = 'building' | 'vehicle' | 'tnt' | 'pilot' | 'explosion' | 'gap';
 
 /** Radius and damage of a fuel kiosk going up. */
 const KIOSK_RADIUS = 9;
@@ -110,6 +111,10 @@ export class DestructionSystem {
     this.registry.add(hauler.sensor, { kind: 'hauler' });
   }
 
+  addPilot(collider: Collider): void {
+    this.registry.add(collider, { kind: 'pilot' });
+  }
+
   addVehicle(vehicle: Vehicle): void {
     for (const collider of vehicle.colliders)
       this.registry.add(collider, { kind: 'vehicle', vehicle });
@@ -126,6 +131,7 @@ export class DestructionSystem {
       if (blast) this.explode(blast.at, blast.radius, blast.damage);
     }
     this.buildings.step(dt);
+    for (const vehicle of vehicles) this.checkLanding(vehicle);
     for (const vehicle of vehicles) {
       const speed = Math.abs(vehicle.forwardSpeed);
       if (speed < 1.5) continue;
@@ -253,6 +259,7 @@ export class DestructionSystem {
   private haulerTouched(other: Owner): void {
     if (other.kind === 'hauler') return;
     if (other.kind === 'building' && other.building.destroyed) return;
+    if (other.kind === 'vehicle' && other.vehicle.bridging) return;
     this.onHaulerHit?.(other.kind);
   }
 
@@ -271,6 +278,19 @@ export class DestructionSystem {
     this.bus.emit('tnt:lit', { seconds: crate.fuse ?? 0 });
   }
 
+  /** A vehicle that lands on a building damages it like a hit from above. */
+  private checkLanding(vehicle: Vehicle): void {
+    const landing = vehicle.landing;
+    if (!landing) return;
+    vehicle.landing = null;
+    const owner = this.registry.get(landing.collider.handle);
+    if (owner?.kind !== 'building' || owner.building.destroyed) return;
+    const chassis = vehicle.colliders[0];
+    if (!chassis) return;
+    this.hitPoint.copy(vehicle.position);
+    this.applyImpact(vehicle, owner.building, chassis, landing.speed, { x: 0, y: 1, z: 0 });
+  }
+
   private vehicleHit(vehicle: Vehicle, building: Building, mine: Collider, theirs: Collider): void {
     if (building.destroyed) return;
     const key = `${vehicle.spec.name}:${building.def.id}`;
@@ -278,10 +298,12 @@ export class DestructionSystem {
 
     const velocity = vehicle.preStepVelocity;
     let normalSpeed = velocity.length();
+    let normal: { x: number; y: number; z: number } | undefined;
     this.hitPoint.copy(vehicle.position).addScaledVector(velocity.clone().normalize(), 2.5);
     this.physics.world.contactPair(mine, theirs, (manifold, flipped) => {
       const n = manifold.normal();
       const sign = flipped ? -1 : 1;
+      normal = { x: n.x * sign, y: n.y * sign, z: n.z * sign };
       normalSpeed = Math.abs(
         velocity.x * n.x * sign + velocity.y * n.y * sign + velocity.z * n.z * sign,
       );
@@ -289,10 +311,28 @@ export class DestructionSystem {
       if (p) this.hitPoint.set(p.x, p.y, p.z);
     });
 
-    const damage = impactDamage(vehicle.spec.mass, normalSpeed, vehicle.damageMultiplier);
+    this.applyImpact(vehicle, building, mine, normalSpeed, normal);
+  }
+
+  /** Damages `building` for a hit at `normalSpeed`, made with the vehicle's `mine` collider. */
+  private applyImpact(
+    vehicle: Vehicle,
+    building: Building,
+    mine: Collider,
+    normalSpeed: number,
+    normal: { x: number; y: number; z: number } | undefined,
+  ): void {
+    const velocity = vehicle.preStepVelocity;
+    const damage = impactDamage(
+      vehicle.spec.mass,
+      normalSpeed,
+      vehicle.impactMultiplier(mine, normal),
+    );
     if (damage <= 0) return;
-    this.lastHit.set(key, this.time);
+    vehicle.onImpact?.(damage);
+    this.lastHit.set(`${vehicle.spec.name}:${building.def.id}`, this.time);
     this.hitDir.set(velocity.x, 0, velocity.z).normalize();
+    if (this.hitDir.lengthSq() === 0) this.hitDir.set(0, -1, 0);
     const destroyed = this.buildings.damage(
       building,
       damage,

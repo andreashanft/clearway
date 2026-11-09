@@ -180,3 +180,40 @@
 .cw-touch.is-left-handed.is-classic .cw-touch__reverse {
   left: calc(200px + env(safe-area-inset-left));
 }
+
+/* Enter/Exit: a small round EXIT in a vehicle, a cyan "ENTER …" pill on foot. */
+.cw-touch__context {
+  right: calc(120px + env(safe-area-inset-right));
+  bottom: calc(112px + env(safe-area-inset-bottom));
+  width: 48px;
+  height: 48px;
+}
+
+.cw-touch__context.is-enter {
+  right: calc(24px + env(safe-area-inset-right));
+  bottom: calc(40px + env(safe-area-inset-bottom));
+  width: auto;
+  height: 52px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 0;
+  background: var(--cw-signal);
+  color: var(--cw-ground);
+  font-family: var(--cw-font-body);
+  font-size: 14px;
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - var(--cw-cut)),
+    calc(100% - var(--cw-cut)) 100%,
+    0 100%
+  );
+}
+
+.cw-touch.is-left-handed .cw-touch__context {
+  left: calc(120px + env(safe-area-inset-left));
+}
+
+.cw-touch.is-left-handed .cw-touch__context.is-enter {
+  left: calc(24px + env(safe-area-inset-left));
+}

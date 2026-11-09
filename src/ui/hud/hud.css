@@ -493,3 +493,24 @@
     transition: none !important;
   }
 }
+
+/* Keyboard context prompt, such as "E Enter Tumbler". */
+.cw-hud__context {
+  display: none;
+}
+
+.cw-hud[data-input='keyboard'] .cw-hud__context,
+.cw-hud[data-input='gamepad'] .cw-hud__context {
+  position: absolute;
+  left: 50%;
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  translate: -50% 0;
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--cw-glass-strong);
+  border: 1px solid rgb(46 230 255 / 0.55);
+  font-weight: 700;
+  font-size: 14px;
+}

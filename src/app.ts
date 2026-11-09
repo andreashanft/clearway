@@ -220,7 +220,7 @@ export class App {
         available,
         isNext,
         unlockHint: !available
-          ? 'BUILT IN MILESTONE 6'
+          ? 'COMING SOON'
           : `BRONZE ON L${String(before?.index ?? 1)} TO UNLOCK`,
       };
     });
@@ -253,7 +253,15 @@ export class App {
     this.setFlow('briefing');
     const session = game.levelSession;
     const firstHit = (session?.obstacles[0]?.distance ?? 0) / def.hauler.speed;
-    const vehicles = [...new Set(def.vehicles.map((v) => VEHICLE_NAMES[v.type] ?? v.type))];
+    // Every machine in the level, including the Railbed on its rails.
+    const vehicles = [
+      ...new Set([
+        ...def.vehicles.map(
+          (v) => `${VEHICLE_NAMES[v.type] ?? v.type}${v.lockedBy ? ' (locked)' : ''}`,
+        ),
+        ...(def.rail ? [VEHICLE_NAMES.railbed ?? 'Railbed'] : []),
+      ]),
+    ];
     this.show(
       briefingScreen(
         {
@@ -488,6 +496,7 @@ export class App {
       const game = new Game(this.physics, this.input, this.bus, {
         difficulty: settings.easyMode ? 'easy' : 'normal',
         steeringAssist: settings.steeringAssist,
+        autoSkid: settings.autoSkid,
       });
       this.game = game;
       game.onPauseRequested = () => this.pause();

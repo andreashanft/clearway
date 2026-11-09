@@ -1,0 +1,119 @@
+{
+  "heightmap": {
+    "size": 256,
+    "metersPerPixel": 2,
+    "maxHeight": 36
+  },
+  "colourmap": {
+    "size": 512
+  },
+  "seed": 37,
+  "profileX": [
+    [-256, 27],
+    [256, 27.5]
+  ],
+  "profileZ": [
+    [-256, 0.5],
+    [256, -0.5]
+  ],
+  "noise": {
+    "amplitude": 0.8,
+    "scale": 60
+  },
+  "hills": [
+    {
+      "at": [-200, -200],
+      "radius": 120,
+      "height": 4
+    },
+    {
+      "at": [210, 200],
+      "radius": 110,
+      "height": 3
+    }
+  ],
+  "pits": [
+    {
+      "min": [-146.1, -96],
+      "max": [142.1, 100],
+      "radius": 32,
+      "height": 20,
+      "blend": 3,
+      "colours": ["#A08E72", "#968569"]
+    },
+    {
+      "min": [-126.1, -64],
+      "max": [114, 92],
+      "radius": 27,
+      "height": 14,
+      "blend": 3,
+      "colours": ["#AA987B", "#9E8D71"]
+    },
+    {
+      "min": [-98, -28],
+      "max": [86, 68],
+      "radius": 22,
+      "height": 8,
+      "blend": 3,
+      "colours": ["#B4A385", "#A89878"]
+    }
+  ],
+  "ramps": [
+    {
+      "from": [4, -92],
+      "to": [40.2, -90],
+      "width": 5,
+      "rise": 4
+    }
+  ],
+  "route": {
+    "width": 10,
+    "blend": 5,
+    "smoothing": 10,
+    "colour": "#C2AE8C"
+  },
+  "padBlend": 5,
+  "colours": {
+    "grass": ["#8A8A55", "#7C7D4C"],
+    "slope": "#7E6C55",
+    "bank": "#9C8B6E",
+    "bed": "#4C7486"
+  },
+  "scatter": [
+    {
+      "type": "pine",
+      "count": 160,
+      "region": [
+        [-255, -255],
+        [255, 255]
+      ],
+      "minSpacing": 8,
+      "scale": [0.9, 1.3],
+      "keepOut": 10,
+      "outsidePits": true
+    },
+    {
+      "type": "bush",
+      "count": 140,
+      "region": [
+        [-255, -255],
+        [255, 255]
+      ],
+      "minSpacing": 5,
+      "scale": [0.7, 1.1],
+      "keepOut": 6,
+      "outsidePits": true
+    },
+    {
+      "type": "rock",
+      "count": 120,
+      "region": [
+        [-150, -100],
+        [150, 100]
+      ],
+      "minSpacing": 6,
+      "scale": [0.6, 1.5],
+      "keepOut": 7
+    }
+  ]
+}

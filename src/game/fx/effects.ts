@@ -256,6 +256,21 @@ export class Effects {
     }
   }
 
+  /** A pale wisp left by a skidding tyre (the Fishtail's ghost trails). */
+  skidPuff(at: Vector3): void {
+    this.dust.spawn({
+      position: at.clone(),
+      velocity: new Vector3((Math.random() - 0.5) * 0.4, 0.3, (Math.random() - 0.5) * 0.4),
+      life: 1.4,
+      startSize: 0.9,
+      endSize: 2.2,
+      colour: new Color('#EEF3FF'),
+      opacity: 0.42,
+      drag: 2,
+      rise: 0.1,
+    });
+  }
+
   /** Fragments thrown from a hit point, tinted like the building. */
   debrisBurst(
     at: Vector3,

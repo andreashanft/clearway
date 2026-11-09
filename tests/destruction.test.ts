@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { loadRapier, Physics, type Rapier } from '../src/engine/physics';
 import { STRENGTH_HP } from '../src/game/damage';
 import type { Effects } from '../src/game/fx/effects';
+import { BUILDING_STYLES } from '../src/game/world/building-styles';
 import { type BuildingDefinition, Buildings, RUBBLE_AFTER } from '../src/game/world/buildings';
 import { Heightfield } from '../src/game/world/heightfield';
 
@@ -49,13 +50,13 @@ const hit = { point: new Vector3(0, 1, 5), direction: new Vector3(0, 0, -1), spe
 
 describe('Buildings', () => {
   it('builds every style with a collider per piece', () => {
-    const styles = ['shed', 'house', 'barn', 'stone-barn', 'kiosk', 'silo', 'fence'] as const;
+    const styles = BUILDING_STYLES;
     const { buildings } = setup(
       styles.map((style, i) => ({
         id: style,
         style,
         strength: 'house',
-        pos: [i * 30 - 90, 0] as const,
+        pos: [(i % 5) * 30 - 60, Math.floor(i / 5) * 30 - 45] as const,
         size: style === 'fence' ? ([10, 1.2, 0.3] as const) : ([8, 6, 7] as const),
       })),
     );
@@ -146,6 +147,55 @@ describe('DestructionSystem.explode', () => {
     expect(body.linvel().x).toBeGreaterThan(1);
 
     system.dispose();
+    expect(() => physics.dispose()).not.toThrow();
+  });
+});
+
+describe('DestructionSystem landings', () => {
+  it('damages a roof the wheels land on, which never touches the chassis', async () => {
+    const { DestructionSystem } = await import('../src/game/destruction-system');
+    const { Props } = await import('../src/game/world/props');
+    const { EventBus } = await import('../src/engine/events');
+    const { Liftoff } = await import('../src/game/vehicles/liftoff');
+    const { Scene } = await import('three');
+    const physics = new Physics(rapier);
+    const ground = physics.world.createRigidBody(rapier.RigidBodyDesc.fixed());
+    physics.world.createCollider(
+      rapier.ColliderDesc.cuboid(200, 1, 200).setTranslation(0, -1, 0),
+      ground,
+    );
+    const system = new DestructionSystem(
+      {
+        buildings: [
+          { id: 'cabin', style: 'cabin', strength: 'shed', pos: [0, 0], size: [9, 3, 8] },
+        ],
+        tnt: [],
+      } as never,
+      new Scene(),
+      physics,
+      flat,
+      new Props({ props: [], water: [] }, flat),
+      quietEffects,
+      new EventBus(),
+    );
+    const liftoff = new Liftoff(physics);
+    system.addVehicle(liftoff);
+    // A flat roof, so only the wheel rays touch it.
+    liftoff.place(0, 6, 0, 0);
+    liftoff.body.setLinvel({ x: 0, y: -7, z: 0 }, true);
+
+    const [cabin] = system.buildings.list;
+    for (let i = 0; i < 90 && !cabin?.destroyed; i++) {
+      liftoff.step(1 / 60);
+      system.step(1 / 60, [liftoff]);
+      physics.step(1 / 60);
+      system.afterStep();
+      liftoff.afterStep();
+    }
+    expect(cabin?.destroyed).toBe(true);
+
+    system.dispose();
+    liftoff.dispose();
     expect(() => physics.dispose()).not.toThrow();
   });
 });

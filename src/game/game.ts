@@ -12,13 +12,19 @@ import { Hauler } from './hauler/hauler';
 import { sweepRoute } from './hauler/route-sweep';
 import type { LevelDefinition } from './level-data';
 import { type LoadedWorld, loadWorld } from './level-loader';
+import { Pilot } from './pilot';
 import { Route } from './route';
-import { type Difficulty, LevelSession, urgencyFor } from './session';
+import { type Difficulty, labelFor, LevelSession, urgencyFor } from './session';
 import { createVehicle } from './vehicles/factory';
-import type { Vehicle } from './vehicles/vehicle';
+import { Fishtail } from './vehicles/fishtail';
+import { DECK_HEIGHT, Railbed } from './vehicles/railbed';
+import type { Machine as Vehicle } from './vehicles/vehicle';
 import { footprintOf } from './world/footprint';
+import { Rails } from './world/rails';
 import { RouteLine } from './world/route-line';
 
+/** The pilot can climb into a vehicle this far beyond its body. */
+const ENTER_DISTANCE = 3;
 /** How far below the ground a vehicle may sink before it is put back on top. */
 const FALL_RESCUE_DEPTH = 4;
 /** Steering assist only acts within this distance of the route. */
@@ -35,9 +41,14 @@ const STATUS_RATE = 10;
 export interface GameOptions {
   readonly difficulty: Difficulty;
   readonly steeringAssist: boolean;
+  readonly autoSkid: boolean;
 }
 
-const DEFAULT_OPTIONS: GameOptions = { difficulty: 'normal', steeringAssist: true };
+const DEFAULT_OPTIONS: GameOptions = {
+  difficulty: 'normal',
+  steeringAssist: true,
+  autoSkid: true,
+};
 
 /** What the game is doing: a title-screen backdrop, a briefing fly-over, or play. */
 export type GameMode = 'attract' | 'briefing' | 'play';
@@ -84,6 +95,12 @@ export class Game {
   private statusClock = 0;
   private slowmoLeft = 0;
   private failAnnounced = false;
+  private pilot: Pilot | null = null;
+  private lastVehicle: Vehicle | null = null;
+  private lastContextKey = '';
+  private railbed: Railbed | null = null;
+  private rails: Rails | null = null;
+  private readonly lockedBy = new Map<Vehicle, string>();
   private readonly subscriptions: (() => void)[] = [];
   private def: LevelDefinition | null = null;
   private modeValue: GameMode = 'play';
@@ -211,9 +228,27 @@ export class Game {
         footprint: footprintOf(b),
       })),
     );
+    // A route gap is an obstacle too: it is cleared by parking the Railbed in its slot.
+    const gap = def.routeGap;
+    if (gap) {
+      obstacles.push({ id: gap.id, memberIds: [], distance: gap.from });
+      obstacles.sort((a, b) => a.distance - b.distance);
+    }
     this.routeLine = new RouteLine(route, field);
     obstacles.forEach((obstacle, i) => {
       const members = (def.buildings ?? []).filter((b) => obstacle.memberIds.includes(b.id));
+      if (members.length === 0 && obstacle.id === gap?.id) {
+        const mid = route.sampleAt((gap.from + gap.to) / 2);
+        const footprint = {
+          x: mid.x,
+          z: mid.z,
+          halfX: 3,
+          halfZ: (gap.to - gap.from) / 2,
+          yaw: Math.atan2(mid.dx, mid.dz),
+        };
+        this.routeLine?.addObstacle(obstacle.id, i + 1, [footprint], 1);
+        return;
+      }
       const height = Math.max(...members.map((b) => b.size[1]));
       this.routeLine?.addObstacle(obstacle.id, i + 1, members.map(footprintOf), height);
     });
@@ -222,6 +257,25 @@ export class Game {
     const hauler = new Hauler(this.physics, route, field, def.hauler.speed);
     this.hauler = hauler;
     this.scene.add(hauler.root);
+
+    if (def.rail) {
+      const rail = new Route(def.rail.points);
+      const railbed = new Railbed(this.physics, rail, field, def.rail.railbed, def.rail.slot);
+      this.railbed = railbed;
+      this.rails = new Rails(rail, field, def.rail.slot);
+      this.scene.add(this.rails.group, railbed.root);
+      this.vehicles.push(railbed);
+      destruction.addVehicle(railbed);
+      if (gap) {
+        const slotPoint = rail.sampleAt(def.rail.slot);
+        hauler.gaps.push({
+          from: gap.from,
+          to: gap.to,
+          deckHeight: field.heightAt(slotPoint.x, slotPoint.z) + DECK_HEIGHT,
+          bridged: () => railbed.snapped,
+        });
+      }
+    }
     const session = new LevelSession(
       obstacles,
       hauler,
@@ -245,6 +299,12 @@ export class Game {
     this.subscriptions.push(
       this.bus.on('building:destroyed', ({ id }) => {
         session.buildingDestroyed(id);
+        for (const vehicle of this.vehicles) {
+          if (vehicle.locked && this.lockedBy.get(vehicle) === id) {
+            vehicle.locked = false;
+            this.hint(`The ${vehicle.spec.name} is free. Climb in.`);
+          }
+        }
       }),
       this.bus.on('obstacle:cleared', ({ id }) => {
         this.routeLine?.clear(id);
@@ -255,6 +315,11 @@ export class Game {
       const vehicle = createVehicle(spawn.type, this.physics);
       const [x, z] = spawn.pos;
       vehicle.place(x, field.heightAt(x, z), z, bearingToHeading(spawn.yaw));
+      if (spawn.lockedBy) {
+        vehicle.locked = true;
+        this.lockedBy.set(vehicle, spawn.lockedBy);
+      }
+      if (vehicle instanceof Fishtail) vehicle.autoSkid = this.options.autoSkid;
       if (this.options.steeringAssist) {
         vehicle.routeAssist = (px, pz) => route.headingNear(px, pz, ASSIST_RADIUS);
       }
@@ -262,6 +327,11 @@ export class Game {
       this.vehicles.push(vehicle);
       destruction.addVehicle(vehicle);
     }
+    const pilot = new Pilot(this.physics);
+    this.pilot = pilot;
+    this.scene.add(pilot.root);
+    destruction.addPilot(pilot.collider);
+
     const start = this.vehicles.find((v) => v.spec.type === def.player.vehicle);
     this.setActive(start ?? this.vehicles[0] ?? null);
     if (this.active) this.camera.snapTo(this.active.position);
@@ -325,14 +395,21 @@ export class Game {
     this.firstStepOfFrame = false;
     const playing = this.modeValue === 'play';
     const playable = playing && this.session?.phase !== 'results';
+    if (playable && frame.enterExitPressed) this.toggleVehicle();
     for (const vehicle of this.vehicles) {
       if (vehicle === this.active && playable) vehicle.control(frame, this.camera.yaw, dt);
       else vehicle.idle(dt);
       vehicle.step(dt);
     }
+    const pilot = this.pilot;
+    if (pilot?.active) {
+      if (playable) pilot.control(frame, this.camera.yaw, dt);
+      else pilot.idle(dt);
+    }
     if (playing) this.session?.step(dt);
     this.hauler?.step(dt);
     this.loopAttract();
+    this.checkGaps();
     this.destruction?.step(dt, this.vehicles);
     this.rescueFallenVehicles();
   }
@@ -341,13 +418,24 @@ export class Game {
     this.destruction?.afterStep();
     this.hauler?.afterStep();
     for (const vehicle of this.vehicles) vehicle.afterStep();
+    this.pilot?.afterStep();
   }
 
   render(alpha: number, frameSeconds: number): void {
     for (const vehicle of this.vehicles) vehicle.render(alpha, frameSeconds);
+    this.pilot?.render(alpha, frameSeconds);
     this.hauler?.render(alpha, frameSeconds);
     this.destruction?.render(alpha, frameSeconds, this.camera.camera);
     this.routeLine?.update(frameSeconds, this.hauler?.state === 'rolling' ? this.hauler.speed : 0);
+    this.rails?.update(frameSeconds, this.railbed?.snapped ?? false);
+    const effects = this.effects;
+    if (effects) {
+      for (const vehicle of this.vehicles) {
+        vehicle.emitTrails?.(frameSeconds, (at) => {
+          effects.skidPuff(at);
+        });
+      }
+    }
     this.updateFailure(frameSeconds);
 
     if (this.modeValue === 'attract' && this.hauler) {
@@ -359,7 +447,7 @@ export class Game {
       const p = this.route.sampleAt(eased * this.route.length);
       this.flyTarget.set(p.x, this.groundAt(p.x, p.z), p.z);
       this.camera.update(frameSeconds, this.flyTarget, this.zero);
-    } else if (this.active) {
+    } else {
       const countdown = this.session?.countdown ?? null;
       const watchHauler = this.hauler && this.hauler.state !== 'destroyed' && countdown !== null;
       this.camera.setInterest(
@@ -367,8 +455,12 @@ export class Game {
           ? (this.hauler?.worldPosition ?? null)
           : null,
       );
-      this.camera.update(frameSeconds, this.active.position, this.active.velocity(this.velocity));
-      this.publishActionState(this.active);
+      const followed = this.player;
+      if (followed) {
+        this.camera.update(frameSeconds, followed.position, this.playerVelocity(this.velocity));
+      }
+      if (this.active) this.publishActionState(this.active);
+      if (this.modeValue === 'play') this.publishContext();
     }
     if (this.world) {
       // Cover the visible ground, including the wider side on landscape screens.
@@ -380,6 +472,11 @@ export class Game {
   }
 
   dispose(): void {
+    this.rails?.dispose();
+    this.rails = null;
+    this.railbed = null;
+    this.pilot?.dispose();
+    this.pilot = null;
     for (const unsubscribe of this.subscriptions) unsubscribe();
     this.subscriptions.length = 0;
     for (const vehicle of this.vehicles) vehicle.dispose();
@@ -447,6 +544,25 @@ export class Game {
     });
   }
 
+  /** Clears a bridged gap, or fails the level when the Hauler reaches an open one. */
+  private checkGaps(): void {
+    const { hauler, session, def } = this;
+    const gap = def?.routeGap;
+    if (!hauler || !session || !gap || this.modeValue !== 'play') return;
+    if (this.railbed?.snapped) {
+      session.clearObstacle(gap.id);
+      return;
+    }
+    if (hauler.state === 'rolling' && hauler.distance >= gap.from - 0.3) {
+      this.failInfo = {
+        hit: labelFor(gap.id),
+        time: session.elapsed,
+        cleared: session.obstacles.filter((o) => o.cleared).length,
+      };
+      if (session.haulerContact()) this.destroyHauler();
+    }
+  }
+
   private hint(text: string | undefined): void {
     if (text) this.bus.emit('hint', { text });
   }
@@ -468,6 +584,7 @@ export class Game {
 
   private publishFrame(): void {
     const { hauler, active, session, destruction } = this;
+    const player = this.player;
     let haulerInfo: GameEvents['hud:frame']['hauler'] = null;
     if (hauler && hauler.state !== 'destroyed') {
       const p = hauler.worldPosition;
@@ -486,17 +603,17 @@ export class Game {
         screenX: (this.projected.x * 0.5 + 0.5) * this.viewport.width,
         screenY: (-this.projected.y * 0.5 + 0.5) * this.viewport.height,
         onScreen,
-        distance: active ? active.position.distanceTo(p) : 0,
+        distance: player ? player.position.distanceTo(p) : 0,
       };
     }
     this.bus.emit('hud:frame', {
       hauler: haulerInfo,
-      player: active
+      player: player
         ? {
-            x: active.position.x,
-            z: active.position.z,
-            heading: active.heading,
-            speed: active.forwardSpeed,
+            x: player.position.x,
+            z: player.position.z,
+            heading: player.heading,
+            speed: active ? active.forwardSpeed : Math.hypot(this.velocity.x, this.velocity.z),
           }
         : null,
       vehicles: this.vehicles
@@ -514,10 +631,19 @@ export class Game {
     });
   }
 
-  /** Puts back on the ground any vehicle that slipped below the terrain or off the map. */
+  /** Puts back on the ground any vehicle (or the pilot) that slipped below the terrain. */
   private rescueFallenVehicles(): void {
     if (!this.world) return;
     const { field } = this.world;
+    const pilot = this.pilot;
+    if (pilot?.active) {
+      const t = pilot.body.translation();
+      if (t.y < field.heightAt(t.x, t.z) - FALL_RESCUE_DEPTH) {
+        // The brief: falling off the map respawns the player at the last vehicle.
+        const back = this.lastVehicle?.position ?? pilot.position;
+        pilot.placeAt(back.x + 3, field.heightAt(back.x + 3, back.z), back.z, pilot.heading);
+      }
+    }
     for (const vehicle of this.vehicles) {
       const t = vehicle.body.translation();
       const ground = field.heightAt(t.x, t.z);
@@ -527,9 +653,81 @@ export class Game {
     }
   }
 
+  /** Climbs out of the current vehicle, or into the nearest unlocked one on foot. */
+  private toggleVehicle(): void {
+    const pilot = this.pilot;
+    const field = this.world?.field;
+    if (!pilot || !field) return;
+    const vehicle = this.active;
+    if (vehicle) {
+      // Step out beside the driver's door (the vehicle's left, local +x).
+      const side = vehicle.spec.chassis.halfExtents[0] + 1.3;
+      const h = vehicle.heading;
+      const x = vehicle.position.x + Math.cos(h) * side;
+      const z = vehicle.position.z - Math.sin(h) * side;
+      pilot.setActive(true);
+      pilot.placeAt(x, field.heightAt(x, z), z, h);
+      this.lastVehicle = vehicle;
+      this.setActive(null);
+      return;
+    }
+    const target = this.nearestEnterable();
+    if (!target) return;
+    pilot.setActive(false);
+    this.setActive(target);
+  }
+
+  /** The closest unlocked vehicle the pilot can reach, if any. */
+  private nearestEnterable(): Vehicle | null {
+    const pilot = this.pilot;
+    if (!pilot?.active) return null;
+    let best: Vehicle | null = null;
+    let bestDistance = Infinity;
+    for (const vehicle of this.vehicles) {
+      if (vehicle.locked) continue;
+      const [hx, , hz] = vehicle.spec.chassis.halfExtents;
+      const reach = Math.max(hx, hz) + ENTER_DISTANCE;
+      const d = vehicle.position.distanceTo(pilot.position);
+      if (d < reach && d < bestDistance) {
+        best = vehicle;
+        bestDistance = d;
+      }
+    }
+    return best;
+  }
+
+  /** Tells the UI what the Enter/Exit button would do, when it changes. */
+  private publishContext(): void {
+    let context: GameEvents['context'] = null;
+    if (this.active) context = { action: 'exit', label: 'Exit' };
+    else {
+      const target = this.nearestEnterable();
+      if (target) context = { action: 'enter', label: `Enter ${target.spec.name}` };
+    }
+    const key = context ? `${context.action}:${context.label}` : '';
+    if (key === this.lastContextKey) return;
+    this.lastContextKey = key;
+    this.bus.emit('context', context);
+  }
+
+  /** The thing the player controls: a vehicle, or the pilot on foot. */
+  private get player(): { position: Vector3; heading: number } | null {
+    if (this.active) return this.active;
+    return this.pilot?.active ? this.pilot : null;
+  }
+
+  private playerVelocity(out: Vector3): Vector3 {
+    if (this.active) return this.active.velocity(out);
+    return this.pilot?.velocityOut(out) ?? out.set(0, 0, 0);
+  }
+
   private setActive(vehicle: Vehicle | null): void {
     this.active = vehicle;
-    if (!vehicle) return;
+    this.lastContextKey = '?';
+    if (!vehicle) {
+      this.bus.emit('vehicle:changed', { type: 'pilot', name: 'Pilot', actionLabel: '' });
+      return;
+    }
     this.bus.emit('vehicle:changed', {
       type: vehicle.spec.type,
       name: vehicle.spec.name,

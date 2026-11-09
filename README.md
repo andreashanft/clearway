@@ -35,7 +35,7 @@ Add these query parameters to the URL:
 | ----------- | ------------------------------------------------------------------------------------- |
 | `?debug`    | Shows the debug overlay: frame rate, draw calls, physics cost and a time-scale slider |
 | `?webgl`    | Forces the WebGL2 backend even when WebGPU is available                               |
-| `?level=ID` | Loads a level directly (from milestone 4)                                             |
+| `?level=ID` | Loads a level directly: `hollow-creek`, `ferrow-junction` or `cinder-quarry`          |
 
 You can combine them, for example `?debug&webgl`.
 
@@ -59,6 +59,12 @@ To see where distances along a level's route fall, for example when placing obst
 
 ```bash
 node scripts/route-report.ts hollow-creek 90 150 210
+```
+
+To check when the Hauler reaches each obstacle against the brief's targets, run the following command. Add `--fix` to slide each obstacle along the route until it matches, then run `npm run terrain` again so the building pads follow:
+
+```bash
+node scripts/level-report.ts ferrow-junction
 ```
 
 ## Project structure

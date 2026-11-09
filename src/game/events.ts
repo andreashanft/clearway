@@ -6,7 +6,9 @@ import type { Phase, Urgency } from './session';
 /** Events the game layer sends up to the UI. */
 export interface GameEvents {
   /** The player took control of a different vehicle (or the level started). */
-  'vehicle:changed': { type: VehicleType; name: string; actionLabel: string };
+  'vehicle:changed': { type: VehicleType | 'pilot'; name: string; actionLabel: string };
+  /** What the Enter/Exit button would do right now, or null when it has nothing to do. */
+  context: { action: 'enter' | 'exit'; label: string } | null;
   /** The active vehicle's Action button state, for the touch button and vehicle card. */
   'action:state': { ready: boolean; active: boolean; charge: number };
   /** A building took damage. */

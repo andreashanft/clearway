@@ -58,12 +58,12 @@ export const CAMPAIGN: readonly CampaignLevel[] = [
     routeSeconds: 160,
     thumbnail:
       '<rect width="400" height="300" fill="#2E2D52"/>' +
-      '<rect x="186" y="0" width="30" height="300" fill="#1E1D38"/>' +
-      '<path d="M193 0 V300 M209 0 V300" stroke="#8E95C0" stroke-width="2"/>' +
+      '<rect x="159" y="0" width="30" height="300" fill="#1E1D38"/>' +
+      '<path d="M166 0 V300 M182 0 V300" stroke="#8E95C0" stroke-width="2"/>' +
       '<g fill="#6C5E8A"><rect x="40" y="168" width="22" height="14"/><rect x="66" y="168" width="22" height="14"/><rect x="92" y="166" width="22" height="14"/><rect x="118" y="164" width="22" height="14"/><rect x="40" y="214" width="22" height="14"/><rect x="66" y="214" width="22" height="14"/><rect x="92" y="212" width="22" height="14"/><rect x="118" y="208" width="22" height="14"/></g>' +
       '<rect x="300" y="160" width="90" height="120" rx="4" fill="#4C4470"/>' +
       ROUTE('M20 200 C 100 200, 140 180, 200 160 S 300 150, 385 100') +
-      '<rect x="186" y="146" width="30" height="28" fill="none" stroke="#2EE6FF" stroke-width="3" stroke-dasharray="5 3"/>' +
+      '<rect x="159" y="155" width="30" height="28" fill="none" stroke="#2EE6FF" stroke-width="3" stroke-dasharray="5 3"/>' +
       '<circle cx="60" cy="40" r="22" fill="#FF9A2E" fill-opacity="0.3"/>',
   },
   {
