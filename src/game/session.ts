@@ -100,6 +100,13 @@ export class LevelSession {
 
   /** Beacon and relay dish counts, when the level has pickups. */
   pickups: PickupCounts | null = null;
+  /** Points scored so far this run. */
+  score = 0;
+
+  /** True while destroying things still scores: not after a failure or the results. */
+  get scoring(): boolean {
+    return this.phase !== 'failed' && this.phase !== 'results';
+  }
 
   get stats(): LevelStats {
     return {
@@ -111,6 +118,7 @@ export class LevelSession {
       beaconsTotal: this.pickups?.beaconsTotal ?? 0,
       dishFound: this.pickups?.dishFound ?? false,
       dishExists: this.pickups?.dishExists ?? false,
+      score: this.score,
     };
   }
 

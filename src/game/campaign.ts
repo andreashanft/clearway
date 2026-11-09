@@ -13,16 +13,9 @@ export interface CampaignLevel {
   /** Route length (m) and time for the Hauler to drive it (s), from the brief. */
   readonly routeLength: number;
   readonly routeSeconds: number;
-  /** Map thumbnail drawn from the level maps in the design canvas (400 × 300 units). */
+  /** Map thumbnail (400 × 300 units), drawn from the level and terrain files. */
   readonly thumbnail: string;
 }
-
-const ROUTE = (d: string): string =>
-  `<path d="${d}" stroke="#FF3D5A" stroke-opacity="0.22" stroke-width="18" fill="none" stroke-linecap="round"/>` +
-  `<path d="${d}" stroke="#FF3D5A" stroke-width="3" fill="none" stroke-dasharray="8 6"/>`;
-
-const box = (x: number, y: number, colour = '#FF3D5A'): string =>
-  `<rect x="${x}" y="${y}" width="18" height="18" rx="3" fill="${colour}"/>`;
 
 export const CAMPAIGN: readonly CampaignLevel[] = [
   {
@@ -35,17 +28,7 @@ export const CAMPAIGN: readonly CampaignLevel[] = [
     routeLength: 540,
     routeSeconds: 180,
     thumbnail:
-      '<rect width="400" height="300" fill="#4E6B3C"/>' +
-      '<polygon points="0,0 120,0 100,80 0,95" fill="#B9B565"/>' +
-      '<path d="M262 0 C 250 60, 278 100, 262 150 S 280 240, 270 300" stroke="#3D7FA0" stroke-width="16" fill="none"/>' +
-      '<g fill="#4F7F3E"><circle cx="40" cy="150" r="14"/><circle cx="70" cy="170" r="12"/><circle cx="330" cy="220" r="14"/><circle cx="360" cy="250" r="12"/><circle cx="160" cy="40" r="13"/></g>' +
-      ROUTE('M20 270 C 100 250, 130 190, 180 170 S 250 130, 270 120 S 350 70, 385 30') +
-      box(66, 243) +
-      box(121, 196) +
-      box(166, 163) +
-      box(281, 99) +
-      box(316, 76) +
-      box(346, 49),
+      '<rect width="400" height="300" fill="#4E6B3C"/><path d="M-21 163 L124 163 L124 62 L-21 62 Z" fill="#C2BB68" fill-opacity="0.75"/><path d="M271 62 L413 62 L413 -68 L271 -68 Z" fill="#A47B50" fill-opacity="0.75"/><path d="M-21 248 L103 248 L103 345 L-21 345 Z" fill="#8DB466" fill-opacity="0.75"/><path d="M234 182 L385 182 L385 276 L234 276 Z" fill="#C2BB68" fill-opacity="0.75"/><path d="M210 -220 L201 -68 L205 35 L198 110 L204 166 L197 241 L202 345 L209 496" stroke="#3D7FA0" stroke-width="12" fill="none"/><path d="M-145 173 L558 173" stroke="#B9A57E" stroke-width="5" fill="none" stroke-linejoin="round"/><path d="M111 173 L111 365" stroke="#B9A57E" stroke-width="3" fill="none" stroke-linejoin="round"/><path d="M260 173 L260 -89" stroke="#B9A57E" stroke-width="3" fill="none" stroke-linejoin="round"/><path d="M260 80 L558 80" stroke="#B9A57E" stroke-width="4" fill="none" stroke-linejoin="round"/><rect x="119" y="207" width="6" height="6" fill="#2F3F28"/><rect x="138" y="193" width="4" height="4" fill="#2F3F28"/><rect x="98.5" y="231.5" width="5" height="5" fill="#2F3F28"/><rect x="145.5" y="182.5" width="11" height="11" fill="#2F3F28"/><rect x="152" y="188" width="10" height="10" fill="#2F3F28"/><rect x="192" y="179" width="6" height="6" fill="#2F3F28"/><rect x="128" y="192" width="8" height="8" fill="#2F3F28"/><rect x="270" y="84" width="6" height="6" fill="#2F3F28"/><rect x="249" y="144" width="4" height="4" fill="#2F3F28"/><rect x="282" y="115" width="4" height="4" fill="#2F3F28"/><rect x="336.5" y="86.5" width="5" height="5" fill="#2F3F28"/><rect x="318.5" y="66.5" width="7" height="7" fill="#2F3F28"/><path d="M34 234 L366 66" stroke="#FF3D5A" stroke-opacity="0.22" stroke-width="18" fill="none" stroke-linecap="round"/><path d="M34 234 L366 66" stroke="#FF3D5A" stroke-width="3" fill="none" stroke-dasharray="8 6"/><rect x="84" y="196" width="18" height="18" rx="3" fill="#FF3D5A"/><rect x="122" y="176" width="18" height="18" rx="3" fill="#FF3D5A"/><rect x="158" y="158" width="18" height="18" rx="3" fill="#FF3D5A"/><rect x="232" y="120" width="18" height="18" rx="3" fill="#FF3D5A"/><rect x="269" y="101" width="18" height="18" rx="3" fill="#FF3D5A"/><rect x="306" y="82" width="18" height="18" rx="3" fill="#FF3D5A"/>',
   },
   {
     id: 'ferrow-junction',
@@ -57,14 +40,7 @@ export const CAMPAIGN: readonly CampaignLevel[] = [
     routeLength: 640,
     routeSeconds: 160,
     thumbnail:
-      '<rect width="400" height="300" fill="#2E2D52"/>' +
-      '<rect x="159" y="0" width="30" height="300" fill="#1E1D38"/>' +
-      '<path d="M166 0 V300 M182 0 V300" stroke="#8E95C0" stroke-width="2"/>' +
-      '<g fill="#6C5E8A"><rect x="40" y="168" width="22" height="14"/><rect x="66" y="168" width="22" height="14"/><rect x="92" y="166" width="22" height="14"/><rect x="118" y="164" width="22" height="14"/><rect x="40" y="214" width="22" height="14"/><rect x="66" y="214" width="22" height="14"/><rect x="92" y="212" width="22" height="14"/><rect x="118" y="208" width="22" height="14"/></g>' +
-      '<rect x="300" y="160" width="90" height="120" rx="4" fill="#4C4470"/>' +
-      ROUTE('M20 200 C 100 200, 140 180, 200 160 S 300 150, 385 100') +
-      '<rect x="159" y="155" width="30" height="28" fill="none" stroke="#2EE6FF" stroke-width="3" stroke-dasharray="5 3"/>' +
-      '<circle cx="60" cy="40" r="22" fill="#FF9A2E" fill-opacity="0.3"/>',
+      '<rect width="400" height="300" fill="#2E2D52"/><path d="M297 93 L371 93 L371 133 L297 133 Z" fill="#7E7B74" fill-opacity="0.75"/><path d="M131 54 L141 80 L151 107 L160 134 L170 161 L180 188 L190 214 L199 241 L209 268" stroke="#1E1D38" stroke-width="4" fill="none"/><path d="M131 54 L141 80 L151 107 L160 134 L170 161 L180 188 L190 214 L199 241 L209 268" stroke="#8E95C0" stroke-width="2" fill="none"/><path d="M11 182 L173 182" stroke="#4C4A72" stroke-width="5" fill="none" stroke-linejoin="round"/><path d="M183 182 L299 182" stroke="#4C4A72" stroke-width="5" fill="none" stroke-linejoin="round"/><path d="M91 110 L91 264" stroke="#4C4A72" stroke-width="5" fill="none" stroke-linejoin="round"/><path d="M135 110 L135 264" stroke="#4C4A72" stroke-width="5" fill="none" stroke-linejoin="round"/><path d="M231 64 L231 230" stroke="#4C4A72" stroke-width="5" fill="none" stroke-linejoin="round"/><path d="M231 114 L388 114" stroke="#4C4A72" stroke-width="5" fill="none" stroke-linejoin="round"/><path d="M74 127 L74 241" stroke="#4C4A72" stroke-width="3" fill="none" stroke-linejoin="round"/><path d="M152 142 L152 235" stroke="#4C4A72" stroke-width="3" fill="none" stroke-linejoin="round"/><rect x="82" y="199" width="6" height="6" fill="#6C5E8A"/><rect x="94" y="199" width="6" height="6" fill="#6C5E8A"/><rect x="94" y="210" width="6" height="6" fill="#6C5E8A"/><rect x="126" y="158" width="6" height="6" fill="#6C5E8A"/><rect x="138" y="158" width="6" height="6" fill="#6C5E8A"/><rect x="138" y="189" width="6" height="6" fill="#6C5E8A"/><rect x="222" y="127" width="6" height="6" fill="#6C5E8A"/><rect x="234" y="146" width="6" height="6" fill="#6C5E8A"/><rect x="60" y="173" width="6" height="6" fill="#6C5E8A"/><rect x="141.5" y="112.5" width="11" height="11" fill="#6C5E8A"/><rect x="334.5" y="120.5" width="7" height="7" fill="#6C5E8A"/><rect x="263" y="104" width="4" height="4" fill="#6C5E8A"/><rect x="263" y="102" width="4" height="4" fill="#6C5E8A"/><rect x="268" y="102" width="4" height="4" fill="#6C5E8A"/><path d="M29 212 L371 88" stroke="#FF3D5A" stroke-opacity="0.22" stroke-width="18" fill="none" stroke-linecap="round"/><path d="M29 212 L371 88" stroke="#FF3D5A" stroke-width="3" fill="none" stroke-dasharray="8 6"/><rect x="82" y="181" width="18" height="18" rx="3" fill="#FF3D5A"/><rect x="126" y="165" width="18" height="18" rx="3" fill="#FF3D5A"/><rect x="222" y="130" width="18" height="18" rx="3" fill="#FF3D5A"/><rect x="269" y="113" width="18" height="18" rx="3" fill="#FF3D5A"/><rect x="320" y="94" width="18" height="18" rx="3" fill="#FF3D5A"/><rect x="158" y="149" width="24" height="24" fill="none" stroke="#2EE6FF" stroke-width="3" stroke-dasharray="5 3"/>',
   },
   {
     id: 'cinder-quarry',
@@ -76,17 +52,7 @@ export const CAMPAIGN: readonly CampaignLevel[] = [
     routeLength: 760,
     routeSeconds: 152,
     thumbnail:
-      '<rect width="400" height="300" fill="#5A4E3C"/>' +
-      '<rect x="20" y="40" width="360" height="245" rx="40" fill="#6A5C46"/>' +
-      '<rect x="45" y="80" width="300" height="195" rx="34" fill="#776850"/>' +
-      '<rect x="80" y="125" width="230" height="130" rx="28" fill="#84755B"/>' +
-      ROUTE('M20 60 H250 C 330 60, 330 180, 250 180 H120 C 60 180, 60 260, 120 260 H385') +
-      box(81, 51) +
-      box(191, 51) +
-      box(300, 104) +
-      box(191, 171) +
-      box(70, 208) +
-      box(241, 251),
+      '<rect width="400" height="300" fill="#5A4E3C"/><rect x="47" y="76" width="232" height="116" rx="14" fill="#6A5C46"/><rect x="60" y="90" width="205" height="88" rx="12" fill="#776850"/><rect x="74" y="103" width="177" height="61" rx="10" fill="#84755B"/><path d="M-38 63 L307 63 L307 157" stroke="#8C7B5C" stroke-width="3" fill="none" stroke-linejoin="round"/><path d="M293 63 L270 80 L256 99 L242 117 L214 123" stroke="#8C7B5C" stroke-width="3" fill="none" stroke-linejoin="round"/><path d="M-38 164 L47 164 L47 131" stroke="#8C7B5C" stroke-width="3" fill="none" stroke-linejoin="round"/><path d="M293 157 L438 157" stroke="#8C7B5C" stroke-width="3" fill="none" stroke-linejoin="round"/><rect x="30" y="127" width="4" height="4" fill="#3E3528"/><rect x="37" y="124" width="4" height="4" fill="#3E3528"/><rect x="189" y="119" width="4" height="4" fill="#3E3528"/><rect x="305.5" y="126.5" width="7" height="7" fill="#3E3528"/><rect x="284.5" y="128.5" width="9" height="9" fill="#3E3528"/><rect x="293" y="163" width="4" height="4" fill="#3E3528"/><rect x="293" y="165" width="4" height="4" fill="#3E3528"/><rect x="338" y="163" width="4" height="4" fill="#3E3528"/><rect x="344" y="163" width="4" height="4" fill="#3E3528"/><rect x="351" y="131" width="4" height="4" fill="#3E3528"/><rect x="363.5" y="163.5" width="5" height="5" fill="#3E3528"/><path d="M23 150 L377 150" stroke="#FF3D5A" stroke-opacity="0.22" stroke-width="18" fill="none" stroke-linecap="round"/><path d="M23 150 L377 150" stroke="#FF3D5A" stroke-width="3" fill="none" stroke-dasharray="8 6"/><rect x="62" y="141" width="18" height="18" rx="3" fill="#FF3D5A"/><rect x="108" y="141" width="18" height="18" rx="3" fill="#FF3D5A"/><rect x="158" y="145" width="18" height="18" rx="3" fill="#FF3D5A"/><rect x="215" y="141" width="18" height="18" rx="3" fill="#FF3D5A"/><rect x="280" y="141" width="18" height="18" rx="3" fill="#FF3D5A"/><rect x="328" y="141" width="18" height="18" rx="3" fill="#FF3D5A"/>',
   },
 ];
 

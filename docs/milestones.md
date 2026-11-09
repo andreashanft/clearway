@@ -305,3 +305,33 @@ This is where each item in the code brief's checklist stands:
 - **The Ferrow Junction dish falls when the station falls.** The brief puts it on the station roof, reached by a ramp of stacked containers. Buildings can't stack yet, so destroy the station and collect the dish from the rubble, which gold needs anyway.
 - **The Hollow Creek dish peeks out of the hay bales.** It can only be collected once the bales fall, and the glimpse hints at where it is.
 - **The HUD shows the level name only from 1400 px wide.** Between iPad and desktop widths, the obstacles and beacons counters need the room beside the route panel.
+
+## After milestone 7: straight routes, points and debris
+
+These changes follow play-testing feedback and replace parts of the brief's level design.
+
+### What changed
+
+- **The Hauler drives one straight line across each level.** It still never steers. Each level keeps its theme and the brief's obstacle distances, but now has a believable layout that the line cuts across, instead of buildings standing on a winding road:
+  - **Hollow Creek:** two farms along Hollow Lane and Ridge Lane, a filling station on Creek Road, the creek (which the Hauler fords) and a grain yard on Mill Road.
+  - **Ferrow Junction:** a street grid with terraces facing each other across Station Road and Victoria Street, a corner shop and pub at the High Street crossroads, the railway in its cutting at right angles to the line, and the goods yard.
+  - **Cinder Quarry:** the line runs due east down the terraces, across the pit floor and out through the crushing plant and the workers' village. The map grows to 1 km so the 760 m line fits.
+- **Only buildings on the line are obstacles.** Every other building is a bonus.
+- **Points.**
+  - Every destroyed building scores by strength: shed 50, house 100, brick 250, concrete 500. Fences score 20, hay bales 30 and containers 80.
+  - Knocked-over trees score 10, and bushes and rocks 5.
+  - Each beacon scores 25, the relay dish 500 and clearing the path 1,000.
+  - The HUD shows the score, with a pop-up over each building as it falls (cyan for a bonus). The pause screen, results and campaign cards show the score, and the best score is saved per level.
+  - Medals still follow the brief's rules.
+- **Debris no longer gets in the way.** Flying chunks land on the ground, on buildings and on each other, but pass through vehicles, the pilot and crates. After 4 seconds they shrink into the ground over 0.8 s and disappear, leaving the foundation.
+
+### Tooling
+
+- The terrain baker draws roads (`roads` in the terrain file, levelled and painted). The Hauler's line can be graded without paint (`route.level`, `route.paint`), as in the quarry. Building pads now sit at the graded height, and water sits under any road that crosses it.
+- The mini-map frames the whole play area at its own shape.
+- The campaign thumbnails are drawn from the level and terrain files.
+
+### Deviations
+
+- **The routes are straight.** The brief describes an S-curve for Hollow Creek and hairpins for Ferrow Junction and Cinder Quarry; the obstacle distances and arrival times are unchanged.
+- **The Hauler fords the creek** in Hollow Creek rather than crossing on a road.

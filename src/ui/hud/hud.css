@@ -9,6 +9,8 @@
   font-family: var(--cw-font-body);
   --pad: 14px;
   --gap: 8px;
+  /* Width of the route panel, top centre; the counters wrap to stay clear of it. */
+  --route-w: min(320px, 40vw);
 }
 
 .cw-hud[hidden],
@@ -37,8 +39,12 @@
   top: calc(12px + env(safe-area-inset-top));
   left: calc(var(--pad) + env(safe-area-inset-left));
   display: flex;
+  flex-wrap: wrap;
   gap: var(--gap);
   align-items: flex-start;
+  max-width: calc(
+    (100vw - var(--route-w) * var(--cw-hud-scale)) / 2 / var(--cw-hud-scale) - var(--pad) - 12px
+  );
   transform-origin: top left;
 }
 
@@ -57,6 +63,75 @@
 .cw-hud__counter .cw-stat__value {
   font-size: 20px;
   line-height: 1;
+}
+
+/* Points rise and fade over whatever earned them. */
+.cw-hud__popups {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+.cw-hud__popup {
+  position: absolute;
+  translate: -50% -100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: var(--cw-font-display);
+  font-weight: 800;
+  color: var(--cw-hazard);
+  text-shadow:
+    0 2px 0 rgb(11 20 48 / 0.85),
+    0 0 14px rgb(255 210 63 / 0.55);
+  animation: cw-popup 1.3s ease-out forwards;
+}
+
+.cw-hud__popup[data-kind='bonus'] {
+  color: var(--cw-signal);
+  text-shadow:
+    0 2px 0 rgb(11 20 48 / 0.85),
+    0 0 14px rgb(46 230 255 / 0.55);
+}
+
+.cw-hud__popup[data-kind='clear'] {
+  color: var(--cw-go);
+}
+
+.cw-hud__popup-points {
+  font-size: 28px;
+  line-height: 1;
+}
+
+.cw-hud__popup-label {
+  font-family: var(--cw-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.cw-hud__popup[data-kind='clear'] .cw-hud__popup-points {
+  font-size: 44px;
+}
+
+@keyframes cw-popup {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.8);
+  }
+
+  15% {
+    opacity: 1;
+    transform: translateY(0) scale(1.08);
+  }
+
+  70% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: translateY(-36px) scale(1);
+  }
 }
 
 /* A beacon just lit: the counter flashes in signal cyan. */
@@ -82,7 +157,7 @@
   top: calc(12px + env(safe-area-inset-top));
   left: 50%;
   translate: -50% 0;
-  width: min(320px, 40vw);
+  width: var(--route-w);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -440,8 +515,8 @@
   }
 
   /* Narrows between iPad and desktop widths so the counters fit beside it. */
-  .cw-hud__top {
-    width: clamp(320px, calc(100vw - 680px), 500px);
+  .cw-hud {
+    --route-w: clamp(320px, calc(100vw - 680px), 500px);
   }
 
   .cw-hud__route {

@@ -42,9 +42,11 @@ export interface BuildingDefinition {
 
 export type BuildingState = 'intact' | 'cracked' | 'collapsing' | 'rubble';
 
-/** Seconds a chunk flies before it settles into non-colliding rubble. */
+/** Seconds a chunk flies before it starts to fade away. */
 export const RUBBLE_AFTER = 4;
-/** Most physics chunks alive at once; the oldest turn to rubble early beyond this. */
+/** Seconds a chunk takes to shrink into the ground and disappear. */
+export const FADE_SECONDS = 0.8;
+/** Most physics chunks alive at once; the oldest start fading early beyond this. */
 export const MAX_ACTIVE_CHUNKS = 200;
 
 const DENSITY: Readonly<Record<Strength, number>> = {
@@ -59,6 +61,8 @@ interface Chunk {
   readonly instanceId: number;
   body: RigidBody | null;
   age: number;
+  /** 0 while it flies; then rises to 1 as the chunk shrinks away. */
+  fade: number;
   readonly prevPosition: Vector3;
   readonly prevRotation: Quaternion;
   readonly currPosition: Vector3;
@@ -95,7 +99,7 @@ export class Building {
   readonly chunks: Chunk[] = [];
   body: RigidBody | null = null;
   readonly colliders: Collider[] = [];
-  /** Batched-mesh geometry slot holding the merged building, later its baked rubble. */
+  /** Batched-mesh geometry slot holding the merged building. */
   intactGeometry: number | null = null;
   /** Batched-mesh instance of the merged intact building, shown while it stands. */
   intactInstance: number | null = null;
@@ -143,6 +147,7 @@ export class Buildings {
   private readonly unit = new Vector3(1, 1, 1);
   private readonly tmpPos = new Vector3();
   private readonly tmpQuat = new Quaternion();
+  private readonly tmpScale = new Vector3();
   private readonly crackTint = new Color(0.8, 0.78, 0.76);
 
   constructor(
@@ -218,6 +223,7 @@ export class Buildings {
           instanceId,
           body: null,
           age: 0,
+          fade: 0,
           prevPosition: new Vector3(),
           prevRotation: new Quaternion(),
           currPosition: new Vector3(),
@@ -263,23 +269,36 @@ export class Buildings {
     return false;
   }
 
-  /** Advances flying chunks and turns old ones into rubble. Call before the world steps. */
+  /** Advances flying chunks and fades old ones away. Call before the world steps. */
   step(dt: number): void {
-    for (const chunk of this.activeChunks) chunk.age += dt;
-    const settled = this.activeChunks.filter((c) => c.age >= RUBBLE_AFTER);
-    if (this.activeChunks.length - settled.length > MAX_ACTIVE_CHUNKS) {
-      // Oldest first beyond the cap.
-      const extra = this.activeChunks.length - settled.length - MAX_ACTIVE_CHUNKS;
-      settled.push(...this.activeChunks.filter((c) => c.age < RUBBLE_AFTER).slice(0, extra));
+    let flying = 0;
+    for (const chunk of this.activeChunks) {
+      chunk.age += dt;
+      if (chunk.body) flying++;
     }
-    if (settled.length > 0) {
-      for (const chunk of settled) this.toRubble(chunk);
-      this.activeChunks = this.activeChunks.filter((c) => c.body !== null);
-      for (const building of this.list) {
-        if (building.state === 'collapsing' && building.chunks.every((c) => c.body === null)) {
-          building.state = 'rubble';
-          this.bakeRubble(building);
-        }
+    // Chunks list oldest first, so beyond the cap the oldest start fading early.
+    for (const chunk of this.activeChunks) {
+      if (!chunk.body) continue;
+      if (chunk.age >= RUBBLE_AFTER || flying > MAX_ACTIVE_CHUNKS) {
+        this.startFade(chunk);
+        flying--;
+      }
+    }
+    let gone = false;
+    for (const chunk of this.activeChunks) {
+      if (chunk.body) continue;
+      chunk.fade = Math.min(1, chunk.fade + dt / FADE_SECONDS);
+      if (chunk.fade >= 1) {
+        this.mesh.setVisibleAt(chunk.instanceId, false);
+        chunk.piece.geometry.dispose();
+        gone = true;
+      }
+    }
+    if (!gone) return;
+    this.activeChunks = this.activeChunks.filter((c) => c.fade < 1);
+    for (const building of this.list) {
+      if (building.state === 'collapsing' && building.chunks.every((c) => c.fade >= 1)) {
+        building.state = 'rubble';
       }
     }
   }
@@ -301,9 +320,13 @@ export class Buildings {
     for (const chunk of this.activeChunks) {
       this.tmpPos.lerpVectors(chunk.prevPosition, chunk.currPosition, alpha);
       this.tmpQuat.slerpQuaternions(chunk.prevRotation, chunk.currRotation, alpha);
+      // A fading chunk shrinks and sinks a little until it is gone.
+      const f = chunk.fade * chunk.fade * (3 - 2 * chunk.fade);
+      this.tmpPos.y -= f * 0.6;
+      this.tmpScale.setScalar(Math.max(0.001, 1 - f));
       this.mesh.setMatrixAt(
         chunk.instanceId,
-        this.matrix.compose(this.tmpPos, this.tmpQuat, this.unit),
+        this.matrix.compose(this.tmpPos, this.tmpQuat, this.tmpScale),
       );
     }
   }
@@ -323,37 +346,6 @@ export class Buildings {
     const id = this.mesh.addInstance(geometryId);
     this.mesh.setMatrixAt(id, this.matrix.compose(building.origin, building.rotation, this.unit));
     return id;
-  }
-
-  /**
-   * Bakes a settled building's rubble and foundation into its merged slot, so a flattened
-   * building costs one draw again instead of one per piece.
-   */
-  private bakeRubble(building: Building): void {
-    if (building.intactGeometry === null || building.intactInstance === null) return;
-    const inverse = new Matrix4().compose(building.origin, building.rotation, this.unit).invert();
-    const local = new Matrix4();
-    const parts = building.chunks.map((chunk) =>
-      chunk.piece.geometry
-        .clone()
-        .applyMatrix4(
-          local.multiplyMatrices(
-            inverse,
-            this.matrix.compose(chunk.currPosition, chunk.currRotation, this.unit),
-          ),
-        ),
-    );
-    if (building.foundation) parts.push(building.foundation.clone());
-    this.mesh.setGeometryAt(building.intactGeometry, merge(parts));
-    this.mesh.setVisibleAt(building.intactInstance, true);
-    this.mesh.setColorAt(building.intactInstance, this.crackTint);
-    for (const chunk of building.chunks) {
-      this.mesh.setVisibleAt(chunk.instanceId, false);
-      chunk.piece.geometry.dispose();
-    }
-    if (building.foundationInstance !== null) {
-      this.mesh.setVisibleAt(building.foundationInstance, false);
-    }
   }
 
   /** Swaps the merged intact mesh for the separate pieces and the bare foundation. */
@@ -474,18 +466,15 @@ export class Buildings {
   }
 
   /** Freezes a chunk where it lies and removes its body, so it can never block anything. */
-  private toRubble(chunk: Chunk): void {
+  /** Freezes a chunk where it lies and starts it fading. */
+  private startFade(chunk: Chunk): void {
     if (!chunk.body) return;
     const t = chunk.body.translation();
     const r = chunk.body.rotation();
-    chunk.currPosition.set(t.x, t.y - 0.08, t.z);
+    chunk.currPosition.set(t.x, t.y, t.z);
     chunk.currRotation.set(r.x, r.y, r.z, r.w);
     chunk.prevPosition.copy(chunk.currPosition);
     chunk.prevRotation.copy(chunk.currRotation);
-    this.mesh.setMatrixAt(
-      chunk.instanceId,
-      this.matrix.compose(chunk.currPosition, chunk.currRotation, this.unit),
-    );
     this.mesh.setColorAt(chunk.instanceId, this.crackTint);
     this.physics.world.removeRigidBody(chunk.body);
     chunk.body = null;

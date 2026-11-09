@@ -4,7 +4,12 @@ import { loadRapier, Physics, type Rapier } from '../src/engine/physics';
 import { STRENGTH_HP } from '../src/game/damage';
 import type { Effects } from '../src/game/fx/effects';
 import { BUILDING_STYLES } from '../src/game/world/building-styles';
-import { type BuildingDefinition, Buildings, RUBBLE_AFTER } from '../src/game/world/buildings';
+import {
+  type BuildingDefinition,
+  Buildings,
+  FADE_SECONDS,
+  RUBBLE_AFTER,
+} from '../src/game/world/buildings';
 import { Heightfield } from '../src/game/world/heightfield';
 
 /** Effects are visual only; the tests replace them with no-ops. */
@@ -88,7 +93,7 @@ describe('Buildings', () => {
     // The intact body is gone and every piece now flies on its own.
     expect(physics.bodyCount).toBe(bodiesBefore - 1 + cottage.chunks.length);
 
-    run(RUBBLE_AFTER + 0.2);
+    run(RUBBLE_AFTER + FADE_SECONDS + 0.2);
     expect(cottage.state).toBe('rubble');
     expect(physics.bodyCount).toBe(bodiesBefore - 1);
     // Rubble rests near the ground rather than falling through it.

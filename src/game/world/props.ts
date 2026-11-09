@@ -174,6 +174,8 @@ export class Props {
   private readonly quat = new Quaternion();
   private readonly tilt = new Quaternion();
   private readonly scaleVec = new Vector3();
+  /** Called for each prop knocked over, for scoring. */
+  onKnocked: ((prop: PropInstance) => void) | null = null;
 
   constructor(file: PropsFile, field: Heightfield) {
     this.group.name = 'props';
@@ -206,6 +208,7 @@ export class Props {
           const len = Math.hypot(fx, fz) || 1;
           const topple = prop.type === 'tree' || prop.type === 'pine';
           prop.state = 'falling';
+          this.onKnocked?.(prop);
           this.falls.push({
             prop,
             // Tipping about this horizontal axis rotates the top towards (fx, fz).

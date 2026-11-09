@@ -25,20 +25,18 @@ export const COLLISION = {
   ground: interactionGroups(GROUP.ground, ALL_GROUPS),
   vehicle: interactionGroups(
     GROUP.vehicle,
-    GROUP.ground | GROUP.vehicle | GROUP.building | GROUP.chunk | GROUP.tnt | GROUP.hauler,
+    GROUP.ground | GROUP.vehicle | GROUP.building | GROUP.tnt | GROUP.hauler,
   ),
   building: interactionGroups(
     GROUP.building,
     GROUP.vehicle | GROUP.chunk | GROUP.tnt | GROUP.pilot | GROUP.hauler,
   ),
-  // Flying chunks never touch the Hauler: rubble must not block it.
-  chunk: interactionGroups(
-    GROUP.chunk,
-    GROUP.ground | GROUP.vehicle | GROUP.chunk | GROUP.building | GROUP.tnt,
-  ),
+  // Flying chunks only land on the ground, standing buildings and each other: they never
+  // block the Hauler, a vehicle, the pilot or a crate.
+  chunk: interactionGroups(GROUP.chunk, GROUP.ground | GROUP.chunk | GROUP.building),
   tnt: interactionGroups(
     GROUP.tnt,
-    GROUP.ground | GROUP.vehicle | GROUP.building | GROUP.chunk | GROUP.tnt | GROUP.hauler,
+    GROUP.ground | GROUP.vehicle | GROUP.building | GROUP.tnt | GROUP.hauler,
   ),
 } as const;
 

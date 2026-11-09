@@ -587,6 +587,14 @@
   display: flex;
 }
 
+.cw-results__score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
 .cw-results__medal {
   width: min(300px, 34%);
   flex-shrink: 0;

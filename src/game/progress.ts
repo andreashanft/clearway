@@ -10,6 +10,8 @@ export interface LevelRecord {
   readonly buildings: number;
   readonly beacons: number;
   readonly dish: boolean;
+  /** Best score; missing in saves from before scoring. */
+  readonly bestScore?: number;
 }
 
 export type ControlLayout = 'point' | 'classic';
@@ -87,6 +89,7 @@ export function recordRun(previous: LevelRecord | undefined, stats: LevelStats):
     ),
     beacons: Math.max(previous?.beacons ?? 0, share(stats.beaconsFound, stats.beaconsTotal)),
     dish: (previous?.dish ?? false) || stats.dishFound,
+    bestScore: Math.max(previous?.bestScore ?? 0, stats.score),
   };
 }
 

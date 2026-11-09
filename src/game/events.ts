@@ -69,6 +69,16 @@ export interface GameEvents {
     beacons: { x: number; z: number }[];
     cameraYaw: number;
   };
+  /** Points scored; `screenX` and `screenY` place a pop-up over what earned them. */
+  score: {
+    points: number;
+    total: number;
+    label: string;
+    kind: 'path' | 'bonus' | 'prop' | 'pickup' | 'clear';
+    screenX: number;
+    screenY: number;
+    onScreen: boolean;
+  };
   /** The player lit a beacon. */
   'pickup:beacon': { found: number; total: number };
   /** The player found the relay dish. */

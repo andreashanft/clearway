@@ -15,42 +15,8 @@
     "speed": 5,
     "startDelay": 5,
     "route": [
-      [-146, -80],
-      [-124.3, -80],
-      [-102.6, -80],
-      [-80.9, -80],
-      [-59.1, -80],
-      [-37.4, -80],
-      [-15.7, -80],
-      [6, -80],
-      [27.8, -80],
-      [49.4, -78.9],
-      [68.9, -69.9],
-      [81.8, -52.7],
-      [86, -31.5],
-      [81.4, -10.4],
-      [68.1, 6.5],
-      [48.4, 15.1],
-      [26.7, 16],
-      [5, 16],
-      [-16.7, 16],
-      [-38.4, 16],
-      [-60.1, 16],
-      [-81.6, 18.7],
-      [-97.9, 32.3],
-      [-101.6, 53.3],
-      [-91.1, 71.8],
-      [-71.2, 79.8],
-      [-49.5, 80],
-      [-27.8, 80],
-      [-6, 80],
-      [15.7, 80],
-      [37.4, 80],
-      [59.1, 80],
-      [80.9, 80],
-      [102.6, 80],
-      [124.3, 80],
-      [146, 80]
+      [-380, 10],
+      [380, 10]
     ]
   },
   "player": {
@@ -59,19 +25,19 @@
   "vehicles": [
     {
       "type": "liftoff",
-      "pos": [-106, -102],
+      "pos": [-360, -14],
       "yaw": 90
     },
     {
       "type": "tumbler",
-      "pos": [58.2, 1.1],
-      "yaw": 148,
+      "pos": [-71, 20.2],
+      "yaw": 0,
       "lockedBy": "hangar"
     },
     {
       "type": "bruiser",
-      "pos": [-78.8, 62],
-      "yaw": 115
+      "pos": [150, 46],
+      "yaw": 0
     }
   ],
   "buildings": [
@@ -79,7 +45,7 @@
       "id": "cabin-1",
       "style": "cabin",
       "strength": "shed",
-      "pos": [-51.5, -82.6],
+      "pos": [-285.5, 7.4],
       "size": [7, 3, 3],
       "yaw": 0,
       "group": "site-cabins"
@@ -88,7 +54,7 @@
       "id": "cabin-2",
       "style": "cabin",
       "strength": "shed",
-      "pos": [-43.5, -77.4],
+      "pos": [-277.5, 12.6],
       "size": [7, 3, 3],
       "yaw": 0,
       "group": "site-cabins"
@@ -97,7 +63,7 @@
       "id": "cabin-3",
       "style": "cabin",
       "strength": "shed",
-      "pos": [-35.5, -82.6],
+      "pos": [-269.5, 7.4],
       "size": [7, 3, 3],
       "yaw": 0,
       "group": "site-cabins"
@@ -106,50 +72,50 @@
       "id": "gantry",
       "style": "gantry",
       "strength": "brick",
-      "pos": [56.3, -76.8],
+      "pos": [-177.5, 10],
       "size": [32, 9, 3],
-      "yaw": 69
+      "yaw": 90
     },
     {
       "id": "hangar",
       "style": "hangar",
       "strength": "brick",
-      "pos": [59.3, 2.8],
+      "pos": [-71, 18.2],
       "size": [16, 9, 14],
-      "yaw": 32
+      "yaw": 180
     },
     {
       "id": "crusher-a",
       "style": "crusher",
       "strength": "concrete",
-      "pos": [-50.9, 20],
+      "pos": [45, 5.8],
       "size": [8, 7, 8],
-      "yaw": 180,
+      "yaw": 0,
       "group": "crushers-ab"
     },
     {
       "id": "crusher-b",
       "style": "crusher",
       "strength": "concrete",
-      "pos": [-63, 11.9],
+      "pos": [57, 14.2],
       "size": [8, 7, 8],
-      "yaw": 2,
+      "yaw": 180,
       "group": "crushers-ab"
     },
     {
       "id": "crusher-c",
       "style": "crusher",
       "strength": "concrete",
-      "pos": [-48.7, 84.2],
+      "pos": [185, 14.2],
       "size": [8, 7, 8],
-      "yaw": -1,
+      "yaw": 0,
       "group": "crusher-c-chimney"
     },
     {
       "id": "chimney",
       "style": "chimney",
       "strength": "concrete",
-      "pos": [-36.9, 77.8],
+      "pos": [197, 7.8],
       "size": [3, 18, 3],
       "yaw": 0,
       "group": "crusher-c-chimney"
@@ -158,7 +124,7 @@
       "id": "hut-1",
       "style": "hut",
       "strength": "shed",
-      "pos": [49.1, 77.4],
+      "pos": [283, 7.4],
       "size": [4, 3, 3.5],
       "yaw": 180,
       "group": "huts"
@@ -167,7 +133,7 @@
       "id": "hut-2",
       "style": "hut",
       "strength": "shed",
-      "pos": [56.1, 82.6],
+      "pos": [290, 12.6],
       "size": [4, 3, 3.5],
       "yaw": 0,
       "group": "huts"
@@ -176,7 +142,7 @@
       "id": "hut-3",
       "style": "hut",
       "strength": "shed",
-      "pos": [63.1, 77.4],
+      "pos": [297, 7.4],
       "size": [4, 3, 3.5],
       "yaw": 180,
       "group": "huts"
@@ -185,7 +151,7 @@
       "id": "hut-4",
       "style": "hut",
       "strength": "shed",
-      "pos": [70.1, 82.6],
+      "pos": [304, 12.6],
       "size": [4, 3, 3.5],
       "yaw": 0,
       "group": "huts"
@@ -194,7 +160,7 @@
       "id": "site-office",
       "style": "cabin",
       "strength": "shed",
-      "pos": [-126, -110],
+      "pos": [-362, -36],
       "size": [9, 3.2, 3.4],
       "yaw": 0
     },
@@ -202,41 +168,89 @@
       "id": "site-store",
       "style": "cabin",
       "strength": "shed",
-      "pos": [-112, -112],
+      "pos": [-346, -42],
       "size": [7, 3, 3],
       "yaw": 0
-    },
-    {
-      "id": "container-1",
-      "style": "container",
-      "strength": "brick",
-      "pos": [-82, 37.9],
-      "size": [6, 2.6, 2.4],
-      "yaw": -46
-    },
-    {
-      "id": "container-2",
-      "style": "container",
-      "strength": "brick",
-      "pos": [-82.2, 41.1],
-      "size": [6, 2.6, 2.4],
-      "yaw": -34
     },
     {
       "id": "spare-crusher",
       "style": "crusher",
       "strength": "concrete",
-      "pos": [-5.8, -4],
+      "pos": [-20, -52],
       "size": [7, 6, 7],
-      "yaw": -180
+      "yaw": 0
+    },
+    {
+      "id": "plant-workshop",
+      "style": "warehouse",
+      "strength": "brick",
+      "pos": [235, -32],
+      "size": [14, 7, 10],
+      "yaw": 0
+    },
+    {
+      "id": "feed-conveyor",
+      "style": "gantry",
+      "strength": "brick",
+      "pos": [192, -26],
+      "size": [20, 7, 3],
+      "yaw": 90
+    },
+    {
+      "id": "container-1",
+      "style": "container",
+      "strength": "brick",
+      "pos": [205, 42],
+      "size": [6, 2.6, 2.4],
+      "yaw": 0
+    },
+    {
+      "id": "container-2",
+      "style": "container",
+      "strength": "brick",
+      "pos": [205, 46],
+      "size": [6, 2.6, 2.4],
+      "yaw": 0
+    },
+    {
+      "id": "village-hut-1",
+      "style": "hut",
+      "strength": "shed",
+      "pos": [300, 42],
+      "size": [4, 3, 3.5],
+      "yaw": 0
+    },
+    {
+      "id": "village-hut-2",
+      "style": "hut",
+      "strength": "shed",
+      "pos": [314, 42],
+      "size": [4, 3, 3.5],
+      "yaw": 0
+    },
+    {
+      "id": "village-hut-3",
+      "style": "hut",
+      "strength": "shed",
+      "pos": [330, -26],
+      "size": [4, 3, 3.5],
+      "yaw": 180
+    },
+    {
+      "id": "canteen",
+      "style": "house",
+      "strength": "house",
+      "pos": [356, 44],
+      "size": [10, 6, 8],
+      "yaw": 180
     }
   ],
   "tnt": [
     {
-      "pos": [-69.6, 68.9]
+      "pos": [166, 40]
     },
     {
-      "pos": [-65.3, 67.4]
+      "pos": [173, 43]
     }
   ],
   "targets": {
@@ -249,62 +263,62 @@
   },
   "description": "Clear 6 obstacles before the Hauler reaches them. Free the Tumbler from its hangar for the concrete plant.",
   "hints": {
-    "start": "Drive off the rim onto the site cabins. Action fires a boost.",
-    "site-cabins": "Drive off the rim at a moderate speed and land on the cabins.",
-    "gantry": "Boost off the spoil heap beside the road into the conveyor gantry.",
+    "start": "Drive off the rim onto the site cabins below. Action fires a boost.",
+    "site-cabins": "Drive off the terrace edge at a moderate speed and land on the cabins.",
+    "gantry": "Boost off the spoil heap beside the line into the conveyor gantry.",
     "hangar": "Land on the hangar roof to break it. The Tumbler inside is yours.",
     "crushers-ab": "Concrete. Roll the Tumbler into both crushers; quick rolls hit harder.",
     "crusher-c-chimney": "Roll into crusher C and the chimney, or push TNT with the Bruiser.",
     "huts": "Workers’ huts fall to anything. Finish the job."
   },
   "tips": {
-    "site-cabins": "Head for the rim straight away and drop onto the cabins: they are only 18 seconds away.",
+    "site-cabins": "Head for the terrace edge straight away and drop onto the cabins: they are only 18 seconds away.",
     "gantry": "Line up with the spoil heap and boost at its top.",
     "hangar": "Landing on a roof does far more damage than ramming a wall.",
     "crushers-ab": "Only the Tumbler or TNT drops concrete. Chain rolls within 2 seconds.",
-    "crusher-c-chimney": "Both crusher C and the chimney must fall. TNT waits by the Bruiser.",
+    "crusher-c-chimney": "Both crusher C and the chimney must fall. TNT waits by the Bruiser at the plant.",
     "huts": "Any vehicle clears the huts. Leave the crushers in time."
   },
   "beacons": {
     "trails": [
       {
         "points": [
-          [-132, -106],
-          [60, -106]
+          [-330, -166],
+          [150, -166]
         ],
         "count": 12
       },
       {
         "points": [
-          [-86, -46],
-          [70, -46]
+          [-250, -135],
+          [100, -135]
         ],
         "count": 12
       },
       {
         "points": [
-          [-70, 44],
-          [60, 44]
+          [-240, 55],
+          [80, 55]
         ],
         "count": 10
       },
       {
         "points": [
-          [6, -92],
-          [38, -90]
+          [-240, -40],
+          [-70, -40]
+        ],
+        "count": 10
+      },
+      {
+        "points": [
+          [-228, -2],
+          [-194, 0]
         ],
         "count": 6
-      },
-      {
-        "points": [
-          [-120, 110],
-          [120, 110]
-        ],
-        "count": 10
       }
     ]
   },
   "relayDish": {
-    "pos": [-112, -42]
+    "pos": [-150, -100]
   }
 }

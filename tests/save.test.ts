@@ -70,6 +70,7 @@ const run = (overrides: Partial<LevelStats>): LevelStats => ({
   beaconsTotal: 0,
   dishFound: false,
   dishExists: false,
+  score: 0,
   ...overrides,
 });
 

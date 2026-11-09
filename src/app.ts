@@ -406,6 +406,7 @@ export class App {
           obstaclesCleared: session?.obstacles.filter((o) => o.cleared).length ?? 0,
           obstaclesTotal: session?.obstacles.length ?? 0,
           ...pickupText(this.game?.pickupProgress),
+          score: session?.score ?? 0,
         }),
         {
           resume: () => this.resume(),
@@ -473,6 +474,7 @@ export class App {
           stats,
           medal,
           newBest,
+          previousBestScore: previous?.bestScore ?? 0,
           obstaclesTotal: this.game?.levelSession?.obstacles.length ?? 0,
           hasNext:
             next !== undefined && findLevel(next.id) !== undefined && medalFor(stats) !== null,

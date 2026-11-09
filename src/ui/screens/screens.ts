@@ -1,5 +1,6 @@
 import './screens.css';
 import type { CampaignLevel } from '../../game/campaign';
+import { formatScore } from '../../game/points';
 import type { LevelRecord, Settings } from '../../game/progress';
 import { type LevelStats, type Medal, shortfallFor } from '../../game/scoring';
 import { button, chip, formatClock, h, icon, slider, stat, toggle } from '../kit';
@@ -119,6 +120,7 @@ export function campaignScreen(
     } else if (record?.medal) {
       if (record.bestTime !== null)
         actionsRow.append(chip(`BEST ${formatClock(record.bestTime)}`, 'hazard'));
+      if (record.bestScore) actionsRow.append(chip(`${formatScore(record.bestScore)} PTS`));
       actionsRow.append(
         button('Replay', 'ghost', () => actions.brief(level.id), { size: 'small' }),
       );
@@ -284,6 +286,7 @@ export interface PauseInfo {
   obstaclesTotal: number;
   beacons: string;
   dish: string;
+  score: number;
 }
 
 export function pauseScreen(
@@ -327,6 +330,7 @@ export function pauseScreen(
       stat('OBSTACLES', `${i.obstaclesCleared} / ${i.obstaclesTotal}`),
       stat('BEACONS', i.beacons, 'signal'),
       stat('RELAY DISH', i.dish, 'muted'),
+      stat('SCORE', formatScore(i.score), 'hazard'),
     );
   };
   update();
@@ -381,6 +385,8 @@ export function resultsScreen(
     stats: LevelStats;
     medal: Medal | null;
     newBest: boolean;
+    /** Best score before this run, to show a new record. */
+    previousBestScore: number;
     obstaclesTotal: number;
     hasNext: boolean;
   },
@@ -472,6 +478,16 @@ export function resultsScreen(
       info.newBest && stats.clearTime !== null
         ? chip(`NEW BEST · ${formatClock(stats.clearTime)}`, 'go')
         : null,
+      h(
+        'div',
+        { class: 'cw-results__score' },
+        stat('SCORE', formatScore(stats.score), 'hazard'),
+        stats.score > info.previousBestScore && info.previousBestScore > 0
+          ? chip('NEW HIGH SCORE', 'hazard')
+          : info.previousBestScore > 0
+            ? chip(`BEST ${formatScore(info.previousBestScore)}`)
+            : null,
+      ),
     ),
     h(
       'div',

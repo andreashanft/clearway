@@ -21,6 +21,14 @@ import { DECK_HEIGHT, Railbed } from './vehicles/railbed';
 import type { Machine as Vehicle } from './vehicles/vehicle';
 import { footprintOf } from './world/footprint';
 import { Pickups } from './world/pickups';
+import { mapBounds } from './map-bounds';
+import {
+  BEACON_POINTS,
+  buildingPoints,
+  DISH_POINTS,
+  PATH_CLEAR_POINTS,
+  propPoints,
+} from './points';
 import { Rails } from './world/rails';
 import { RouteLine } from './world/route-line';
 
@@ -112,6 +120,7 @@ export class Game {
   private readonly lockedBy = new Map<Vehicle, string>();
   private pickups: Pickups | null = null;
   private hitStopLeft = 0;
+  private readonly scoreAt = new Vector3();
   private readonly subscriptions: (() => void)[] = [];
   private def: LevelDefinition | null = null;
   private modeValue: GameMode = 'play';
@@ -315,6 +324,9 @@ export class Game {
     );
     this.session = session;
     session.pickups = pickups;
+    this.world.props.onKnocked = (prop) => {
+      this.addPoints(propPoints(prop.type), '', 'prop', prop.position);
+    };
     destruction.watchHauler(hauler, () => {
       if (this.modeValue !== 'play') return;
       const next = session.next;
@@ -333,12 +345,26 @@ export class Game {
       this.bus.on('building:destroyed', ({ id }) => {
         session.buildingDestroyed(id);
         pickups.onBuildingDestroyed(id);
+        const building = destruction.buildings.list.find((b) => b.def.id === id);
+        if (building) {
+          const onPath = session.obstacles.some((o) => o.memberIds.includes(id));
+          this.scoreAt.copy(building.origin).setY(building.origin.y + building.def.size[1] * 0.6);
+          this.addPoints(
+            buildingPoints(building.def.style, building.def.strength),
+            onPath ? '' : 'BONUS',
+            onPath ? 'path' : 'bonus',
+            this.scoreAt,
+          );
+        }
         for (const vehicle of this.vehicles) {
           if (vehicle.locked && this.lockedBy.get(vehicle) === id) {
             vehicle.locked = false;
             this.hint(`The ${vehicle.spec.name} is free. Climb in.`);
           }
         }
+      }),
+      this.bus.on('path:cleared', () => {
+        this.addPoints(PATH_CLEAR_POINTS, 'PATH CLEAR', 'clear', null);
       }),
       this.bus.on('obstacle:cleared', ({ id }) => {
         this.routeLine?.clear(id);
@@ -370,16 +396,12 @@ export class Game {
     this.setActive(start ?? this.vehicles[0] ?? null);
     if (this.active) this.camera.snapTo(this.active.position);
 
-    const xs = route.points(10).map((p) => p.x);
-    const zs = route.points(10).map((p) => p.z);
-    const margin = 70;
     this.bus.emit('map:setup', {
-      bounds: {
-        minX: Math.min(...xs) - margin,
-        maxX: Math.max(...xs) + margin,
-        minZ: Math.min(...zs) - margin,
-        maxZ: Math.max(...zs) + margin,
-      },
+      bounds: mapBounds([
+        ...route.points(10).map((p): [number, number] => [p.x, p.z]),
+        ...(def.buildings ?? []).map((b) => b.pos),
+        ...def.vehicles.map((v) => v.pos),
+      ]),
       route: route.points(6).map((p) => [p.x, p.z]),
       background: this.world.terrain.colourImage,
       extent: field.extent,
@@ -591,6 +613,7 @@ export class Game {
     if (!pickups || !player) return;
     const found = pickups.collect(player.position);
     if (found.beacons > 0) {
+      this.addPoints(BEACON_POINTS * found.beacons, 'BEACON', 'pickup', player.position);
       this.bus.emit('pickup:beacon', {
         found: pickups.beaconsFound,
         total: pickups.beaconsTotal,
@@ -599,8 +622,43 @@ export class Game {
     if (found.dish) {
       const p = player.position;
       this.bus.emit('pickup:dish', { x: p.x, y: p.y, z: p.z });
+      this.addPoints(DISH_POINTS, 'RELAY DISH', 'pickup', p);
       this.hint('Relay dish found.');
     }
+  }
+
+  /**
+   * Adds points to the run and tells the HUD where to pop them up: over `at`, or in the
+   * middle of the screen when `at` is null.
+   */
+  private addPoints(
+    points: number,
+    label: string,
+    kind: GameEvents['score']['kind'],
+    at: Vector3 | null,
+  ): void {
+    const session = this.session;
+    if (!session?.scoring || this.modeValue !== 'play' || points <= 0) return;
+    session.score += points;
+    let screenX = this.viewport.width / 2;
+    let screenY = this.viewport.height * 0.38;
+    let onScreen = true;
+    if (at) {
+      this.projected.copy(at).project(this.camera.camera);
+      screenX = (this.projected.x * 0.5 + 0.5) * this.viewport.width;
+      screenY = (-this.projected.y * 0.5 + 0.5) * this.viewport.height;
+      onScreen =
+        Math.abs(this.projected.x) <= 1 && Math.abs(this.projected.y) <= 1 && this.projected.z < 1;
+    }
+    this.bus.emit('score', {
+      points,
+      total: session.score,
+      label,
+      kind,
+      screenX,
+      screenY,
+      onScreen,
+    });
   }
 
   /** Beacons lit, out of how many, and whether the dish is found, for the pause screen. */

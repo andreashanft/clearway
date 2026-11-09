@@ -1,12 +1,17 @@
 import './hud.css';
 import type { InputSource } from '../../engine/input/controls';
-import type { GameBus } from '../../game/events';
+import type { GameBus, GameEvents } from '../../game/events';
+import { formatScore } from '../../game/points';
 import type { CommandBus } from '../commands';
 import { button, chip, formatClock, h, icon, stat } from '../kit';
 import { Minimap } from './minimap';
 
 /** Seconds a hint stays up. */
 const HINT_SECONDS = 6;
+
+/** Score pop-ups on screen at once, and how long each lasts. */
+const MAX_POPUPS = 8;
+const POPUP_MS = 1300;
 
 /**
  * The in-game HUD from the gameplay mocks: pause button and counters, the route bar with
@@ -21,6 +26,8 @@ export class Hud {
   private readonly levelStat = stat('LEVEL', '');
   private readonly buildingsStat = stat('BUILDINGS', '–');
   private readonly beaconsStat = stat('BEACONS', '–', 'signal');
+  private readonly scoreStat = stat('SCORE', '0', 'hazard');
+  private readonly popups = h('div', { class: 'cw-hud__popups', attrs: { 'aria-hidden': 'true' } });
   private readonly routePanel = h('div', { class: 'cw-hud__route cw-glass' });
   private readonly routeLabel = h('div', { class: 'cw-hud__route-label', text: 'HAULER STARTING' });
   private readonly routeTimer = h('div', { class: 'cw-hud__route-timer' });
@@ -64,7 +71,13 @@ export class Hud {
     });
     this.levelStat.classList.add('cw-hud__level');
     this.buildingsStat.hidden = true;
-    for (const s of [this.obstaclesStat, this.buildingsStat, this.beaconsStat, this.levelStat]) {
+    for (const s of [
+      this.obstaclesStat,
+      this.buildingsStat,
+      this.beaconsStat,
+      this.scoreStat,
+      this.levelStat,
+    ]) {
       s.classList.add('cw-glass', 'cw-hud__counter');
     }
     this.counters.append(
@@ -72,6 +85,7 @@ export class Hud {
       this.obstaclesStat,
       this.buildingsStat,
       this.beaconsStat,
+      this.scoreStat,
       this.levelStat,
     );
 
@@ -135,6 +149,7 @@ export class Hud {
     );
 
     this.element.append(
+      this.popups,
       this.counters,
       top,
       this.minimapBox,
@@ -224,6 +239,11 @@ export class Hud {
         if (found === total) this.showHint('Every beacon is lit.');
         this.updateRoamText();
       }),
+      bus.on('score', (score) => {
+        setStat(this.scoreStat, formatScore(score.total));
+        // Scenery adds up quietly; buildings, pickups and the path clear pop up.
+        if (score.kind !== 'prop' && score.onScreen) this.popUp(score);
+      }),
       bus.on('pickup:dish', () => {
         this.dishPending = false;
         this.updateRoamText();
@@ -255,6 +275,23 @@ export class Hud {
     );
   }
 
+  /** Shows "+points" rising and fading over what earned them. */
+  private popUp(score: GameEvents['score']): void {
+    while (this.popups.childElementCount >= MAX_POPUPS) this.popups.firstElementChild?.remove();
+    const popup = h(
+      'div',
+      { class: 'cw-hud__popup', data: { kind: score.kind } },
+      h('span', { class: 'cw-hud__popup-points', text: `+${formatScore(score.points)}` }),
+      score.label ? h('span', { class: 'cw-hud__popup-label', text: score.label }) : null,
+    );
+    popup.style.left = `${Math.round(score.screenX)}px`;
+    popup.style.top = `${Math.round(score.screenY)}px`;
+    this.popups.append(popup);
+    window.setTimeout(() => {
+      popup.remove();
+    }, POPUP_MS);
+  }
+
   /** What is left for gold, in the free-roam strip. */
   private updateRoamText(): void {
     const left: string[] = [];
@@ -277,6 +314,8 @@ export class Hud {
     this.dishPending = dishExists;
     this.beaconsStat.hidden = beaconsTotal === 0;
     setStat(this.beaconsStat, `0 / ${beaconsTotal}`);
+    setStat(this.scoreStat, '0');
+    this.popups.replaceChildren();
     this.routePanel.hidden = false;
     this.obstaclesStat.hidden = false;
     this.buildingsStat.hidden = true;

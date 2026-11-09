@@ -12,6 +12,8 @@ export interface LevelStats {
   readonly dishFound: boolean;
   /** False for levels without a relay dish yet. */
   readonly dishExists: boolean;
+  /** Points for everything destroyed and found. */
+  readonly score: number;
 }
 
 /** Share needed for silver, from the brief. */

@@ -51,7 +51,20 @@ interface Recipe {
     bankColour?: string;
     bedColour?: string;
   }[];
-  route?: { width: number; blend: number; smoothing: number; colour: string };
+  /**
+   * The Hauler's line. `level` (default true) grades a smoothed bed along it, as for a
+   * ramp through quarry terraces; `paint` (default true) draws it as a dirt road.
+   */
+  route?: {
+    width: number;
+    blend: number;
+    smoothing: number;
+    colour: string;
+    level?: boolean;
+    paint?: boolean;
+  };
+  /** Roads and lanes: levelled along a smoothed profile and painted. */
+  roads?: { points: Vec2[]; width: number; blend?: number; smoothing?: number; colour: string }[];
   pads?: { at: Vec2; size: Vec2; yaw?: number; blend: number }[];
   padBlend?: number;
   colours: {
@@ -205,6 +218,63 @@ function roundedRectDistance(
   return outside + Math.min(Math.max(qx, qz), 0) - rect.radius;
 }
 
+interface Strip {
+  readonly points: Vec2[];
+  readonly width: number;
+  readonly blend: number;
+  readonly level: boolean;
+  readonly rgb: [number, number, number] | null;
+  /** Smoothed ground height at a distance along the strip. */
+  heightAt(along: number): number;
+}
+
+/** A strip of ground along a polyline sampled every 2 m, with its smoothed height profile. */
+function makeStrip(
+  points: Vec2[],
+  natural: (x: number, z: number) => number,
+  o: { width: number; blend: number; smoothing: number; colour: string | null; level: boolean },
+): Strip {
+  const profile = points.map(([x, z]) => natural(x, z));
+  const smoothed = profile.map((_, i) => {
+    let sum = 0;
+    let n = 0;
+    for (let k = -o.smoothing; k <= o.smoothing; k++) {
+      const v = profile[clamp(i + k, 0, profile.length - 1)];
+      if (v !== undefined) {
+        sum += v;
+        n++;
+      }
+    }
+    return sum / n;
+  });
+  return {
+    points,
+    width: o.width,
+    blend: o.blend,
+    level: o.level,
+    rgb: o.colour ? hexToRgb(o.colour) : null,
+    heightAt: (along) => {
+      const idx = clamp(along / 2, 0, smoothed.length - 1);
+      const i0 = Math.floor(idx);
+      const i1 = Math.min(smoothed.length - 1, i0 + 1);
+      return lerp(smoothed[i0] ?? 0, smoothed[i1] ?? 0, idx - i0);
+    },
+  };
+}
+
+/** Straight-line resample of a polyline every `step` metres, keeping its corners sharp. */
+function resample(points: Vec2[], step: number): Vec2[] {
+  const out: Vec2[] = [];
+  for (let i = 1; i < points.length; i++) {
+    const [ax, az] = points[i - 1]!;
+    const [bx, bz] = points[i]!;
+    const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / step));
+    for (let k = i === 1 ? 0 : 1; k <= n; k++)
+      out.push([ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n]);
+  }
+  return out;
+}
+
 function pointInPolygon(poly: Vec2[], x: number, z: number): boolean {
   let inside = false;
   for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -328,29 +398,31 @@ function bake(id: string): void {
     return h;
   };
 
-  // 2. The route profile: natural height along the route, heavily smoothed so the road
-  //    runs on an embankment over dips such as the creek.
-  const route = level.hauler?.route ? smoothPolyline(level.hauler.route, 2) : [];
-  const routeProfile: number[] = route.map(([x, z]) => natural(x, z));
-  const smoothing = recipe.route?.smoothing ?? 10;
-  const smoothedProfile = routeProfile.map((_, i) => {
-    let sum = 0;
-    let n = 0;
-    for (let k = -smoothing; k <= smoothing; k++) {
-      const v = routeProfile[clamp(i + k, 0, routeProfile.length - 1)];
-      if (v !== undefined) {
-        sum += v;
-        n++;
-      }
-    }
-    return sum / n;
-  });
-  const routeHeightAt = (along: number): number => {
-    const idx = clamp(along / 2, 0, smoothedProfile.length - 1);
-    const i0 = Math.floor(idx);
-    const i1 = Math.min(smoothedProfile.length - 1, i0 + 1);
-    return lerp(smoothedProfile[i0] ?? 0, smoothedProfile[i1] ?? 0, idx - i0);
-  };
+  // 2. Strips: the Hauler's line and the roads. Each follows the natural height along it,
+  //    heavily smoothed, so a road runs on an embankment over dips such as the creek.
+  const strips: Strip[] = [];
+  if (level.hauler?.route && recipe.route) {
+    strips.push(
+      makeStrip(smoothPolyline(level.hauler.route, 2), natural, {
+        width: recipe.route.width,
+        blend: recipe.route.blend,
+        smoothing: recipe.route.smoothing,
+        colour: recipe.route.paint === false ? null : recipe.route.colour,
+        level: recipe.route.level !== false,
+      }),
+    );
+  }
+  for (const road of recipe.roads ?? []) {
+    strips.push(
+      makeStrip(resample(road.points, 2), natural, {
+        width: road.width,
+        blend: road.blend ?? 4,
+        smoothing: road.smoothing ?? 8,
+        colour: road.colour,
+        level: true,
+      }),
+    );
+  }
 
   const channels = (recipe.channels ?? []).map((c) => ({
     ...c,
@@ -359,9 +431,14 @@ function bake(id: string): void {
     bedRgb: hexToRgb(c.bedColour ?? recipe.colours.bed),
   }));
   const pads = buildPads(recipe, level);
-  const padTargets = pads.map((p) => natural(p.at[0], p.at[1]));
+  /** How deep a channel cuts at (x, z). */
+  const cutDepth = (c: (typeof channels)[number], x: number, z: number): number => {
+    const { d } = polylineDistance(c.points, x, z);
+    return c.depth * (1 - smoothstep(c.width / 2, c.width / 2 + c.bank, d));
+  };
 
-  const finalHeight = (x: number, z: number): number => {
+  /** Height with ramps, channels and strips, before building pads flatten it. */
+  const graded = (x: number, z: number): number => {
     let h = natural(x, z);
     for (const ramp of recipe.ramps ?? []) {
       const dx = ramp.to[0] - ramp.from[0];
@@ -376,17 +453,20 @@ function bake(id: string): void {
         h = lerp(h, Math.max(h, target), w);
       }
     }
-    const cut = (c: (typeof channels)[number]): void => {
-      const { d } = polylineDistance(c.points, x, z);
-      h -= c.depth * (1 - smoothstep(c.width / 2, c.width / 2 + c.bank, d));
-    };
-    for (const c of channels) if (!c.afterRoute) cut(c);
-    if (route.length > 1 && recipe.route) {
-      const { d, along } = polylineDistance(route, x, z);
-      const w =
-        1 - smoothstep(recipe.route.width / 2, recipe.route.width / 2 + recipe.route.blend, d);
-      if (w > 0) h = lerp(h, routeHeightAt(along), w);
+    for (const c of channels) if (!c.afterRoute) h -= cutDepth(c, x, z);
+    for (const strip of strips) {
+      if (!strip.level) continue;
+      const { d, along } = polylineDistance(strip.points, x, z);
+      const w = 1 - smoothstep(strip.width / 2, strip.width / 2 + strip.blend, d);
+      if (w > 0) h = lerp(h, strip.heightAt(along), w);
     }
+    return h;
+  };
+  // A pad sits at the graded height under it, so a building on a ramp doesn't notch it.
+  const padTargets = pads.map((p) => graded(p.at[0], p.at[1]));
+
+  const finalHeight = (x: number, z: number): number => {
+    let h = graded(x, z);
     pads.forEach((pad, i) => {
       const yaw = ((pad.yaw ?? 0) * Math.PI) / 180;
       const lx = (x - pad.at[0]) * Math.cos(yaw) - (z - pad.at[1]) * Math.sin(yaw);
@@ -396,7 +476,7 @@ function bake(id: string): void {
       const w = 1 - smoothstep(0, pad.blend, Math.hypot(ex, ez));
       if (w > 0) h = lerp(h, padTargets[i] ?? h, w);
     });
-    for (const c of channels) if (c.afterRoute) cut(c);
+    for (const c of channels) if (c.afterRoute) h -= cutDepth(c, x, z);
     return clamp(h, 0, maxHeight);
   };
 
@@ -434,7 +514,6 @@ function bake(id: string): void {
   const grassA = hexToRgb(recipe.colours.grass[0]);
   const grassB = hexToRgb(recipe.colours.grass[1]);
   const slopeCol = hexToRgb(recipe.colours.slope);
-  const roadCol = hexToRgb(recipe.route?.colour ?? '#c8b48a');
   const pits = (recipe.pits ?? [])
     .filter((pit) => pit.colours)
     .map((pit) => ({
@@ -489,27 +568,22 @@ function bake(id: string): void {
         );
         col = mixRgb(col, c.bedRgb, 1 - smoothstep(c.width / 2 - 1, c.width / 2 + 1, d));
       }
-      if (route.length > 1 && recipe.route) {
-        const { d } = polylineDistance(route, x, z);
-        const roadW = recipe.route.width / 2;
-        // A road cut by a channel shows the channel, not the road surface.
-        const inCut = channels.some(
-          (c) => c.afterRoute && polylineDistance(c.points, x, z).d < c.width / 2 + c.bank * 0.6,
-        );
-        if (inCut) {
-          const o = (v * csize + u) * 3;
-          colourPixels[o] = clamp(Math.round(col[0]), 0, 255);
-          colourPixels[o + 1] = clamp(Math.round(col[1]), 0, 255);
-          colourPixels[o + 2] = clamp(Math.round(col[2]), 0, 255);
-          continue;
-        }
-        const tread = hash(Math.floor(x / 2), Math.floor(z / 2), seed + 3) * 18 - 9;
-        const dirt: [number, number, number] = [
-          roadCol[0] + tread,
-          roadCol[1] + tread,
-          roadCol[2] + tread,
+      // A road cut by a channel shows the channel, not the road surface.
+      const inCut = channels.some(
+        (c) => c.afterRoute && polylineDistance(c.points, x, z).d < c.width / 2 + c.bank * 0.6,
+      );
+      for (const strip of inCut ? [] : strips) {
+        if (!strip.rgb) continue;
+        const { d } = polylineDistance(strip.points, x, z);
+        const half = strip.width / 2;
+        if (d > half + 1.5) continue;
+        const tread = hash(Math.floor(x / 2), Math.floor(z / 2), seed + 3) * 14 - 7;
+        const surface: [number, number, number] = [
+          strip.rgb[0] + tread,
+          strip.rgb[1] + tread,
+          strip.rgb[2] + tread,
         ];
-        col = mixRgb(col, dirt, 1 - smoothstep(roadW - 1.5, roadW + 1.5, d));
+        col = mixRgb(col, surface, 1 - smoothstep(half - 1.2, half + 1.2, d));
       }
       const o = (v * csize + u) * 3;
       colourPixels[o] = clamp(Math.round(col[0]), 0, 255);
@@ -523,11 +597,8 @@ function bake(id: string): void {
   const rand = mulberry32(seed + 999);
   const props: Prop[] = [];
   const blocked = (x: number, z: number, margin: number): boolean => {
-    if (
-      route.length > 1 &&
-      polylineDistance(route, x, z).d < (recipe.route?.width ?? 8) / 2 + margin
-    ) {
-      return true;
+    for (const strip of strips) {
+      if (polylineDistance(strip.points, x, z).d < strip.width / 2 + margin) return true;
     }
     for (const c of channels) {
       if (polylineDistance(c.points, x, z).d < c.width / 2 + c.bank + 2) return true;
@@ -583,7 +654,9 @@ function bake(id: string): void {
       width: c.width + 2,
       points: c.points
         .filter((_, i) => i % 2 === 0)
-        .map(([x, z]) => [round1(x), round2(sampleHeight(x, z) + (c.water ?? 0)), round1(z)]),
+        // From the channel bed before roads were levelled over it, so a crossing road
+        // stays dry above the water.
+        .map(([x, z]) => [round1(x), round2(natural(x, z) - c.depth + (c.water ?? 0)), round1(z)]),
     }));
 
   writeFileSync(

@@ -10,6 +10,7 @@ const base: LevelStats = {
   beaconsTotal: 30,
   dishFound: false,
   dishExists: true,
+  score: 0,
 };
 
 describe('medalFor', () => {
@@ -40,6 +41,7 @@ describe('medalFor', () => {
         beaconsFound: 0,
         beaconsTotal: 0,
         dishExists: false,
+        score: 0,
       }),
     ).toBe('gold');
   });
