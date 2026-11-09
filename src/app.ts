@@ -6,17 +6,70 @@ import { InputManager } from './engine/input/input-manager';
 import { GameLoop } from './engine/loop';
 import { Physics, type Rapier } from './engine/physics';
 import type { Renderer } from './engine/renderer';
+import { browserStorage, load, save, type Storage } from './engine/save';
+import { CAMPAIGN, campaignLevel } from './game/campaign';
 import type { GameEvents } from './game/events';
 import { Game } from './game/game';
 import { findLevel, type LevelDefinition, LEVELS } from './game/level-data';
+import {
+  type GraphicsQuality,
+  isUnlocked,
+  medalPoints,
+  recordRun,
+  SAVE_SCHEMA,
+  type SaveData,
+  type Settings,
+} from './game/progress';
+import { medalFor } from './game/scoring';
 import type { UiCommands } from './ui/commands';
 import { Hud } from './ui/hud/hud';
+import { button, h } from './ui/kit';
+import {
+  briefingScreen,
+  campaignScreen,
+  countdownScreen,
+  failScreen,
+  pauseScreen,
+  resultsScreen,
+  rotateScreen,
+  type Screen,
+  settingsScreen,
+  titleScreen,
+} from './ui/screens/screens';
 import { CameraGestures } from './ui/touch-controls/camera-gestures';
 import { TouchControls } from './ui/touch-controls/touch-controls';
 
+type Flow =
+  | 'title'
+  | 'campaign'
+  | 'briefing'
+  | 'countdown'
+  | 'playing'
+  | 'paused'
+  | 'failed'
+  | 'results'
+  | 'settings'
+  | 'help';
+
+const VEHICLE_NAMES: Readonly<Record<string, string>> = {
+  bruiser: 'Bruiser',
+  fishtail: 'Fishtail',
+  liftoff: 'Liftoff',
+  tumbler: 'Tumbler',
+  railbed: 'Railbed',
+};
+
+/** Device pixel ratio cap and shadow map size for each graphics quality. */
+const QUALITY: Readonly<Record<GraphicsQuality, { dpr: number; shadows: number }>> = {
+  low: { dpr: 1, shadows: 0 },
+  medium: { dpr: 1.5, shadows: 1024 },
+  high: { dpr: 2, shadows: 2048 },
+  ultra: { dpr: 3, shadows: 2048 },
+};
+
 /**
- * The application shell: owns the renderer, input, UI and loop, and runs one level at a
- * time with a fresh physics world, so Retry and Next start clean.
+ * The application shell: owns the renderer, input, UI and loop, moves between screens,
+ * and runs one level at a time with a fresh physics world, so Retry and Next start clean.
  */
 export class App {
   readonly bus = new EventBus<GameEvents>();
@@ -24,9 +77,20 @@ export class App {
   readonly input: InputManager;
   readonly loop: GameLoop;
   private readonly hud: Hud;
+  private readonly touchControls: TouchControls;
+  private readonly screenLayer: HTMLElement;
+  private readonly storage: Storage | null = browserStorage();
+  private data: SaveData;
   private game: Game | null = null;
   private physics: Physics | null = null;
   private level: LevelDefinition | null = null;
+  private flow: Flow = 'title';
+  private screen: Screen | null = null;
+  private returnTo: Flow = 'title';
+  private sceneHidden = false;
+  /** True once the loaded level has been played and needs a fresh copy for the backdrop. */
+  private dirty = false;
+  private rotateShown = false;
   private overlay: DebugOverlay | null = null;
   private physicsLines: PhysicsLines | null = null;
   private invincible = false;
@@ -39,15 +103,22 @@ export class App {
     private readonly ui: HTMLElement,
     private readonly flags: LaunchFlags,
   ) {
+    this.data = load(SAVE_SCHEMA, this.storage);
     this.input = new InputManager(renderer.three.domElement);
-    const touchControls = new TouchControls(ui, this.input.touch, this.bus);
+    this.touchControls = new TouchControls(ui, this.input.touch, this.bus);
     new CameraGestures(renderer.three.domElement, this.input.touch);
-    this.input.onSourceChange((source) => {
-      touchControls.setVisible(source === 'touch');
-    });
     this.hud = new Hud(ui, this.bus, this.commands);
+    this.screenLayer = h('div', { class: 'cw-screens' });
+    ui.append(this.screenLayer);
+    this.input.onSourceChange((source) => {
+      this.hud.setInputSource(source);
+      this.updateControlsVisibility();
+    });
 
-    renderer.onResize((viewport) => this.game?.setViewport(viewport));
+    renderer.onResize((viewport) => {
+      this.game?.setViewport(viewport);
+      this.checkOrientation();
+    });
 
     this.loop = new GameLoop({
       beginFrame: () => {
@@ -64,28 +135,19 @@ export class App {
       render: (alpha, frameSeconds) => {
         const { game } = this;
         if (!game) return;
-        game.render(alpha, frameSeconds);
-        this.hud.update(frameSeconds);
+        if (!this.loop.paused) {
+          game.render(alpha, frameSeconds);
+          this.hud.update(frameSeconds);
+        }
+        this.screen?.update?.();
         this.physicsLines?.update();
-        renderer.render(game.scene, game.camera.camera);
+        if (!this.sceneHidden) renderer.render(game.scene, game.camera.camera);
         this.overlay?.update(frameSeconds);
       },
     });
 
-    this.commands.on('retry', () => {
-      if (this.level) void this.start(this.level);
-    });
-    this.commands.on('finish', () => this.game?.finish());
-    this.commands.on('next', () => {
-      const index = LEVELS.findIndex((l) => l.id === this.level?.id);
-      const next = LEVELS[index + 1] ?? LEVELS[0];
-      if (next) void this.start(next);
-    });
-    this.commands.on('quit', () => {
-      const first = LEVELS[0];
-      if (first) void this.start(first);
-    });
-
+    this.bindEvents();
+    this.applySettings();
     if (flags.debug) this.createDebugTools();
   }
 
@@ -97,24 +159,342 @@ export class App {
     return this.physics;
   }
 
-  /** Starts (or restarts) a level from scratch. */
+  /** Shows the title over a live Hollow Creek, or jumps straight into `?level=`. */
+  async boot(): Promise<void> {
+    const direct = this.flags.level ? findLevel(this.flags.level) : undefined;
+    if (direct) {
+      await this.loadLevel(direct);
+      this.beginPlay();
+      return;
+    }
+    await this.showTitle();
+  }
+
+  /** Starts (or restarts) a level straight into play, skipping the briefing. */
   async start(level: LevelDefinition): Promise<void> {
+    await this.loadLevel(level);
+    this.beginPlay();
+  }
+
+  // Flow ----------------------------------------------------------------------
+
+  private async showTitle(): Promise<void> {
+    const backdrop = LEVELS[0];
+    if (!backdrop) return;
+    if (!this.game || this.dirty || this.level?.id !== backdrop.id) await this.loadLevel(backdrop);
+    this.game?.setMode('attract');
+    this.setFlow('title');
+    this.show(
+      titleScreen(
+        {
+          version: __APP_VERSION__,
+          levels: CAMPAIGN.length,
+          medals: medalPoints(this.data.levels),
+          maxMedals: CAMPAIGN.length * 3,
+          vehicles: 4,
+        },
+        {
+          play: () => this.showCampaign(),
+          settings: () => this.openSettings(),
+          howToPlay: () => this.showHelp(),
+        },
+      ),
+    );
+  }
+
+  private showCampaign(): void {
+    this.setFlow('campaign');
+    const order = CAMPAIGN.map((l) => l.id);
+    let nextMarked = false;
+    const entries = CAMPAIGN.map((level) => {
+      const record = this.data.levels[level.id];
+      const unlocked = isUnlocked(order, this.data.levels, level.id);
+      const available = findLevel(level.id) !== undefined;
+      const isNext = unlocked && available && !record?.medal && !nextMarked;
+      if (isNext) nextMarked = true;
+      const before = CAMPAIGN[level.index - 2];
+      return {
+        level,
+        record,
+        unlocked,
+        available,
+        isNext,
+        unlockHint: !available
+          ? 'BUILT IN MILESTONE 6'
+          : `BRONZE ON L${String(before?.index ?? 1)} TO UNLOCK`,
+      };
+    });
+    this.show(
+      campaignScreen(
+        entries,
+        {
+          medals: medalPoints(this.data.levels),
+          maxMedals: CAMPAIGN.length * 3,
+          cleared: Object.values(this.data.levels).filter((r) => r.medal).length,
+        },
+        {
+          back: () => void this.showTitle(),
+          brief: (id) => void this.openBriefing(id),
+        },
+      ),
+      true,
+    );
+  }
+
+  private async openBriefing(id: string): Promise<void> {
+    const def = findLevel(id);
+    const level = campaignLevel(id);
+    if (!def || !level) return;
+    this.show(null);
+    await this.loadLevel(def);
+    const game = this.game;
+    if (!game) return;
+    game.setMode('briefing');
+    this.setFlow('briefing');
+    const session = game.levelSession;
+    const firstHit = (session?.obstacles[0]?.distance ?? 0) / def.hauler.speed;
+    const vehicles = [...new Set(def.vehicles.map((v) => VEHICLE_NAMES[v.type] ?? v.type))];
+    this.show(
+      briefingScreen(
+        {
+          level,
+          description: def.description ?? level.tagline,
+          firstHit,
+          best: this.data.levels[id]?.medal ?? null,
+          vehicles,
+          tnt: def.tnt?.length ?? 0,
+        },
+        () => game.flyoverProgress,
+        {
+          back: () => this.showCampaign(),
+          skip: () => game.skipFlyover(),
+          start: () => this.countdown(),
+        },
+      ),
+    );
+  }
+
+  /** 3-2-1, then play. The scene shows the player's vehicle while the clock is frozen. */
+  private countdown(): void {
+    const game = this.game;
+    if (!game) return;
+    game.setMode('play');
+    this.loop.paused = true;
+    this.setFlow('countdown');
+    const overlay = countdownScreen();
+    this.show(overlay);
+    let n = 3;
+    overlay.show(n);
+    const tick = (): void => {
+      if (this.flow !== 'countdown') return;
+      n--;
+      overlay.show(n);
+      if (n > 0) {
+        window.setTimeout(tick, 700);
+      } else {
+        window.setTimeout(() => {
+          if (this.flow === 'countdown') this.beginPlay(true);
+        }, 450);
+      }
+    };
+    window.setTimeout(tick, 700);
+  }
+
+  private beginPlay(alreadyInPlayMode = false): void {
+    const game = this.game;
+    if (!game) return;
+    if (!alreadyInPlayMode) game.setMode('play');
+    this.dirty = true;
+    this.loop.paused = false;
+    this.setFlow('playing');
+    this.show(null);
+    this.checkOrientation();
+  }
+
+  private pause(): void {
+    if (this.flow !== 'playing') return;
+    this.loop.paused = true;
+    this.input.reset();
+    this.setFlow('paused');
+    const session = this.game?.levelSession;
+    this.show(
+      pauseScreen(
+        () => ({
+          countdown: session?.countdown ?? null,
+          obstaclesCleared: session?.obstacles.filter((o) => o.cleared).length ?? 0,
+          obstaclesTotal: session?.obstacles.length ?? 0,
+          beacons: '–',
+          dish: 'NOT FOUND',
+        }),
+        {
+          resume: () => this.resume(),
+          restart: () => this.restart(),
+          settings: () => this.openSettings(),
+          quit: () => this.quitToMap(),
+        },
+      ),
+    );
+  }
+
+  private resume(): void {
+    this.loop.paused = false;
+    this.setFlow('playing');
+    this.show(null);
+  }
+
+  private restart(): void {
+    if (!this.level) return;
+    void this.openBriefing(this.level.id);
+  }
+
+  private quitToMap(): void {
+    this.loop.paused = false;
+    this.showCampaign();
+  }
+
+  private onFailed(info: GameEvents['hauler:destroyed']): void {
+    this.setFlow('failed');
+    const tip = this.level?.tips?.[info.hit.toLowerCase().replace(/ /g, '-')] ?? null;
+    this.show(
+      failScreen(
+        { ...info, tip },
+        {
+          retry: () => {
+            if (this.level) void this.start(this.level);
+          },
+          quit: () => this.quitToMap(),
+        },
+      ),
+    );
+  }
+
+  private onResults({ stats, medal }: GameEvents['session:results']): void {
+    const level = this.level ? campaignLevel(this.level.id) : undefined;
+    if (!this.level || !level) return;
+    const previous = this.data.levels[this.level.id];
+    const newBest =
+      stats.clearTime !== null &&
+      (previous?.bestTime === null ||
+        previous?.bestTime === undefined ||
+        stats.clearTime < previous.bestTime);
+    this.data = {
+      ...this.data,
+      levels: { ...this.data.levels, [this.level.id]: recordRun(previous, stats) },
+    };
+    save(SAVE_SCHEMA, this.storage, this.data);
+    const next = CAMPAIGN[level.index];
+    this.setFlow('results');
+    this.show(
+      resultsScreen(
+        {
+          level,
+          stats,
+          medal,
+          newBest,
+          obstaclesTotal: this.game?.levelSession?.obstacles.length ?? 0,
+          hasNext:
+            next !== undefined && findLevel(next.id) !== undefined && medalFor(stats) !== null,
+        },
+        {
+          keepExploring: () => {
+            this.game?.levelSession?.resumeFreeRoam();
+            this.setFlow('playing');
+            this.show(null);
+          },
+          replay: () => this.restart(),
+          next: () => this.showCampaign(),
+        },
+      ),
+      true,
+    );
+  }
+
+  private openSettings(): void {
+    this.returnTo = this.flow;
+    this.setFlow('settings');
+    this.show(
+      settingsScreen(
+        () => this.data.settings,
+        (patch) => this.updateSettings(patch),
+        () => this.closeSettings(),
+      ),
+      true,
+    );
+  }
+
+  private closeSettings(): void {
+    if (this.returnTo === 'paused') {
+      this.flow = 'playing';
+      this.pause();
+    } else {
+      void this.showTitle();
+    }
+  }
+
+  private showHelp(): void {
+    this.returnTo = this.flow;
+    this.setFlow('help');
+    const row = (key: string, what: string): HTMLElement =>
+      h(
+        'div',
+        { class: 'cw-setting' },
+        h('div', { class: 'cw-setting__label', text: key }),
+        h('div', { class: 'cw-setting__desc', text: what }),
+      );
+    const element = h(
+      'section',
+      {
+        class: 'cw-screen cw-screen--dim',
+        attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'How to play' },
+      },
+      h(
+        'div',
+        { class: 'cw-card cw-dialog' },
+        h('h1', { class: 'cw-heading', text: 'How to play' }),
+        h('p', {
+          class: 'cw-body',
+          text: 'The Hauler drives a fixed route and explodes if it touches anything solid. Demolish every building on its path before it arrives, then flatten the rest for a better medal.',
+        }),
+        row('Touch', 'Point the left stick where you want to go. Action and Brake on the right.'),
+        row(
+          'Keyboard',
+          'WASD to drive, Space for Action, Shift to brake, Q/R and the wheel for the camera.',
+        ),
+        row('Gamepad', 'Left stick to point, triggers for gas and brake, A for Action.'),
+        button('GOT IT', 'primary', () => void this.showTitle()),
+      ),
+    );
+    this.show({ element });
+  }
+
+  // Helpers -------------------------------------------------------------------
+
+  private async loadLevel(level: LevelDefinition): Promise<void> {
     if (this.loading) return;
     this.loading = true;
     try {
       this.loop.stop();
+      this.loop.paused = false;
       this.game?.dispose();
       this.physics?.dispose();
       this.physicsLines?.dispose();
       this.physicsLines = null;
       this.input.reset();
-      this.hud.reset();
+      this.hud.reset(level.name, level.buildings?.length ?? 0);
       this.level = level;
+      this.dirty = false;
       this.physics = new Physics(this.rapier);
-      const game = new Game(this.physics, this.input, this.bus);
+      const settings = this.data.settings;
+      const game = new Game(this.physics, this.input, this.bus, {
+        difficulty: settings.easyMode ? 'easy' : 'normal',
+        steeringAssist: settings.steeringAssist,
+      });
       this.game = game;
+      game.onPauseRequested = () => this.pause();
       await game.load(level);
       game.setViewport(this.renderer.viewport);
+      game.setShadowQuality(this.quality().shadows);
+      game.setPatternMarkings(this.data.settings.patternMarkings);
       const session = game.levelSession;
       if (session) session.invincible = this.invincible;
       this.loop.start();
@@ -123,11 +503,100 @@ export class App {
     }
   }
 
-  /** The level named by `?level=`, or the first one. */
-  initialLevel(): LevelDefinition {
-    const level = (this.flags.level ? findLevel(this.flags.level) : undefined) ?? LEVELS[0];
-    if (!level) throw new Error('No levels found');
-    return level;
+  private show(screen: Screen | null, coversScene = false): void {
+    this.screen?.element.remove();
+    this.screen = screen;
+    this.sceneHidden = coversScene;
+    if (screen) this.screenLayer.append(screen.element);
+  }
+
+  private setFlow(flow: Flow): void {
+    this.flow = flow;
+    const inLevel = flow === 'playing' || flow === 'countdown' || flow === 'paused';
+    this.hud.setVisible(inLevel);
+    document.getElementById('app')?.classList.toggle('is-paused', flow === 'paused');
+    this.updateControlsVisibility();
+  }
+
+  private updateControlsVisibility(): void {
+    this.touchControls.setVisible(this.flow === 'playing' && this.input.source === 'touch');
+  }
+
+  /** Phones in portrait pause gameplay behind the "rotate device" card. */
+  private checkOrientation(): void {
+    const portraitPhone =
+      this.input.source === 'touch' &&
+      window.innerHeight > window.innerWidth &&
+      window.innerWidth < 600;
+    if (
+      portraitPhone &&
+      (this.flow === 'playing' || this.flow === 'countdown') &&
+      !this.rotateShown
+    ) {
+      this.rotateShown = true;
+      this.loop.paused = true;
+      this.show(
+        rotateScreen(
+          () => this.game?.levelSession?.countdown ?? null,
+          () => {
+            this.rotateShown = false;
+            this.quitToMap();
+          },
+        ),
+      );
+    } else if (!portraitPhone && this.rotateShown) {
+      this.rotateShown = false;
+      this.resume();
+    }
+  }
+
+  private quality(): { dpr: number; shadows: number } {
+    const choice = this.data.settings.graphics;
+    const coarse = matchMedia('(pointer: coarse)').matches;
+    return QUALITY[choice === 'auto' ? (coarse ? 'medium' : 'high') : choice];
+  }
+
+  private updateSettings(patch: Partial<Settings>): void {
+    this.data = { ...this.data, settings: { ...this.data.settings, ...patch } };
+    save(SAVE_SCHEMA, this.storage, this.data);
+    this.applySettings();
+  }
+
+  private applySettings(): void {
+    const s = this.data.settings;
+    document.documentElement.style.setProperty('--cw-hud-scale', String(s.hudScale));
+    document.documentElement.dataset.patterns = String(s.patternMarkings);
+    this.touchControls.setLayout(s.controlLayout, s.leftHanded);
+    this.hud.setMinimapVisible(s.minimap);
+    const quality = this.quality();
+    this.renderer.setMaxPixelRatio(quality.dpr);
+    this.game?.setShadowQuality(quality.shadows);
+    this.game?.setSteeringAssist(s.steeringAssist);
+    this.game?.setPatternMarkings(s.patternMarkings);
+  }
+
+  private bindEvents(): void {
+    this.bus.on('hauler:destroyed', (info) => this.onFailed(info));
+    this.bus.on('session:results', (results) => this.onResults(results));
+    this.bus.on('impact', ({ strength }) => {
+      // Not every browser has vibrate (Safari on iOS doesn't).
+      if (this.data.settings.haptics && strength > 0.3 && 'vibrate' in navigator) {
+        navigator.vibrate(Math.round(20 + strength * 60));
+      }
+    });
+    this.commands.on('pause', () => this.pause());
+    this.commands.on('finish', () => this.game?.finish());
+    this.commands.on('recentre', () => this.game?.recentre());
+    this.commands.on('retry', () => {
+      if (this.level) void this.start(this.level);
+    });
+    this.commands.on('quit', () => this.quitToMap());
+    window.addEventListener('keydown', (event) => {
+      if (event.code !== 'Escape') return;
+      if (this.flow === 'paused') this.resume();
+      else if (this.flow === 'settings' || this.flow === 'help') this.closeSettings();
+    });
+    window.addEventListener('orientationchange', () => this.checkOrientation());
   }
 
   private createDebugTools(): void {
@@ -151,12 +620,12 @@ export class App {
       if (!session) return '';
       const next = session.next;
       const countdown = session.countdown;
-      return `SESSION ${session.phase}  t ${session.elapsed.toFixed(1)} s  next ${next ? `${next.id} @ ${next.distance.toFixed(0)} m` : '–'}  ${countdown === null ? '' : `${countdown.toFixed(1)} s`}`;
+      return `SESSION ${this.flow}/${session.phase}  t ${session.elapsed.toFixed(1)} s  next ${next ? `${next.id} @ ${next.distance.toFixed(0)} m` : '–'}  ${countdown === null ? '' : `${countdown.toFixed(1)} s`}`;
     });
     overlay.addSelect(
       'Level',
       LEVELS.map((l) => ({ value: l.id, label: `${l.index}. ${l.name}` })),
-      this.initialLevel().id,
+      this.flags.level ?? LEVELS[0]?.id ?? '',
       (id) => {
         const level = findLevel(id);
         if (level) void this.start(level);

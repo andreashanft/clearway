@@ -106,6 +106,20 @@ export class Hauler {
     if (this.state === 'waiting') this.state = 'rolling';
   }
 
+  /** Jumps the nose to `distance` with no blending (title-screen loop). */
+  resetTo(distance: number): void {
+    this.distance = distance;
+    this.computePose(distance);
+    this.body.setTranslation(this.position, true);
+    this.body.setRotation(this.rotation, true);
+    this.pose.snap();
+  }
+
+  /** Overrides the cruise speed multiplier (title-screen loop, safe-zone run). */
+  setSpeedFactor(factor: number): void {
+    this.speedFactor = factor;
+  }
+
   /** Easy mode: pauses the Hauler once for `seconds`. */
   stall(seconds: number): void {
     if (this.state !== 'rolling') return;

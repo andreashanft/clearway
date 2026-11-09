@@ -153,3 +153,45 @@ Measured on a desktop browser with WebGPU: 24–35 draw calls and 15–20k trian
 - **Only the front sensor fails the level.** Brushing the Hauler's side pushes your vehicle away instead. The brief puts the sensor "slightly ahead of its bumper".
 - **After "Path clear" the Hauler speeds up 2.5×** to reach the safe zone while the banner plays.
 - **Fixed in milestone 3's blasts:** explosions now push bodies away. Applying impulses inside Rapier's shape query left the world borrowed, so the push silently did nothing and the world couldn't be freed. A regression test covers it.
+
+## Milestone 5: screens
+
+### What works
+
+- Every screen in the brief's flow, built on the design tokens and checked against the mocks at phone landscape (844 × 390), phone portrait (390 × 844) and desktop (1440 × 900):
+  - **Title** over a live Hollow Creek where the Hauler crosses the first field, with a portrait layout.
+  - **Campaign** with map thumbnails, medal, best time, NEXT UP and lock states (next level unlocks on bronze).
+  - **Briefing** with a camera fly-over of the route, Skip, route length, first impact, best medal, vehicles and TNT, then a 3-2-1 countdown.
+  - **Gameplay HUD**: pause button, counters (with the level name on large screens), route bar with amber next-impact tick, hint pill, mini-map (tap to collapse on phones, double-tap or double-click to recentre), an edge pointer to the Hauler with its distance, and on keyboard the vehicle card and key hints.
+  - **Pause** over the blurred scene: Resume, Restart, Settings, Quit to map and live stats.
+  - **Hauler destroyed**: what it hit and when, how many obstacles were cleared, a level tip, Retry and Quit to map.
+  - **Path clear** banner, then free roam with a Finish level button.
+  - **Results**: medal, new best time, progress bars with the 80% silver marker, what the next medal needs, and Keep exploring, Replay and Campaign.
+  - **Settings** in three tabs: touch layout (point-to-drive or classic), left-handed, steering assist, auto-skid, easy mode, haptics, graphics quality, HUD scale, mini-map, camera shake, pattern markings, volumes, tension music and subtitles.
+  - **Rotate device** card that pauses play on a phone held upright and resumes on landscape.
+  - **How to play** summary.
+- Settings apply at once: HUD scale, graphics quality (pixel ratio and shadow resolution), classic and left-handed touch layouts, steering assist, mini-map, route chevrons, haptics on impacts, and easy mode from the next attempt.
+- Local save in `clearway.save.v1`: per-level best medal, best clear time, building and beacon shares, dish, and settings, with a version number and a migration hook. It falls back to defaults when storage is blocked.
+- Level hints (start and per obstacle), fail tips and a briefing description in the level file.
+
+### Stubbed
+
+- Levels 2 and 3 show as "built in milestone 6" on the campaign map.
+- Beacons, the relay dish, the failure replay ("Watch again"), music, effects volume and subtitles take effect in milestone 7.
+- Auto-skid applies to the Fishtail in milestone 6.
+
+### How to test
+
+1. Open the game; the title shows the Hauler crossing Hollow Creek. Choose **PLAY**.
+2. Choose **BRIEFING**, watch or skip the fly-over, then **START**.
+3. Press Esc (or the pause button) and try **Settings**: switch to **Classic** and change **HUD scale**.
+4. Let the Hauler hit something to see the fail screen, or clear the route and choose **Finish level** for Results.
+5. Reload: the medal and best time stay on the campaign card.
+6. On a phone, hold it upright during play to see the rotate card.
+
+### Deviations
+
+- **The mini-map is drawn with Canvas 2D from game data**, not a second orthographic 3D render. It reuses the baked colour map as its background and costs no draw calls.
+- **Medal count on the title and campaign counts bronze 1, silver 2 and gold 3**, out of 9 for three levels. The mocks show "1/9" next to a silver medal, which doesn't add up under either reading.
+- **"Watch again" is left out of the fail screen** until milestone 7 adds the replay.
+- **Next level goes to the campaign map**, as the mock's link does, where the newly unlocked level shows NEXT UP.

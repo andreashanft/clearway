@@ -10,6 +10,10 @@ export interface UiCommands {
   next: undefined;
   /** Leave the level. */
   quit: undefined;
+  /** Open the pause menu. */
+  pause: undefined;
+  /** Snap the camera back behind the player (double-tap on the mini-map). */
+  recentre: undefined;
 }
 
 export type CommandBus = EventBus<UiCommands>;

@@ -22,6 +22,8 @@ export class GameLoop {
   private lastTime = -1;
   private running = false;
   private hiddenPause = false;
+  /** While paused the loop keeps rendering (for menus over the scene) but runs no steps. */
+  paused = false;
 
   constructor(
     private readonly handlers: LoopHandlers,
@@ -61,6 +63,11 @@ export class GameLoop {
       this.lastTime < 0 ? 0 : Math.min((time - this.lastTime) / 1000, MAX_FRAME_SECONDS);
     this.lastTime = time;
 
+    if (this.paused) {
+      this.clock.reset();
+      this.handlers.render(1, frameSeconds);
+      return;
+    }
     this.handlers.beginFrame?.(frameSeconds);
     const { steps, alpha } = this.clock.advance(frameSeconds);
     for (let i = 0; i < steps; i++) this.handlers.step(this.clock.stepSeconds);

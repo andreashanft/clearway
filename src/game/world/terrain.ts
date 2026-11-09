@@ -27,6 +27,8 @@ const WALL_HEIGHT = 40;
  */
 export class Terrain {
   readonly group = new Group();
+  /** The baked ground colours, for the mini-map background. */
+  readonly colourImage: CanvasImageSource | null;
   private readonly material: MeshStandardNodeMaterial;
   private readonly detail: DataTexture;
 
@@ -36,6 +38,7 @@ export class Terrain {
   ) {
     colourMap.colorSpace = SRGBColorSpace;
     colourMap.anisotropy = 4;
+    this.colourImage = (colourMap.image as CanvasImageSource | undefined) ?? null;
     this.detail = createDetailTexture();
     // The baked colour map carries the layout; two octaves of tiling noise add grain at
     // play zoom so the ground doesn't look like a blurred photo.

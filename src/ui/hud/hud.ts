@@ -1,152 +1,271 @@
 import './hud.css';
+import type { InputSource } from '../../engine/input/controls';
 import type { GameBus } from '../../game/events';
-import type { LevelStats, Medal } from '../../game/scoring';
-import { shortfallFor } from '../../game/scoring';
 import type { CommandBus } from '../commands';
+import { button, chip, formatClock, h, icon, stat } from '../kit';
+import { Minimap } from './minimap';
 
-/** Formats seconds as m:ss. */
-export function formatClock(seconds: number): string {
-  const s = Math.max(0, Math.ceil(seconds));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className: string,
-  text?: string,
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
-const MEDAL_LETTER: Record<Medal, string> = { bronze: 'B', silver: 'S', gold: 'G' };
+/** Seconds a hint stays up. */
+const HINT_SECONDS = 6;
 
 /**
- * The in-game HUD: counters, the route bar with its countdown, banners, free roam and the
- * fail and results panels. It listens to game events and sends commands; it never
- * touches the game directly.
+ * The in-game HUD from the gameplay mocks: pause button and counters, the route bar with
+ * its countdown and hint pill, the mini-map, the Hauler pointer, the path-clear banner,
+ * free roam, and (with a keyboard) the vehicle card and key hints. It listens to game
+ * events and sends commands; it never touches the game directly.
  */
 export class Hud {
-  readonly element = el('div', 'cw-hud');
-  private readonly obstaclesValue = el('div', 'cw-hud__value', '–');
-  private readonly buildingsCounter = el('div', 'cw-hud__counter');
-  private readonly buildingsValue = el('div', 'cw-hud__value', '–');
-  private readonly routePanel = el('div', 'cw-hud__route');
-  private readonly routeLabel = el('div', 'cw-hud__route-label', 'HAULER STARTING');
-  private readonly routeTimer = el('div', 'cw-hud__route-timer', '0:00');
-  private readonly routeFill = el('div', 'cw-hud__route-fill');
-  private readonly routeTrack = el('div', 'cw-hud__route-track');
-  private readonly ticks = new Map<string, HTMLElement>();
-  private readonly banner = el('div', 'cw-hud__banner');
-  private readonly finishButton = el(
-    'button',
-    'cw-button cw-button--primary cw-hud__finish',
-    'FINISH',
-  );
-  private readonly panel = el('div', 'cw-hud__panel');
+  readonly element = h('div', { class: 'cw-hud' });
+  private readonly counters = h('div', { class: 'cw-hud__counters' });
+  private readonly obstaclesStat = stat('OBSTACLES', '–');
+  private readonly levelStat = stat('LEVEL', '');
+  private readonly buildingsStat = stat('BUILDINGS', '–');
+  private readonly routePanel = h('div', { class: 'cw-hud__route cw-glass' });
+  private readonly routeLabel = h('div', { class: 'cw-hud__route-label', text: 'HAULER STARTING' });
+  private readonly routeTimer = h('div', { class: 'cw-hud__route-timer' });
+  private readonly routeFill = h('div', { class: 'cw-hud__route-fill' });
+  private readonly routeTrack = h('div', { class: 'cw-hud__route-track' }, this.routeFill);
+  private readonly hintPill = h('div', { class: 'cw-hud__hint', attrs: { role: 'status' } });
+  private readonly minimap = new Minimap();
+  private readonly minimapBox = h('div', { class: 'cw-hud__minimap cw-glass' });
+  private readonly pointer = h('div', {
+    class: 'cw-hud__pointer',
+    attrs: { 'aria-hidden': 'true' },
+  });
+  private readonly pointerLabel = h('span');
+  private readonly banner = h('div', { class: 'cw-hud__banner', attrs: { role: 'status' } });
+  private readonly bannerChip = chip('', 'go');
+  private readonly roam = h('div', { class: 'cw-hud__roam' });
+  private readonly roamText = h('span');
+  private readonly finish: HTMLButtonElement;
+  private readonly vehicleCard = h('div', { class: 'cw-hud__vehicle' });
+  private readonly vehicleName = h('div', { class: 'cw-hud__vehicle-name' });
+  private readonly vehicleSpeed = h('div', { class: 'cw-label' });
+  private readonly vehicleAction = h('div', { class: 'cw-hud__vehicle-action' });
+  private readonly keys = h('div', { class: 'cw-hud__keys cw-glass' });
+  private readonly ticks = new Map<string, { element: HTMLElement; label: string }>();
   private readonly unsubscribe: (() => void)[] = [];
-  private bannerTimer = 0;
+  private bannerLeft = 0;
+  private hintLeft = 0;
+  private buildingsTotal = 0;
+  private actionLabel = 'ACTION';
 
   constructor(parent: HTMLElement, bus: GameBus, commands: CommandBus) {
-    const counters = el('div', 'cw-hud__counters');
-    const obstacles = el('div', 'cw-hud__counter');
-    obstacles.append(el('div', 'cw-hud__label', 'OBSTACLES'), this.obstaclesValue);
-    this.buildingsCounter.append(el('div', 'cw-hud__label', 'BUILDINGS LEFT'), this.buildingsValue);
-    this.buildingsCounter.hidden = true;
-    counters.append(obstacles, this.buildingsCounter);
+    const pause = button('', 'ghost', () => commands.emit('pause', undefined), {
+      icon: icon('pause', 16),
+      ariaLabel: 'Pause',
+      class: 'cw-button--icon cw-hud__pause',
+    });
+    this.levelStat.classList.add('cw-hud__level');
+    this.buildingsStat.hidden = true;
+    for (const s of [this.obstaclesStat, this.buildingsStat, this.levelStat]) {
+      s.classList.add('cw-glass', 'cw-hud__counter');
+    }
+    this.counters.append(pause, this.obstaclesStat, this.buildingsStat, this.levelStat);
 
-    const head = el('div', 'cw-hud__route-head');
-    head.append(this.routeLabel, this.routeTimer);
-    this.routeTrack.append(this.routeFill);
-    this.routePanel.append(head, this.routeTrack);
+    this.routePanel.append(
+      h('div', { class: 'cw-hud__route-head' }, this.routeLabel, this.routeTimer),
+      this.routeTrack,
+    );
+    const top = h('div', { class: 'cw-hud__top' }, this.routePanel, this.hintPill);
+    this.hintPill.hidden = true;
 
-    this.finishButton.type = 'button';
-    this.finishButton.hidden = true;
-    this.finishButton.addEventListener('click', () => commands.emit('finish', undefined));
+    this.minimapBox.append(this.minimap.canvas);
+    this.minimapBox.addEventListener('dblclick', () => commands.emit('recentre', undefined));
+    let lastTap = 0;
+    this.minimapBox.addEventListener('pointerup', (event) => {
+      if (event.pointerType !== 'touch') return;
+      const now = performance.now();
+      if (now - lastTap < 320) commands.emit('recentre', undefined);
+      else this.minimapBox.classList.toggle('is-collapsed');
+      lastTap = now;
+    });
+
+    this.pointer.append(icon('arrow', 16), this.pointerLabel);
+    this.pointer.hidden = true;
+
+    this.banner.append(
+      h('div', { class: 'cw-hud__check' }, icon('check', 40)),
+      h(
+        'div',
+        { class: 'cw-hud__banner-text' },
+        h('div', { class: 'cw-hud__banner-title', text: 'PATH CLEAR' }),
+        h(
+          'div',
+          { class: 'cw-hud__banner-sub' },
+          this.bannerChip,
+          h('span', { text: 'The Hauler is rolling to the safe zone.' }),
+        ),
+      ),
+    );
     this.banner.hidden = true;
-    this.panel.hidden = true;
 
-    this.element.append(counters, this.routePanel, this.banner, this.finishButton, this.panel);
+    this.roam.append(h('span', { class: 'cw-hud__roam-title', text: 'FREE ROAM' }), this.roamText);
+    this.roam.hidden = true;
+    this.finish = button('Finish level', 'secondary', () => commands.emit('finish', undefined), {
+      class: 'cw-hud__finish',
+    });
+    this.finish.hidden = true;
+
+    this.vehicleCard.append(
+      h('div', { class: 'cw-hud__vehicle-head' }, this.vehicleName, this.vehicleSpeed),
+      this.vehicleAction,
+    );
+    this.keys.append(
+      ...[
+        ['WASD', 'drive'],
+        ['SHIFT', 'brake'],
+        ['SPACE', 'action'],
+        ['E', 'exit / enter'],
+        ['Q / R', 'rotate'],
+        ['ESC', 'pause'],
+      ].map(([key, what]) => h('div', {}, h('b', { text: key ?? '' }), ` ${what ?? ''}`)),
+    );
+
+    this.element.append(
+      this.counters,
+      top,
+      this.minimapBox,
+      this.pointer,
+      this.banner,
+      this.roam,
+      this.finish,
+      this.vehicleCard,
+      this.keys,
+    );
     parent.append(this.element);
 
     this.unsubscribe.push(
       bus.on('session:obstacles', ({ obstacles, routeLength }) => {
-        this.routeTrack.querySelectorAll('.cw-hud__tick').forEach((t) => t.remove());
+        for (const tick of this.ticks.values()) tick.element.remove();
         this.ticks.clear();
         for (const o of obstacles) {
-          const tick = el('div', 'cw-hud__tick');
-          tick.style.left = `${(o.distance / routeLength) * 100}%`;
-          tick.title = o.label;
-          this.routeTrack.append(tick);
-          this.ticks.set(o.id, tick);
+          const element = h('div', { class: 'cw-hud__tick', attrs: { title: o.label } });
+          element.style.left = `${(o.distance / routeLength) * 100}%`;
+          this.routeTrack.append(element);
+          this.ticks.set(o.id, { element, label: o.label });
         }
-        this.obstaclesValue.textContent = `${obstacles.length} LEFT`;
+        setStat(this.obstaclesStat, `${obstacles.length} LEFT`);
+      }),
+      bus.on('map:setup', (setup) => {
+        this.minimap.configure(setup);
+      }),
+      bus.on('hud:frame', (frame) => {
+        this.minimap.draw(frame);
+        this.placePointer(frame.hauler);
+        if (frame.player) {
+          this.vehicleSpeed.textContent = `${Math.abs(Math.round(frame.player.speed * 3.6))} KM/H`;
+        }
       }),
       bus.on('hauler:status', (s) => {
         this.routeFill.style.width = `${Math.min(100, (s.distance / s.routeLength) * 100)}%`;
         this.routePanel.dataset.urgency = s.urgency;
-        this.obstaclesValue.textContent = `${s.obstaclesLeft} LEFT`;
-        this.buildingsValue.textContent = String(s.buildingsLeft);
+        setStat(this.obstaclesStat, `${s.obstaclesLeft} LEFT`);
+        setStat(
+          this.buildingsStat,
+          `${this.buildingsTotal - s.buildingsLeft} / ${this.buildingsTotal}`,
+        );
+        this.roamText.textContent =
+          s.buildingsLeft > 0
+            ? `No timer. Wreck ${s.buildingsLeft} more building${s.buildingsLeft === 1 ? '' : 's'} for gold.`
+            : 'No timer. Every building is down.';
         if (s.countdown !== null && s.next !== null) {
           this.routeLabel.textContent = `NEXT IMPACT · ${s.next.toUpperCase()}`;
           this.routeTimer.textContent = formatClock(s.countdown);
         }
+        for (const tick of this.ticks.values()) {
+          tick.element.classList.toggle('is-next', tick.label === s.next);
+        }
       }),
       bus.on('obstacle:cleared', ({ id }) => {
-        this.ticks.get(id)?.classList.add('is-cleared');
+        this.ticks.get(id)?.element.classList.add('is-cleared');
       }),
       bus.on('session:phase', ({ phase }) => {
         this.element.dataset.phase = phase;
         if (phase === 'pathClear') {
           this.routeLabel.textContent = 'PATH CLEAR';
           this.routeTimer.textContent = '';
-          this.showBanner('PATH CLEAR', 'Free roam: flatten the rest', 'go', 3);
+          this.banner.hidden = false;
+          this.bannerLeft = 3;
         }
-        if (phase === 'freeRoam') {
-          this.routePanel.hidden = true;
-          this.buildingsCounter.hidden = false;
-          this.finishButton.hidden = false;
+        if (phase === 'freeRoam' || phase === 'pathClear') {
+          this.obstaclesStat.hidden = true;
+          this.buildingsStat.hidden = false;
+          this.roam.hidden = false;
+          this.finish.hidden = false;
         }
-        if (phase === 'results') this.finishButton.hidden = true;
+        if (phase === 'freeRoam') this.routePanel.hidden = true;
+      }),
+      bus.on('path:cleared', ({ seconds }) => {
+        this.bannerChip.textContent = `CLEARED IN ${formatClock(seconds)}`;
+      }),
+      bus.on('hint', ({ text }) => {
+        this.showHint(text);
       }),
       bus.on('hauler:stalled', ({ seconds }) => {
-        this.showBanner('HAULER STALLED', `${seconds} seconds of grace`, 'signal', 2);
+        this.showHint(`The Hauler stalled. ${seconds} seconds of grace.`);
       }),
-      bus.on('hauler:destroyed', () => {
-        this.showPanel('fail', 'HAULER DESTROYED', 'The core went up. Clear the route faster.', [
-          {
-            label: 'RETRY',
-            kind: 'danger',
-            command: () => commands.emit('retry', undefined),
-            focus: true,
-          },
-          { label: 'QUIT', kind: 'ghost', command: () => commands.emit('quit', undefined) },
-        ]);
+      bus.on('tnt:lit', ({ seconds }) => {
+        this.showHint(`Fuse lit: ${seconds.toFixed(0)} seconds. Push it into place and back off.`);
       }),
-      bus.on('session:results', ({ stats, medal }) => {
-        this.showResults(stats, medal, commands);
+      bus.on('vehicle:changed', ({ name, actionLabel }) => {
+        this.vehicleName.textContent = name.toUpperCase();
+        this.actionLabel = actionLabel;
+        this.vehicleAction.replaceChildren(
+          chip('SPACE', 'hazard'),
+          ` ${actionLabel.toLowerCase()} ready`,
+        );
+      }),
+      bus.on('action:state', ({ active, ready, charge }) => {
+        const state = active ? 'on' : ready ? 'ready' : `${Math.round(charge * 100)}%`;
+        this.vehicleAction.replaceChildren(
+          chip('SPACE', 'hazard'),
+          ` ${this.actionLabel.toLowerCase()} ${state}`,
+        );
       }),
     );
   }
 
-  /** Resets the HUD for a fresh attempt. */
-  reset(): void {
+  /** Sets up for a fresh attempt at a level. */
+  reset(levelName: string, buildingsTotal: number): void {
     this.routePanel.hidden = false;
-    this.buildingsCounter.hidden = true;
-    this.finishButton.hidden = true;
-    this.panel.hidden = true;
+    this.obstaclesStat.hidden = false;
+    this.buildingsStat.hidden = true;
     this.banner.hidden = true;
+    this.roam.hidden = true;
+    this.finish.hidden = true;
+    this.hintPill.hidden = true;
+    this.pointer.hidden = true;
     this.routeLabel.textContent = 'HAULER STARTING';
     this.routeTimer.textContent = '';
     this.routeFill.style.width = '0%';
+    this.routePanel.dataset.urgency = 'calm';
+    this.buildingsTotal = buildingsTotal;
+    setStat(this.levelStat, levelName.toUpperCase());
+    delete this.element.dataset.phase;
+  }
+
+  setVisible(visible: boolean): void {
+    this.element.hidden = !visible;
+  }
+
+  setMinimapVisible(visible: boolean): void {
+    this.minimapBox.hidden = !visible;
+  }
+
+  /** Keyboard and gamepad players see the vehicle card and key hints. */
+  setInputSource(source: InputSource): void {
+    this.element.dataset.input = source;
   }
 
   update(frameSeconds: number): void {
-    if (this.bannerTimer > 0) {
-      this.bannerTimer -= frameSeconds;
-      if (this.bannerTimer <= 0) this.banner.hidden = true;
+    if (this.bannerLeft > 0) {
+      this.bannerLeft -= frameSeconds;
+      if (this.bannerLeft <= 0) this.banner.hidden = true;
+    }
+    if (this.hintLeft > 0) {
+      this.hintLeft -= frameSeconds;
+      if (this.hintLeft <= 0) this.hintPill.hidden = true;
     }
   }
 
@@ -155,81 +274,46 @@ export class Hud {
     this.element.remove();
   }
 
-  private showBanner(title: string, subtitle: string, tone: string, seconds: number): void {
-    this.banner.replaceChildren(
-      el('div', 'cw-hud__banner-title', title),
-      el('div', 'cw-hud__banner-sub', subtitle),
-    );
-    this.banner.dataset.tone = tone;
-    this.banner.hidden = false;
-    this.bannerTimer = seconds;
+  private showHint(text: string): void {
+    this.hintPill.replaceChildren(h('span', { class: 'cw-hud__hint-dot' }), text);
+    this.hintPill.hidden = false;
+    this.hintLeft = HINT_SECONDS;
   }
 
-  private showPanel(
-    tone: string,
-    title: string,
-    body: string | HTMLElement,
-    buttons: { label: string; kind: string; command: () => void; focus?: boolean }[],
+  /** An arrow at the screen edge pointing at the Hauler when it is out of view. */
+  private placePointer(
+    hauler: { screenX: number; screenY: number; onScreen: boolean; distance: number } | null,
   ): void {
-    const actions = el('div', 'cw-hud__actions');
-    let focus: HTMLButtonElement | null = null;
-    for (const b of buttons) {
-      const button = el('button', `cw-button cw-button--${b.kind}`, b.label);
-      button.type = 'button';
-      button.addEventListener('click', b.command);
-      actions.append(button);
-      if (b.focus) focus = button;
+    if (!hauler || hauler.onScreen || this.element.dataset.phase === 'freeRoam') {
+      this.pointer.hidden = true;
+      return;
     }
-    const content = typeof body === 'string' ? el('p', 'cw-hud__panel-body', body) : body;
-    this.panel.replaceChildren(el('h2', 'cw-hud__panel-title', title), content, actions);
-    this.panel.dataset.tone = tone;
-    this.panel.hidden = false;
-    this.banner.hidden = true;
-    this.bannerTimer = 0;
-    focus?.focus();
-  }
-
-  private showResults(stats: LevelStats, medal: Medal | null, commands: CommandBus): void {
-    const body = el('div', 'cw-hud__results');
-    const badge = el(
-      'div',
-      `cw-medal cw-medal--${medal ?? 'none'}`,
-      medal ? MEDAL_LETTER[medal] : '–',
+    const rect = this.element.getBoundingClientRect();
+    const cx = rect.width / 2;
+    const cy = rect.height / 2;
+    let dx = hauler.screenX - cx;
+    let dy = hauler.screenY - cy;
+    const len = Math.hypot(dx, dy) || 1;
+    dx /= len;
+    dy /= len;
+    // Push the arrow out to the edge of an inset rectangle.
+    // Keep clear of the corner panels: more inset on bigger screens.
+    const marginX = Math.max(10, cx - Math.max(90, rect.width * 0.14));
+    const marginY = Math.max(10, cy - Math.max(70, rect.height * 0.2));
+    const t = Math.min(
+      Math.abs(marginX / (Math.abs(dx) > 1e-6 ? dx : 1e-6)),
+      Math.abs(marginY / (Math.abs(dy) > 1e-6 ? dy : 1e-6)),
     );
-    const list = el('dl', 'cw-hud__stats');
-    const row = (term: string, value: string): void => {
-      list.append(el('dt', '', term), el('dd', '', value));
-    };
-    row('CLEAR TIME', stats.clearTime === null ? '–' : formatClock(stats.clearTime));
-    row('BUILDINGS', `${stats.buildingsDestroyed} / ${stats.buildingsTotal}`);
-    if (stats.beaconsTotal > 0) row('BEACONS', `${stats.beaconsFound} / ${stats.beaconsTotal}`);
-    if (stats.dishExists) row('RELAY DISH', stats.dishFound ? 'FOUND' : '–');
-    body.append(badge, list);
-    if (medal !== 'gold' && stats.pathCleared) {
-      const goal = medal === 'silver' ? 'gold' : 'silver';
-      const need = shortfallFor(stats, goal);
-      const parts = [
-        need.buildings > 0 ? `${need.buildings} more buildings` : '',
-        need.beacons > 0 ? `${need.beacons} more beacons` : '',
-        need.dish ? 'the relay dish' : '',
-      ].filter(Boolean);
-      body.append(
-        el(
-          'p',
-          'cw-hud__hint',
-          `${goal === 'gold' ? 'Gold' : 'Silver'} needs ${parts.join(', ')}.`,
-        ),
-      );
-    }
-    const title = medal ? `${medal.toUpperCase()} MEDAL` : 'RESULTS';
-    this.showPanel(medal ?? 'none', title, body, [
-      { label: 'REPLAY', kind: 'ghost', command: () => commands.emit('retry', undefined) },
-      {
-        label: 'NEXT',
-        kind: 'primary',
-        command: () => commands.emit('next', undefined),
-        focus: true,
-      },
-    ]);
+    this.pointer.style.transform = `translate(${cx + dx * t}px, ${cy + dy * t}px) translate(-50%, -50%)`;
+    const svg = this.pointer.querySelector('svg');
+    // The arrow icon points to the upper right; rotate it towards the Hauler.
+    if (svg) svg.style.transform = `rotate(${(Math.atan2(dy, dx) * 180) / Math.PI + 45}deg)`;
+    this.pointerLabel.textContent = `HAULER ${Math.round(hauler.distance)} M`;
+    this.pointer.hidden = false;
   }
+}
+
+function setStat(element: HTMLElement, value: string): void {
+  const v = element.querySelector('.cw-stat__value');
+  if (v) v.textContent = value;
 }

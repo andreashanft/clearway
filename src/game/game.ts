@@ -6,7 +6,7 @@ import type { Viewport } from '../engine/renderer';
 import { FollowCamera } from './camera';
 import { DestructionSystem } from './destruction-system';
 import { bearingToHeading } from './drive';
-import type { GameBus } from './events';
+import type { GameBus, GameEvents } from './events';
 import { Effects } from './fx/effects';
 import { Hauler } from './hauler/hauler';
 import { sweepRoute } from './hauler/route-sweep';
@@ -38,6 +38,16 @@ export interface GameOptions {
 }
 
 const DEFAULT_OPTIONS: GameOptions = { difficulty: 'normal', steeringAssist: true };
+
+/** What the game is doing: a title-screen backdrop, a briefing fly-over, or play. */
+export type GameMode = 'attract' | 'briefing' | 'play';
+
+/** Seconds the briefing camera takes to fly the whole route. */
+const FLYOVER_SECONDS = 9;
+/** Title backdrop: the Hauler loops this far before the first obstacle, a bit faster. */
+const ATTRACT_MARGIN = 18;
+const ATTRACT_SPEEDUP = 1.6;
+const ATTRACT_ORBIT = 0.05;
 
 /** Strips one-frame events so they only reach the first fixed step of a frame. */
 function withoutEdges(frame: ControlFrame): ControlFrame {
@@ -75,6 +85,15 @@ export class Game {
   private slowmoLeft = 0;
   private failAnnounced = false;
   private readonly subscriptions: (() => void)[] = [];
+  private def: LevelDefinition | null = null;
+  private modeValue: GameMode = 'play';
+  private flyover = 0;
+  private lastHintFor = '';
+  private failInfo = { hit: '', time: 0, cleared: 0 };
+  private readonly flyTarget = new Vector3();
+  private readonly zero = new Vector3();
+  private readonly projected = new Vector3();
+  private viewport: Viewport = { width: 1, height: 1 };
 
   constructor(
     private readonly physics: Physics,
@@ -96,12 +115,77 @@ export class Game {
     return this.session;
   }
 
+  get mode(): GameMode {
+    return this.modeValue;
+  }
+
+  /** Progress of the briefing fly-over, 0–1. */
+  get flyoverProgress(): number {
+    return this.flyover;
+  }
+
+  get definition(): LevelDefinition | null {
+    return this.def;
+  }
+
+  /**
+   * Switches between the title backdrop, the briefing fly-over and play. Play starts the
+   * level's rules (start delay, then the Hauler).
+   */
+  setMode(mode: GameMode): void {
+    this.modeValue = mode;
+    const hauler = this.hauler;
+    if (!hauler) return;
+    if (mode === 'attract') {
+      hauler.resetTo(0);
+      hauler.setSpeedFactor(ATTRACT_SPEEDUP);
+      hauler.start();
+      this.camera.snapTo(hauler.worldPosition);
+    } else if (mode === 'briefing') {
+      this.flyover = 0;
+      hauler.resetTo(0);
+      hauler.setSpeedFactor(1);
+      hauler.state = 'waiting';
+      while (this.camera.zoomLevel < 2) this.camera.zoom(1);
+      const start = this.route?.sampleAt(0);
+      if (start)
+        this.camera.snapTo(this.flyTarget.set(start.x, this.groundAt(start.x, start.z), start.z));
+    } else {
+      hauler.resetTo(0);
+      hauler.setSpeedFactor(1);
+      hauler.state = 'waiting';
+      while (this.camera.zoomLevel > 1) this.camera.zoom(-1);
+      if (this.active) this.camera.snapTo(this.active.position);
+      this.lastHintFor = '';
+      this.hint(this.def?.hints?.start);
+    }
+  }
+
+  /** Jumps the briefing fly-over to its end. */
+  skipFlyover(): void {
+    this.flyover = 1;
+  }
+
+  /** Turns steering assist on or off for every vehicle. */
+  setSteeringAssist(on: boolean): void {
+    const route = this.route;
+    for (const vehicle of this.vehicles) {
+      vehicle.routeAssist = on && route ? (x, z) => route.headingNear(x, z, ASSIST_RADIUS) : null;
+    }
+  }
+
+  /** Shadow map resolution, or 0 to turn sun shadows off. */
+  setShadowQuality(size: number): void {
+    this.world?.lighting.setShadowMapSize(size);
+  }
+
   /** Multiplier on simulation speed, used for the slow motion after a failure. */
   get timeScale(): number {
     return this.slowmoLeft > 0 ? FAIL_SLOWMO_SCALE : 1;
   }
 
   async load(def: LevelDefinition): Promise<void> {
+    this.def = def;
     this.world = await loadWorld(def, this.scene, this.physics);
     const { field } = this.world;
     this.effects = new Effects(field);
@@ -148,6 +232,14 @@ export class Game {
     );
     this.session = session;
     destruction.watchHauler(hauler, () => {
+      if (this.modeValue !== 'play') return;
+      const next = session.next;
+      // Snapshot before the blast, which may flatten the obstacle it hit.
+      this.failInfo = {
+        hit: next?.label ?? 'something',
+        time: session.elapsed,
+        cleared: session.obstacles.filter((o) => o.cleared).length,
+      };
       if (session.haulerContact()) this.destroyHauler();
     });
     this.subscriptions.push(
@@ -174,6 +266,20 @@ export class Game {
     this.setActive(start ?? this.vehicles[0] ?? null);
     if (this.active) this.camera.snapTo(this.active.position);
 
+    const xs = route.points(10).map((p) => p.x);
+    const zs = route.points(10).map((p) => p.z);
+    const margin = 70;
+    this.bus.emit('map:setup', {
+      bounds: {
+        minX: Math.min(...xs) - margin,
+        maxX: Math.max(...xs) + margin,
+        minZ: Math.min(...zs) - margin,
+        maxZ: Math.max(...zs) + margin,
+      },
+      route: route.points(6).map((p) => [p.x, p.z]),
+      background: this.world.terrain.colourImage,
+      extent: field.extent,
+    });
     this.bus.emit('session:obstacles', {
       obstacles: session.obstacles.map((o) => ({ id: o.id, label: o.label, distance: o.distance })),
       routeLength: route.length,
@@ -181,8 +287,9 @@ export class Game {
     this.bus.emit('session:phase', { phase: session.phase });
   }
 
-  setViewport({ width, height }: Viewport): void {
-    this.camera.setViewport(width, height);
+  setViewport(viewport: Viewport): void {
+    this.viewport = viewport;
+    this.camera.setViewport(viewport.width, viewport.height);
   }
 
   /** Ends free roam and shows the results. */
@@ -190,10 +297,25 @@ export class Game {
     this.session?.finish();
   }
 
+  /** Called when the player asks to pause (Esc, P or the gamepad's Start). */
+  onPauseRequested: (() => void) | null = null;
+
+  /** Puts the camera back behind the player with north up. */
+  recentre(): void {
+    this.camera.resetYaw();
+    if (this.active) this.camera.snapTo(this.active.position);
+  }
+
+  /** Chevrons on the route (pattern plus colour) or a plain dashed line. */
+  setPatternMarkings(on: boolean): void {
+    this.routeLine?.setPattern(on);
+  }
+
   /** Reads input once at the start of each rendered frame. */
   beginFrame(): void {
     this.frame = this.input.poll();
     this.firstStepOfFrame = true;
+    if (this.frame.pausePressed && this.modeValue === 'play') this.onPauseRequested?.();
     if (this.frame.cameraTurn !== 0) this.camera.turn(this.frame.cameraTurn);
     if (this.frame.zoomStep !== 0) this.camera.zoom(this.frame.zoomStep);
   }
@@ -201,14 +323,16 @@ export class Game {
   step(dt: number): void {
     const frame = this.firstStepOfFrame ? this.frame : withoutEdges(this.frame);
     this.firstStepOfFrame = false;
-    const playable = this.session?.phase !== 'results';
+    const playing = this.modeValue === 'play';
+    const playable = playing && this.session?.phase !== 'results';
     for (const vehicle of this.vehicles) {
       if (vehicle === this.active && playable) vehicle.control(frame, this.camera.yaw, dt);
       else vehicle.idle(dt);
       vehicle.step(dt);
     }
-    this.session?.step(dt);
+    if (playing) this.session?.step(dt);
     this.hauler?.step(dt);
+    this.loopAttract();
     this.destruction?.step(dt, this.vehicles);
     this.rescueFallenVehicles();
   }
@@ -226,7 +350,16 @@ export class Game {
     this.routeLine?.update(frameSeconds, this.hauler?.state === 'rolling' ? this.hauler.speed : 0);
     this.updateFailure(frameSeconds);
 
-    if (this.active) {
+    if (this.modeValue === 'attract' && this.hauler) {
+      this.camera.turnBy(ATTRACT_ORBIT * frameSeconds);
+      this.camera.update(frameSeconds, this.hauler.worldPosition, this.zero);
+    } else if (this.modeValue === 'briefing' && this.route) {
+      this.flyover = Math.min(1, this.flyover + frameSeconds / FLYOVER_SECONDS);
+      const eased = this.flyover * this.flyover * (3 - 2 * this.flyover);
+      const p = this.route.sampleAt(eased * this.route.length);
+      this.flyTarget.set(p.x, this.groundAt(p.x, p.z), p.z);
+      this.camera.update(frameSeconds, this.flyTarget, this.zero);
+    } else if (this.active) {
       const countdown = this.session?.countdown ?? null;
       const watchHauler = this.hauler && this.hauler.state !== 'destroyed' && countdown !== null;
       this.camera.setInterest(
@@ -243,7 +376,7 @@ export class Game {
       this.world.lighting.setShadowSize(Math.max(20, this.camera.viewSpan * aspect * 0.62));
       this.world.lighting.follow(this.camera.focus);
     }
-    this.publishStatus(frameSeconds);
+    if (this.modeValue === 'play') this.publishStatus(frameSeconds);
   }
 
   dispose(): void {
@@ -280,7 +413,13 @@ export class Game {
     this.slowmoLeft -= frameSeconds;
     if (this.slowmoLeft <= 0 && !this.failAnnounced) {
       this.failAnnounced = true;
-      this.bus.emit('hauler:destroyed', {});
+      const obstacles = this.session?.obstacles ?? [];
+      this.bus.emit('hauler:destroyed', {
+        hit: this.failInfo.hit,
+        time: this.failInfo.time,
+        cleared: this.failInfo.cleared,
+        total: obstacles.length,
+      });
     }
   }
 
@@ -291,6 +430,12 @@ export class Game {
     if (this.statusClock > 0) return;
     this.statusClock = 1 / STATUS_RATE;
     const countdown = session.countdown;
+    const next = session.next;
+    if (next && next.id !== this.lastHintFor) {
+      this.lastHintFor = next.id;
+      this.hint(this.def?.hints?.[next.id]);
+    }
+    this.publishFrame();
     this.bus.emit('hauler:status', {
       distance: hauler.distance,
       routeLength: route.length,
@@ -299,6 +444,73 @@ export class Game {
       urgency: urgencyFor(countdown),
       obstaclesLeft: session.obstacles.filter((o) => !o.cleared).length,
       buildingsLeft: destruction.buildings.list.filter((b) => !b.destroyed).length,
+    });
+  }
+
+  private hint(text: string | undefined): void {
+    if (text) this.bus.emit('hint', { text });
+  }
+
+  private groundAt(x: number, z: number): number {
+    return this.world?.field.heightAt(x, z) ?? 0;
+  }
+
+  /** Title backdrop: send the Hauler back to the start before it reaches a building. */
+  private loopAttract(): void {
+    const hauler = this.hauler;
+    const first = this.session?.obstacles[0];
+    if (this.modeValue !== 'attract' || !hauler || !first) return;
+    if (hauler.distance > first.distance - ATTRACT_MARGIN) {
+      hauler.resetTo(0);
+      this.camera.snapTo(hauler.worldPosition);
+    }
+  }
+
+  private publishFrame(): void {
+    const { hauler, active, session, destruction } = this;
+    let haulerInfo: GameEvents['hud:frame']['hauler'] = null;
+    if (hauler && hauler.state !== 'destroyed') {
+      const p = hauler.worldPosition;
+      this.projected.copy(p).project(this.camera.camera);
+      const onScreen =
+        Math.abs(this.projected.x) <= 0.92 &&
+        Math.abs(this.projected.y) <= 0.88 &&
+        this.projected.z < 1;
+      haulerInfo = {
+        x: p.x,
+        z: p.z,
+        heading: Math.atan2(
+          hauler.model.root.matrixWorld.elements[8],
+          hauler.model.root.matrixWorld.elements[10],
+        ),
+        screenX: (this.projected.x * 0.5 + 0.5) * this.viewport.width,
+        screenY: (-this.projected.y * 0.5 + 0.5) * this.viewport.height,
+        onScreen,
+        distance: active ? active.position.distanceTo(p) : 0,
+      };
+    }
+    this.bus.emit('hud:frame', {
+      hauler: haulerInfo,
+      player: active
+        ? {
+            x: active.position.x,
+            z: active.position.z,
+            heading: active.heading,
+            speed: active.forwardSpeed,
+          }
+        : null,
+      vehicles: this.vehicles
+        .filter((v) => v !== active)
+        .map((v) => ({ x: v.position.x, z: v.position.z })),
+      obstacles: (session?.obstacles ?? []).flatMap((o) =>
+        (destruction?.buildings.list ?? [])
+          .filter((b) => o.memberIds.includes(b.def.id))
+          .map((b) => ({ x: b.origin.x, z: b.origin.z, cleared: o.cleared })),
+      ),
+      crates: (destruction?.crates ?? [])
+        .filter((c) => !c.exploded)
+        .map((c) => ({ x: c.position.x, z: c.position.z, lit: c.lit })),
+      cameraYaw: this.camera.yaw,
     });
   }
 

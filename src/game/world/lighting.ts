@@ -106,6 +106,16 @@ export class Lighting {
     cam.updateProjectionMatrix();
   }
 
+  /** Shadow map resolution; 0 turns sun shadows off. */
+  setShadowMapSize(size: number): void {
+    this.sun.castShadow = size > 0;
+    if (size > 0 && size !== this.sun.shadow.mapSize.x) {
+      this.sun.shadow.mapSize.set(size, size);
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+    }
+  }
+
   dispose(): void {
     this.environment.dispose();
   }

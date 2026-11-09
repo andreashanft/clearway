@@ -17,7 +17,7 @@ async function boot(): Promise<void> {
     loadRapier(),
   ]);
   const app = new App(renderer, rapier, ui, flags);
-  await app.start(app.initialLevel());
+  await app.boot();
   console.info(
     `Clearway booted on ${renderer.backend.toUpperCase()} in ${Math.round(performance.now())} ms`,
   );

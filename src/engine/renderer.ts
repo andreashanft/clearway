@@ -26,7 +26,7 @@ type ResizeListener = (viewport: Viewport) => void;
 export class Renderer {
   readonly three: WebGPURenderer;
   readonly backend: RenderBackend;
-  private readonly maxPixelRatio: number;
+  private maxPixelRatio: number;
   private readonly listeners = new Set<ResizeListener>();
   private readonly observer: ResizeObserver;
   private scale = 1;
@@ -72,6 +72,12 @@ export class Renderer {
 
   set renderScale(value: number) {
     this.scale = Math.min(1, Math.max(0.4, value));
+    this.applyPixelRatio();
+  }
+
+  /** Highest device pixel ratio to render at (graphics quality). */
+  setMaxPixelRatio(ratio: number): void {
+    this.maxPixelRatio = ratio;
     this.applyPixelRatio();
   }
 

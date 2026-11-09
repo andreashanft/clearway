@@ -116,3 +116,67 @@
   color: var(--cw-muted-dim);
   box-shadow: none;
 }
+
+/* Classic layout: gas and reverse pedals beside the action button. */
+.cw-touch__gas,
+.cw-touch__reverse {
+  display: none;
+}
+
+.cw-touch.is-classic .cw-touch__gas,
+.cw-touch.is-classic .cw-touch__reverse {
+  display: block;
+  border-radius: 14px;
+  width: 64px;
+}
+
+.cw-touch.is-classic .cw-touch__gas {
+  right: calc(124px + env(safe-area-inset-right));
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  height: 96px;
+  background: rgb(61 245 160 / 0.2);
+  border-color: rgb(61 245 160 / 0.6);
+}
+
+.cw-touch.is-classic .cw-touch__reverse {
+  right: calc(200px + env(safe-area-inset-right));
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  height: 60px;
+}
+
+.cw-touch.is-classic .cw-touch__brake {
+  bottom: calc(136px + env(safe-area-inset-bottom));
+}
+
+.cw-touch.is-classic .cw-touch__stick {
+  height: 64px;
+  margin-top: -32px;
+  border-radius: 32px;
+}
+
+/* Left-handed: mirror the stick zone and the buttons. */
+.cw-touch.is-left-handed .cw-touch__zone {
+  left: auto;
+  right: 0;
+}
+
+.cw-touch.is-left-handed .cw-touch__stick {
+  left: calc(100% - 44px - 58px - env(safe-area-inset-right));
+}
+
+.cw-touch.is-left-handed .cw-touch__button {
+  right: auto;
+}
+
+.cw-touch.is-left-handed .cw-touch__action {
+  left: calc(22px + env(safe-area-inset-left));
+}
+
+.cw-touch.is-left-handed .cw-touch__brake,
+.cw-touch.is-left-handed.is-classic .cw-touch__gas {
+  left: calc(124px + env(safe-area-inset-left));
+}
+
+.cw-touch.is-left-handed.is-classic .cw-touch__reverse {
+  left: calc(200px + env(safe-area-inset-left));
+}

@@ -87,6 +87,16 @@ export class FollowCamera {
     this.yawTarget = wrapAngle(this.yawTarget + direction * YAW_STEP);
   }
 
+  /** Turns the view back to north up. */
+  resetYaw(): void {
+    this.yawTarget = 0;
+  }
+
+  /** Rotates the view smoothly by `radians` (title-screen orbit). */
+  turnBy(radians: number): void {
+    this.yawTarget = wrapAngle(this.yawTarget + radians);
+  }
+
   /** Moves one zoom preset in (−1) or out (+1). */
   zoom(step: -1 | 1): void {
     this.zoomIndex = Math.max(0, Math.min(ZOOM_PRESETS.length - 1, this.zoomIndex + step));

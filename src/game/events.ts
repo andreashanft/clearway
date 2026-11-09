@@ -40,7 +40,35 @@ export interface GameEvents {
   'hauler:stalled': { seconds: number };
   'session:results': { stats: LevelStats; medal: Medal | null };
   /** The Hauler was destroyed and the slow motion has played out. */
-  'hauler:destroyed': Record<string, never>;
+  'hauler:destroyed': { hit: string; time: number; cleared: number; total: number };
+  /** Static map data for the mini-map, sent once per level. */
+  'map:setup': {
+    bounds: { minX: number; minZ: number; maxX: number; maxZ: number };
+    route: [number, number][];
+    background: CanvasImageSource | null;
+    extent: number;
+  };
+  /** Positions for the mini-map, Hauler pointer and vehicle card, about ten times a second. */
+  'hud:frame': {
+    hauler: {
+      x: number;
+      z: number;
+      heading: number;
+      screenX: number;
+      screenY: number;
+      onScreen: boolean;
+      distance: number;
+    } | null;
+    player: { x: number; z: number; heading: number; speed: number } | null;
+    vehicles: { x: number; z: number }[];
+    obstacles: { x: number; z: number; cleared: boolean }[];
+    crates: { x: number; z: number; lit: boolean }[];
+    cameraYaw: number;
+  };
+  /** A short tutorial or context hint. */
+  hint: { text: string };
+  /** The last obstacle fell `seconds` after the Hauler started. */
+  'path:cleared': { seconds: number };
 }
 
 export type GameBus = EventBus<GameEvents>;

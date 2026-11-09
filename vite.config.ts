@@ -4,6 +4,9 @@ import { VitePWA } from 'vite-plugin-pwa';
 const NAVY = '#0B1430';
 
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? '0.0.0'),
+  },
   // A relative base lets the static build run from any folder or host.
   base: './',
   build: {

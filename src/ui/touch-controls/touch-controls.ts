@@ -16,6 +16,9 @@ export class TouchControls {
   private readonly knob: HTMLElement;
   private readonly actionButton: HTMLButtonElement;
   private readonly brakeButton: HTMLButtonElement;
+  private readonly gasButton: HTMLButtonElement;
+  private readonly reverseButton: HTMLButtonElement;
+  private classic = false;
   private stickPointer: number | null = null;
   private originX = 0;
   private originY = 0;
@@ -35,7 +38,15 @@ export class TouchControls {
 
     this.brakeButton = button('cw-touch__brake', 'BRAKE');
     this.actionButton = button('cw-touch__action', 'ACTION');
-    this.element.append(this.zone, this.brakeButton, this.actionButton);
+    this.gasButton = button('cw-touch__gas', 'GAS');
+    this.reverseButton = button('cw-touch__reverse', 'REV');
+    this.element.append(
+      this.zone,
+      this.brakeButton,
+      this.gasButton,
+      this.reverseButton,
+      this.actionButton,
+    );
     parent.append(this.element);
 
     this.zone.addEventListener('pointerdown', this.onStickDown);
@@ -47,6 +58,26 @@ export class TouchControls {
       this.actionButton,
       () => touch.pressAction(),
       () => touch.releaseAction(),
+    );
+    holdButton(
+      this.gasButton,
+      () => {
+        touch.gas = 1;
+        touch.active = true;
+      },
+      () => {
+        touch.gas = 0;
+      },
+    );
+    holdButton(
+      this.reverseButton,
+      () => {
+        touch.reverse = 1;
+        touch.active = true;
+      },
+      () => {
+        touch.reverse = 0;
+      },
     );
     holdButton(
       this.brakeButton,
@@ -70,6 +101,18 @@ export class TouchControls {
         this.actionButton.style.setProperty('--charge', `${Math.round(charge * 100)}%`);
       }),
     );
+  }
+
+  /**
+   * Point-to-drive (one stick) or classic (steering stick plus gas and reverse pedals),
+   * optionally mirrored for left-handed players.
+   */
+  setLayout(layout: 'point' | 'classic', leftHanded: boolean): void {
+    this.classic = layout === 'classic';
+    this.element.classList.toggle('is-classic', this.classic);
+    this.element.classList.toggle('is-left-handed', leftHanded);
+    this.releaseStick();
+    this.touch.reset();
   }
 
   setVisible(visible: boolean): void {
@@ -115,9 +158,15 @@ export class TouchControls {
       dx = (dx / length) * STICK_RADIUS;
       dy = (dy / length) * STICK_RADIUS;
     }
-    this.knob.style.transform = `translate(${dx}px, ${dy}px)`;
-    this.touch.stickX = dx / STICK_RADIUS;
-    this.touch.stickY = -dy / STICK_RADIUS;
+    if (this.classic) {
+      // Classic steering only uses the horizontal axis.
+      this.knob.style.transform = `translate(${dx}px, 0)`;
+      this.touch.steer = dx / STICK_RADIUS;
+    } else {
+      this.knob.style.transform = `translate(${dx}px, ${dy}px)`;
+      this.touch.stickX = dx / STICK_RADIUS;
+      this.touch.stickY = -dy / STICK_RADIUS;
+    }
     this.touch.active = true;
   }
 
@@ -125,6 +174,7 @@ export class TouchControls {
     this.stickPointer = null;
     this.touch.stickX = 0;
     this.touch.stickY = 0;
+    this.touch.steer = 0;
     this.knob.style.transform = '';
     this.base.classList.remove('is-active');
     this.base.style.left = '';

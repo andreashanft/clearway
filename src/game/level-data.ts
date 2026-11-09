@@ -39,6 +39,12 @@ export interface LevelDefinition {
   readonly tnt?: readonly { readonly pos: GroundPoint }[];
   /** The brief's route distance for each obstacle, keyed by building id or group. */
   readonly targets?: Readonly<Record<string, number>>;
+  /** One-line goal shown on the briefing screen. */
+  readonly description?: string;
+  /** Hints shown in the HUD: `start`, or an obstacle id when it becomes the next one. */
+  readonly hints?: Readonly<Record<string, string>>;
+  /** Tips on the fail screen, keyed by the obstacle the Hauler hit. */
+  readonly tips?: Readonly<Record<string, string>>;
 }
 
 // Level definitions are `<id>.json`; dotted names such as `<id>.props.json` are assets.

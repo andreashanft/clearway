@@ -145,6 +145,7 @@ export class LevelSession {
       this.obstacles.every((o) => o.cleared)
     ) {
       this.clearTime = this.elapsed;
+      this.bus.emit('path:cleared', { seconds: this.elapsed });
       this.bannerLeft = PATH_CLEAR_BANNER;
       this.hauler.headForSafeZone();
       this.setPhase('pathClear');
@@ -164,6 +165,11 @@ export class LevelSession {
     this.setPhase('results');
     const stats = this.stats;
     this.bus.emit('session:results', { stats, medal: medalFor(stats) });
+  }
+
+  /** Results were shown, and the player chose to keep exploring. */
+  resumeFreeRoam(): void {
+    if (this.phase === 'results') this.setPhase('freeRoam');
   }
 
   private maybeStall(): void {

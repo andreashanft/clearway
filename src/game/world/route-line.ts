@@ -21,17 +21,15 @@ const PATTERN_LENGTH = 4;
 const LIFT = 0.12;
 const ALARM = '#FF3D5A';
 
-/** Red chevrons pointing along the route: colour plus shape, readable without colour. */
-function chevronTexture(): CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 32;
+/** Draws the route pattern: chevrons (colour plus shape) or plain dashes. */
+function drawPattern(canvas: HTMLCanvasElement, chevrons: boolean): void {
   const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.clearRect(0, 0, 128, 32);
-    ctx.fillStyle = ALARM;
-    ctx.beginPath();
+  if (!ctx) return;
+  ctx.clearRect(0, 0, 128, 32);
+  ctx.fillStyle = ALARM;
+  if (chevrons) {
     // One chevron per repeat, pointing towards +u (the direction of travel).
+    ctx.beginPath();
     ctx.moveTo(20, 2);
     ctx.lineTo(64, 16);
     ctx.lineTo(20, 30);
@@ -39,7 +37,17 @@ function chevronTexture(): CanvasTexture {
     ctx.closePath();
     ctx.fill();
     ctx.fillRect(74, 13, 36, 6);
+  } else {
+    ctx.fillRect(8, 11, 70, 10);
   }
+}
+
+/** Red chevrons pointing along the route: colour plus shape, readable without colour. */
+function chevronTexture(): CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 32;
+  drawPattern(canvas, true);
   const texture = new CanvasTexture(canvas);
   texture.colorSpace = SRGBColorSpace;
   texture.wrapS = RepeatWrapping;
@@ -227,6 +235,12 @@ export class RouteLine {
       // Only the first member of a group carries the number.
       label.visible = index === 0;
     });
+  }
+
+  /** Switches between chevrons and a plain dashed line. */
+  setPattern(chevrons: boolean): void {
+    drawPattern(this.texture.image, chevrons);
+    this.texture.needsUpdate = true;
   }
 
   /** Hides the outline and marker of a cleared obstacle. */
