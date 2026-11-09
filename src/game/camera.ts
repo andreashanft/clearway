@@ -22,6 +22,8 @@ function presetDistance(index: number): number {
   return distanceForSpan(ZOOM_PRESETS[index] ?? ZOOM_PRESETS[DEFAULT_ZOOM]);
 }
 
+/** How far the focus moves towards a point of interest. */
+const INTEREST_PULL = 0.42;
 /** Seconds of travel the camera looks ahead of a moving vehicle. */
 const LOOK_AHEAD_SECONDS = 0.9;
 
@@ -53,6 +55,7 @@ export class FollowCamera {
   private zoomIndex: number = DEFAULT_ZOOM;
   private distanceCurrent = presetDistance(DEFAULT_ZOOM);
   private placed = false;
+  private interest: Vector3 | null = null;
 
   /** Current (smoothed) yaw of the camera rig; 0 looks north. */
   get yaw(): number {
@@ -89,6 +92,11 @@ export class FollowCamera {
     this.zoomIndex = Math.max(0, Math.min(ZOOM_PRESETS.length - 1, this.zoomIndex + step));
   }
 
+  /** Keeps a second point in frame alongside the target, or stops when given null. */
+  setInterest(point: Vector3 | null): void {
+    this.interest = point;
+  }
+
   /** Jumps straight to a target with no smoothing, for level starts and respawns. */
   snapTo(target: Vector3): void {
     this.focus.copy(target);
@@ -117,7 +125,12 @@ export class FollowCamera {
     this.lead.lerp(this.tmp, smoothing(1.8, dt));
 
     this.tmp.copy(target).add(this.lead);
-    this.focus.lerp(this.tmp, smoothing(9, dt));
+    // Nudge towards a point of interest (the Hauler near impact) if it is close enough.
+    if (this.interest) {
+      const gap = Math.hypot(this.interest.x - target.x, this.interest.z - target.z);
+      if (gap < this.viewSpan * 1.2) this.tmp.lerp(this.interest, INTEREST_PULL);
+    }
+    this.focus.lerp(this.tmp, smoothing(this.interest ? 3 : 9, dt));
     this.applyTransform();
   }
 

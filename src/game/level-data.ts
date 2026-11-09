@@ -37,6 +37,8 @@ export interface LevelDefinition {
   readonly vehicles: readonly VehicleSpawn[];
   readonly buildings?: readonly BuildingDefinition[];
   readonly tnt?: readonly { readonly pos: GroundPoint }[];
+  /** The brief's route distance for each obstacle, keyed by building id or group. */
+  readonly targets?: Readonly<Record<string, number>>;
 }
 
 // Level definitions are `<id>.json`; dotted names such as `<id>.props.json` are assets.

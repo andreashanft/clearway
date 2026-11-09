@@ -1,0 +1,396 @@
+.cw-hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: var(--cw-font-body);
+  color: var(--cw-ink);
+}
+
+.cw-hud > * {
+  pointer-events: none;
+}
+
+.cw-hud [hidden] {
+  display: none !important;
+}
+
+/* Counters, top left. */
+.cw-hud__counters {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  left: calc(14px + env(safe-area-inset-left));
+  display: flex;
+  gap: var(--cw-space-2);
+}
+
+.cw-hud__counter {
+  height: 44px;
+  padding: 4px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: var(--cw-glass);
+  border: 1px solid var(--cw-line);
+}
+
+.cw-hud__label {
+  font-family: var(--cw-font-mono);
+  font-size: 9px;
+  color: var(--cw-muted);
+  letter-spacing: 0.04em;
+}
+
+.cw-hud__value {
+  font-family: var(--cw-font-display);
+  font-weight: 800;
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* Route bar, top centre. */
+.cw-hud__route {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  left: 50%;
+  width: min(320px, 46vw);
+  transform: translateX(-50%);
+  padding: 7px 14px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--cw-glass-strong);
+  border: 1px solid var(--cw-line);
+  transition:
+    border-color var(--cw-normal) var(--cw-ease),
+    box-shadow var(--cw-normal) var(--cw-ease);
+  --tone: var(--cw-ink);
+}
+
+.cw-hud__route[data-urgency='amber'] {
+  --tone: var(--cw-amber);
+  border-color: rgb(255 154 46 / 0.45);
+  box-shadow: 0 0 20px rgb(255 154 46 / 0.2);
+}
+
+.cw-hud__route[data-urgency='red'] {
+  --tone: var(--cw-alarm);
+  border-color: rgb(255 61 90 / 0.6);
+  box-shadow: 0 0 22px rgb(255 61 90 / 0.35);
+  animation: cw-pulse 0.6s var(--cw-ease) infinite alternate;
+}
+
+.cw-hud__route-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--cw-space-2);
+}
+
+.cw-hud__route-label {
+  font-family: var(--cw-font-mono);
+  font-size: 10px;
+  color: var(--cw-ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cw-hud__route-timer {
+  font-family: var(--cw-font-display);
+  font-weight: 900;
+  font-size: 30px;
+  line-height: 0.9;
+  color: var(--tone);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--tone) 60%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+
+.cw-hud__route-track {
+  position: relative;
+  height: 8px;
+  background: rgb(238 243 255 / 0.12);
+}
+
+.cw-hud__route-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  background: linear-gradient(90deg, var(--cw-alarm), var(--cw-amber));
+  box-shadow: 0 0 10px rgb(255 61 90 / 0.7);
+}
+
+.cw-hud__tick {
+  position: absolute;
+  top: -3px;
+  width: 3px;
+  height: 14px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--cw-ink);
+}
+
+.cw-hud__tick.is-cleared {
+  background: var(--cw-go);
+}
+
+/* Banners. */
+.cw-hud__banner {
+  position: absolute;
+  top: 38%;
+  left: 0;
+  right: 0;
+  padding: var(--cw-space-3) var(--cw-space-5);
+  text-align: center;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--cw-glass-strong) 20%,
+    var(--cw-glass-strong) 80%,
+    transparent
+  );
+  --tone: var(--cw-go);
+  animation: cw-banner-in var(--cw-normal) var(--cw-ease);
+}
+
+.cw-hud__banner[data-tone='signal'] {
+  --tone: var(--cw-signal);
+}
+
+.cw-hud__banner-title {
+  font-family: var(--cw-font-display);
+  font-weight: 900;
+  font-size: clamp(40px, 9vw, 72px);
+  line-height: 0.95;
+  color: var(--tone);
+  text-shadow: 0 0 28px color-mix(in srgb, var(--tone) 55%, transparent);
+}
+
+.cw-hud__banner-sub {
+  font-family: var(--cw-font-mono);
+  font-size: 12px;
+  color: var(--cw-ink-soft);
+  text-transform: uppercase;
+}
+
+/* Free roam. */
+.cw-hud__finish {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top));
+  right: calc(14px + env(safe-area-inset-right));
+  pointer-events: auto !important;
+}
+
+/* Fail and results panels. */
+.cw-hud__panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: min(440px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  transform: translate(-50%, -50%);
+  padding: var(--cw-space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--cw-space-4);
+  background: var(--cw-card);
+  border: 1px solid var(--cw-line);
+  box-shadow: 0 24px 60px rgb(0 0 0 / 0.45);
+  pointer-events: auto !important;
+  animation: cw-banner-in var(--cw-normal) var(--cw-ease);
+  --tone: var(--cw-ink);
+}
+
+.cw-hud__panel[data-tone='fail'] {
+  --tone: var(--cw-alarm);
+  border-color: rgb(255 61 90 / 0.5);
+}
+
+.cw-hud__panel[data-tone='gold'] {
+  --tone: var(--cw-gold);
+}
+
+.cw-hud__panel[data-tone='silver'] {
+  --tone: var(--cw-silver);
+}
+
+.cw-hud__panel[data-tone='bronze'] {
+  --tone: var(--cw-bronze);
+}
+
+.cw-hud__panel-title {
+  margin: 0;
+  font-family: var(--cw-font-display);
+  font-weight: 900;
+  font-size: 40px;
+  line-height: 0.9;
+  color: var(--tone);
+  text-shadow: 0 0 22px color-mix(in srgb, var(--tone) 50%, transparent);
+}
+
+.cw-hud__panel-body,
+.cw-hud__hint {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--cw-ink-soft);
+}
+
+.cw-hud__results {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--cw-space-3) var(--cw-space-5);
+  align-items: center;
+}
+
+.cw-hud__results .cw-hud__hint {
+  grid-column: 1 / -1;
+}
+
+.cw-hud__stats {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 4px var(--cw-space-4);
+}
+
+.cw-hud__stats dt {
+  font-family: var(--cw-font-mono);
+  font-size: 11px;
+  color: var(--cw-muted);
+  align-self: center;
+}
+
+.cw-hud__stats dd {
+  margin: 0;
+  font-family: var(--cw-font-display);
+  font-weight: 800;
+  font-size: 20px;
+}
+
+.cw-hud__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--cw-space-3);
+}
+
+/* Shared components (milestone 5 moves these into the screen kit). */
+.cw-button {
+  height: 48px;
+  min-width: 48px;
+  padding: 0 24px;
+  border: none;
+  font-family: var(--cw-font-display);
+  font-weight: 900;
+  font-size: 20px;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - var(--cw-cut)),
+    calc(100% - var(--cw-cut)) 100%,
+    0 100%
+  );
+  transition:
+    transform var(--cw-fast) var(--cw-ease),
+    filter var(--cw-fast) var(--cw-ease);
+}
+
+.cw-button:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+.cw-button:focus-visible {
+  outline: 2px solid var(--cw-signal);
+  outline-offset: 3px;
+}
+
+.cw-button--primary {
+  background: var(--cw-hazard);
+  color: var(--cw-ground);
+  box-shadow: 0 8px 22px rgb(255 210 63 / 0.35);
+}
+
+.cw-button--danger {
+  background: var(--cw-alarm);
+  color: var(--cw-ground);
+}
+
+.cw-button--ghost {
+  background:
+    linear-gradient(
+      315deg,
+      transparent 8.5px,
+      var(--cw-line-cut) 8.5px,
+      var(--cw-line-cut) 9.6px,
+      transparent 9.6px
+    ),
+    rgb(14 28 64 / 0.6);
+  border: 1px solid var(--cw-line-strong);
+  color: var(--cw-ink);
+}
+
+.cw-medal {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--cw-font-display);
+  font-weight: 900;
+  font-size: 34px;
+  color: var(--cw-ground);
+  background: var(--cw-panel);
+}
+
+.cw-medal--gold {
+  background: var(--cw-gold);
+  box-shadow: 0 0 28px rgb(255 200 61 / 0.6);
+}
+
+.cw-medal--silver {
+  background: var(--cw-silver);
+  box-shadow: 0 0 22px rgb(213 222 239 / 0.45);
+}
+
+.cw-medal--bronze {
+  background: var(--cw-bronze);
+}
+
+.cw-medal--none {
+  border: 2px dashed var(--cw-line-strong);
+  color: var(--cw-muted);
+}
+
+@keyframes cw-pulse {
+  to {
+    box-shadow: 0 0 32px rgb(255 61 90 / 0.55);
+  }
+}
+
+@keyframes cw-banner-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.cw-hud__panel {
+  animation-name: cw-panel-in;
+}
+
+@keyframes cw-panel-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cw-hud *,
+  .cw-hud {
+    animation: none !important;
+    transition: none !important;
+  }
+}

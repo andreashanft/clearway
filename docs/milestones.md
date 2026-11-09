@@ -112,3 +112,44 @@ Measured on a desktop browser with WebGPU: 24–35 draw calls and 15–20k trian
 - **The Bruiser's push mode halves its impact damage.** The brief names the action but not its effect. Push mode lifts the blade so it nudges crates instead of ramming them.
 - **Kiosk blast: 450 damage within 9 m.** The brief says "small radius". This size reaches the fence the level design says it damages.
 - **Buildings share one batched mesh and vehicles one vertex-attribute material.** Each intact or flattened building is a single draw; a vehicle is about five. A frame costs 15–35 draws and under 30k triangles on Hollow Creek.
+
+## Milestone 4: Hauler loop
+
+### What works
+
+- The Hauler: a long autonomous carrier with an armoured tractor unit, a caged reactor vessel with a pulsing red core and light, four corner beacons that strobe under 5 s to impact, rear hazard chevrons and twelve spinning wheels.
+- It runs as a kinematic body along the route spline at the level's speed, pitched to the terrain, and never steers or stops. A sensor ahead of the bumper fails the level on touching a building, vehicle or TNT crate. Rubble never counts.
+- Route obstacles come from sweeping the sensor's footprint along the route; twin buildings share one obstacle. The countdown to the next impact runs from the Hauler's nose.
+- The route shows as red chevrons that scroll at the Hauler's pace (shape plus colour, for colour-blind players), over a faint band as wide as the Hauler. Each obstacle has a red ground outline and a numbered floating marker that disappear when it is cleared.
+- The level flow: a 5 s start delay, then clearing, "Path clear" (the Hauler hurries to the safe zone), free roam with a Finish button, and Results with the medal and what silver or gold still need.
+- Failure: the Hauler explodes (damaging everything nearby), the game plays 2.2 s of slow motion, and the "Hauler destroyed" panel offers Retry and Quit.
+- Bronze, silver and gold rules from the brief, with tests.
+- Steering assist: stick directions within 25° of the route are eased onto it near the road.
+- Camera nudge: under 5 s to impact, the camera pulls towards the Hauler to keep both in view.
+- Easy-mode Hauler stall (8 s, once per level) is implemented; Settings turns it on in milestone 5.
+- Retry and Next restart with a fresh physics world.
+- Debug tools under `?debug`: level select, invincible Hauler, collider wireframes, a session readout, Finish free roam and Print arrivals.
+- `node scripts/level-report.ts <level> [--fix]` prints each obstacle's arrival against the brief and can slide obstacles along the route to match. A test fails if any level drifts more than ±10%. Hollow Creek now matches exactly: 0:30, 0:50, 1:10, 1:50, 2:10 and 2:30.
+
+### Stubbed
+
+- The HUD and panels are functional placeholders on the design tokens; milestone 5 replaces them with the designed screens, a pause menu, the Hauler pointer and the mini-map.
+- Beacons and the relay dish arrive in milestone 7; until then they count as complete for medals.
+- Best times and medals aren't saved yet (milestone 5).
+- The short replay after a failure and hit-stop arrive in milestone 7.
+
+### How to test
+
+1. Run `npm run dev`. The Hauler waits 5 s, then rolls; the route bar counts down to the tool shed.
+2. Do nothing: at 0:35 the Hauler hits the tool shed, explodes in slow motion and the fail panel appears. Choose **RETRY**.
+3. Clear all six obstacles in time (the stone barn needs a TNT crate). "PATH CLEAR" plays, then free roam starts.
+4. Flatten more buildings, then choose **FINISH** to see the medal.
+5. With `?debug`, tick **Invincible Hauler** to practise, or choose **Print arrivals** to log arrival times.
+
+### Deviations
+
+- **Arrival times count from when the Hauler starts rolling.** They exclude the 5 s start delay, as the brief's tables do (90 m at 3 m/s is 0:30).
+- **A route distance is where the Hauler's nose meets the obstacle.** The level files place buildings so the first contact happens at the brief's distance.
+- **Only the front sensor fails the level.** Brushing the Hauler's side pushes your vehicle away instead. The brief puts the sensor "slightly ahead of its bumper".
+- **After "Path clear" the Hauler speeds up 2.5×** to reach the safe zone while the banner plays.
+- **Fixed in milestone 3's blasts:** explosions now push bodies away. Applying impulses inside Rapier's shape query left the world borrowed, so the push silently did nothing and the world couldn't be freed. A regression test covers it.

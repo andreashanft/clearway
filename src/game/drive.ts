@@ -88,6 +88,27 @@ export class PointToDrive {
   }
 }
 
+/** Stick directions within this angle of the route are eased onto it. */
+export const ASSIST_ANGLE = 25 * DEG;
+/** How far the target heading moves towards the route (0 = none, 1 = snap). */
+export const ASSIST_STRENGTH = 0.55;
+
+/**
+ * Steering assist: when the requested heading is close to the route's direction (either
+ * way along it), ease it onto the route so driving along the road needs less precision.
+ */
+export function assistHeading(target: number, routeHeading: number): number {
+  for (const along of [routeHeading, routeHeading + Math.PI]) {
+    const diff = wrapAngle(target - along);
+    if (Math.abs(diff) < ASSIST_ANGLE) {
+      // Full pull near the route direction, fading out towards the edge of the cone.
+      const weight = ASSIST_STRENGTH * (1 - Math.abs(diff) / ASSIST_ANGLE);
+      return wrapAngle(target - diff * weight);
+    }
+  }
+  return target;
+}
+
 function clampUnit(v: number): number {
   return Math.max(-1, Math.min(1, v));
 }

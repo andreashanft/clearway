@@ -116,6 +116,14 @@ export class Route {
     return { along, offset: best };
   }
 
+  /** Direction of travel (heading about +y) within `radius` of (x, z), or null. */
+  headingNear(x: number, z: number, radius: number): number | null {
+    const { along, offset } = this.project(x, z);
+    if (offset > radius) return null;
+    const s = this.sampleAt(along);
+    return Math.atan2(s.dx, s.dz);
+  }
+
   /** Evenly spaced points along the route, for drawing it. */
   points(spacing: number): RouteSample[] {
     const out: RouteSample[] = [];

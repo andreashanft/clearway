@@ -42,15 +42,15 @@
       "id": "tool-shed",
       "style": "shed",
       "strength": "shed",
-      "pos": [-138.8, 110.5],
+      "pos": [-135.4, 108.1],
       "size": [6, 3.8, 5],
-      "yaw": 35
+      "yaw": 36
     },
     {
       "id": "farmhouse",
       "style": "house",
       "strength": "house",
-      "pos": [-94.2, 70.4],
+      "pos": [-89.4, 66],
       "size": [11, 8, 9],
       "yaw": 42
     },
@@ -58,9 +58,9 @@
       "id": "fuel-kiosk",
       "style": "kiosk",
       "strength": "shed",
-      "pos": [-43.8, 37.9],
+      "pos": [-39.4, 35.5],
       "size": [8, 4.6, 8],
-      "yaw": 29,
+      "yaw": 28,
       "explodes": true
     },
     {
@@ -75,7 +75,7 @@
       "id": "hay-barn",
       "style": "barn",
       "strength": "house",
-      "pos": [60.1, -21.8],
+      "pos": [66.2, -25.6],
       "size": [12, 7, 9],
       "yaw": 32
     },
@@ -83,7 +83,7 @@
       "id": "stone-barn",
       "style": "stone-barn",
       "strength": "concrete",
-      "pos": [112.2, -51.7],
+      "pos": [118.5, -55.7],
       "size": [13, 7.5, 10],
       "yaw": 32
     },
@@ -91,7 +91,7 @@
       "id": "silo-west",
       "style": "silo",
       "strength": "brick",
-      "pos": [158.9, -89.4],
+      "pos": [162.1, -91.9],
       "size": [6, 13, 6],
       "yaw": 38,
       "group": "twin-silos"
@@ -100,7 +100,7 @@
       "id": "silo-east",
       "style": "silo",
       "strength": "brick",
-      "pos": [164.5, -85.4],
+      "pos": [167.6, -87.9],
       "size": [6, 13, 6],
       "yaw": 38,
       "group": "twin-silos"
@@ -169,5 +169,13 @@
     {
       "pos": [144.2, -54.7]
     }
-  ]
+  ],
+  "targets": {
+    "tool-shed": 90,
+    "farmhouse": 150,
+    "fuel-kiosk": 210,
+    "hay-barn": 330,
+    "stone-barn": 390,
+    "twin-silos": 450
+  }
 }

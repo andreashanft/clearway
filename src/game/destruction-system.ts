@@ -1,9 +1,10 @@
-import type { Collider } from '@dimforge/rapier3d-compat';
+import type { Collider, RigidBody } from '@dimforge/rapier3d-compat';
 import { type Camera, type Scene, Vector3 } from 'three';
 import type { Physics } from '../engine/physics';
 import { explosionDamage, impactDamage } from './damage';
 import type { GameBus } from './events';
 import type { Effects } from './fx/effects';
+import type { Hauler } from './hauler/hauler';
 import type { LevelDefinition } from './level-data';
 import { type Building, Buildings } from './world/buildings';
 import type { Heightfield } from './world/heightfield';
@@ -15,7 +16,11 @@ import type { Vehicle } from './vehicles/vehicle';
 type Owner =
   | { readonly kind: 'building'; readonly building: Building }
   | { readonly kind: 'vehicle'; readonly vehicle: Vehicle }
-  | { readonly kind: 'tnt'; readonly crate: TntCrate };
+  | { readonly kind: 'tnt'; readonly crate: TntCrate }
+  | { readonly kind: 'hauler' };
+
+/** What hit the Hauler, for the fail message. */
+export type HaulerHit = 'building' | 'vehicle' | 'tnt' | 'explosion';
 
 /** Radius and damage of a fuel kiosk going up. */
 const KIOSK_RADIUS = 9;
@@ -44,6 +49,8 @@ export class DestructionSystem {
   private readonly lastHit = new Map<string, number>();
   private readonly pending: PendingExplosion[] = [];
   private time = 0;
+  private hauler: Hauler | null = null;
+  private onHaulerHit: ((cause: HaulerHit) => void) | null = null;
   private readonly tmp = new Vector3();
   private readonly hitPoint = new Vector3();
   private readonly hitDir = new Vector3();
@@ -96,6 +103,13 @@ export class DestructionSystem {
     }
   }
 
+  /** Watches the Hauler's sensor and blasts near it, and reports hits to `onHit`. */
+  watchHauler(hauler: Hauler, onHit: (cause: HaulerHit) => void): void {
+    this.hauler = hauler;
+    this.onHaulerHit = onHit;
+    this.registry.add(hauler.sensor, { kind: 'hauler' });
+  }
+
   addVehicle(vehicle: Vehicle): void {
     for (const collider of vehicle.colliders)
       this.registry.add(collider, { kind: 'vehicle', vehicle });
@@ -128,14 +142,21 @@ export class DestructionSystem {
       const a = this.registry.get(h1);
       const b = this.registry.get(h2);
       if (!a || !b) return;
+      if (a.kind === 'hauler' || b.kind === 'hauler') {
+        this.haulerTouched(a.kind === 'hauler' ? b : a);
+        return;
+      }
       const c1 = this.physics.world.getCollider(h1);
       const c2 = this.physics.world.getCollider(h2);
-      if (a.kind === 'vehicle' && b.kind === 'building')
+      if (a.kind === 'vehicle' && b.kind === 'building') {
         this.vehicleHit(a.vehicle, b.building, c1, c2);
-      else if (b.kind === 'vehicle' && a.kind === 'building')
+      } else if (b.kind === 'vehicle' && a.kind === 'building') {
         this.vehicleHit(b.vehicle, a.building, c2, c1);
-      else if (a.kind === 'vehicle' && b.kind === 'tnt') this.touchTnt(a.vehicle, b.crate);
-      else if (b.kind === 'vehicle' && a.kind === 'tnt') this.touchTnt(b.vehicle, a.crate);
+      } else if (a.kind === 'vehicle' && b.kind === 'tnt') {
+        this.touchTnt(a.vehicle, b.crate);
+      } else if (b.kind === 'vehicle' && a.kind === 'tnt') {
+        this.touchTnt(b.vehicle, a.crate);
+      }
     });
     this.buildings.afterStep();
     for (const crate of this.crates) if (!crate.exploded) crate.afterStep();
@@ -184,28 +205,39 @@ export class DestructionSystem {
       if (d < radius) crate.light(0.15 + d * 0.04);
     }
 
-    const kicked = new Set<number>();
+    // Collect first: changing bodies inside Rapier's query callback leaves the world
+    // borrowed, and it can no longer be freed.
+    const bodies = new Map<number, RigidBody>();
     world.intersectionsWithShape(
       at,
       { x: 0, y: 0, z: 0, w: 1 },
       new rapier.Ball(radius),
       (collider) => {
         const body = collider.parent();
-        if (!body || !body.isDynamic() || kicked.has(body.handle)) return true;
-        kicked.add(body.handle);
-        const t = body.translation();
-        this.tmp.set(t.x - at.x, t.y - at.y, t.z - at.z);
-        const d = this.tmp.length();
-        const falloff = Math.max(0, 1 - d / radius);
-        this.tmp.normalize();
-        this.tmp.y = Math.max(this.tmp.y, 0.45);
-        this.tmp.normalize().multiplyScalar(body.mass() * BLAST_KICK * falloff);
-        body.applyImpulse(this.tmp, true);
+        if (body?.isDynamic()) bodies.set(body.handle, body);
         return true;
       },
     );
+    for (const body of bodies.values()) {
+      const t = body.translation();
+      this.tmp.set(t.x - at.x, t.y - at.y, t.z - at.z);
+      const falloff = Math.max(0, 1 - this.tmp.length() / radius);
+      this.tmp.normalize();
+      this.tmp.y = Math.max(this.tmp.y, 0.45);
+      this.tmp.normalize().multiplyScalar(body.mass() * BLAST_KICK * falloff);
+      body.applyImpulse(this.tmp, true);
+    }
 
     this.props.knock(at.x, at.z, radius * 0.7, 0, 0);
+
+    const hauler = this.hauler;
+    if (
+      hauler &&
+      hauler.state !== 'destroyed' &&
+      hauler.worldPosition.distanceTo(at) < radius + 4
+    ) {
+      this.onHaulerHit?.('explosion');
+    }
   }
 
   dispose(): void {
@@ -214,6 +246,14 @@ export class DestructionSystem {
     this.scene.remove(this.buildings.mesh);
     this.buildings.dispose();
     this.registry.clear();
+    this.hauler = null;
+    this.onHaulerHit = null;
+  }
+
+  private haulerTouched(other: Owner): void {
+    if (other.kind === 'hauler') return;
+    if (other.kind === 'building' && other.building.destroyed) return;
+    this.onHaulerHit?.(other.kind);
   }
 
   private detonate(crate: TntCrate): void {

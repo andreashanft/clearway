@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ASSIST_ANGLE,
+  assistHeading,
   bearingToHeading,
   PointToDrive,
   REVERSE_ANGLE,
@@ -90,5 +92,20 @@ describe('PointToDrive', () => {
     const out = drive.update(0, NORTH + 10 * DEG, 1);
     expect(out.throttle).toBeLessThan(0);
     expect(out.steer).toBeGreaterThan(0);
+  });
+});
+
+describe('assistHeading', () => {
+  it('pulls a nearby heading towards the route, either way along it', () => {
+    const route = 1;
+    const eased = assistHeading(route + 0.1, route);
+    expect(Math.abs(eased - route)).toBeLessThan(0.1);
+    const backwards = assistHeading(route + Math.PI - 0.1, route);
+    expect(Math.abs(wrapAngle(backwards - (route + Math.PI)))).toBeLessThan(0.1);
+  });
+
+  it('leaves headings outside the assist cone alone', () => {
+    expect(assistHeading(1 + ASSIST_ANGLE + 0.05, 1)).toBeCloseTo(1 + ASSIST_ANGLE + 0.05);
+    expect(assistHeading(1 + Math.PI / 2, 1)).toBeCloseTo(1 + Math.PI / 2);
   });
 });

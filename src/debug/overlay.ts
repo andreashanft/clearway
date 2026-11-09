@@ -5,7 +5,8 @@ import type { Renderer } from '../engine/renderer';
 
 export interface DebugSources {
   readonly renderer: Renderer;
-  readonly physics: Physics;
+  /** The current physics world; it changes when a level restarts. */
+  readonly physics: () => Physics | null;
   readonly clock: FixedStepClock;
 }
 
@@ -23,6 +24,9 @@ export class DebugOverlay {
   private elapsed = 0;
   private worstFrame = 0;
   private readonly readouts: (() => string)[] = [];
+  private onTimeScale: (value: number) => void = (value) => {
+    this.sources.clock.timeScale = value;
+  };
 
   constructor(
     parent: HTMLElement,
@@ -47,7 +51,7 @@ export class DebugOverlay {
     parent.append(this.root);
 
     this.addSlider('Time scale', { min: 0, max: 2, step: 0.05, value: 1 }, (value) => {
-      this.sources.clock.timeScale = value;
+      this.onTimeScale(value);
     });
   }
 
@@ -60,7 +64,8 @@ export class DebugOverlay {
 
     const fps = this.frames / this.elapsed;
     const avgMs = (this.elapsed / this.frames) * 1000;
-    const { renderer, physics } = this.sources;
+    const { renderer } = this.sources;
+    const physics = this.sources.physics();
     const { drawCalls, triangles } = renderer.frameStats;
     const { width, height } = renderer.viewport;
 
@@ -68,13 +73,18 @@ export class DebugOverlay {
       `FPS     ${fps.toFixed(0).padStart(4)}   avg ${avgMs.toFixed(1)} ms  max ${(this.worstFrame * 1000).toFixed(1)} ms`,
       `GPU     ${renderer.backend.toUpperCase()}  ${width}×${height} @${renderer.pixelRatio.toFixed(2)}x`,
       `DRAW    ${drawCalls} calls  ${formatCount(triangles)} tris`,
-      `PHYSICS ${physics.lastStepMs.toFixed(2)} ms  ${physics.bodyCount} bodies`,
+      physics ? `PHYSICS ${physics.lastStepMs.toFixed(2)} ms  ${physics.bodyCount} bodies` : '',
       ...this.readouts.map((read) => read()).filter((line) => line.length > 0),
     ].join('\n');
 
     this.frames = 0;
     this.elapsed = 0;
     this.worstFrame = 0;
+  }
+
+  /** Replaces what the time-scale slider controls. */
+  setTimeScaleHandler(handler: (value: number) => void): void {
+    this.onTimeScale = handler;
   }
 
   /** Adds a line of live text, read every refresh. */

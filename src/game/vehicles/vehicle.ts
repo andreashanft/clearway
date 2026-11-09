@@ -8,7 +8,7 @@ import type { ControlFrame } from '../../engine/input/controls';
 import { COLLISION, WHEEL_RAY_GROUPS } from '../../engine/collision-groups';
 import { InterpolatedPose } from '../../engine/interpolation';
 import type { Physics } from '../../engine/physics';
-import { PointToDrive, stickToHeading, type DriveOutput } from '../drive';
+import { assistHeading, type DriveOutput, PointToDrive, stickToHeading } from '../drive';
 import type { VehicleType } from '../level-data';
 
 export interface WheelLayout {
@@ -106,6 +106,11 @@ export abstract class Vehicle {
   grounded = false;
   /** Velocity just before the latest physics step, for measuring impacts. */
   readonly preStepVelocity = new Vector3();
+  /**
+   * Steering assist: returns the route's heading near (x, z), or null when the vehicle
+   * isn't near the route or assist is off.
+   */
+  routeAssist: ((x: number, z: number) => number | null) | null = null;
   /** The current drive request after control mapping, for animation and debug. */
   drive: DriveOutput = { steer: 0, throttle: 0 };
   braking = false;
@@ -278,7 +283,10 @@ export abstract class Vehicle {
   private mapControls(frame: ControlFrame, cameraYaw: number): DriveOutput {
     const magnitude = Math.min(1, Math.hypot(frame.stickX, frame.stickY));
     if (magnitude > 0.01) {
-      const target = stickToHeading(frame.stickX, frame.stickY, cameraYaw);
+      let target = stickToHeading(frame.stickX, frame.stickY, cameraYaw);
+      const p = this.body.translation();
+      const routeHeading = this.routeAssist?.(p.x, p.z) ?? null;
+      if (routeHeading !== null) target = assistHeading(target, routeHeading);
       return this.pointDrive.update(this.heading, target, magnitude);
     }
     this.pointDrive.reset();

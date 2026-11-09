@@ -118,3 +118,34 @@ describe('Buildings', () => {
     expect(shed.distanceTo(10, 5)).toBeCloseTo(2);
   });
 });
+
+describe('DestructionSystem.explode', () => {
+  it('pushes nearby bodies away and leaves the world disposable', async () => {
+    const { DestructionSystem } = await import('../src/game/destruction-system');
+    const { Props } = await import('../src/game/world/props');
+    const { EventBus } = await import('../src/engine/events');
+    const { Scene } = await import('three');
+    const physics = new Physics(rapier);
+    const props = new Props({ props: [], water: [] }, flat);
+    const system = new DestructionSystem(
+      { buildings: [], tnt: [] } as never,
+      new Scene(),
+      physics,
+      flat,
+      props,
+      quietEffects,
+      new EventBus(),
+    );
+    const body = physics.world.createRigidBody(
+      rapier.RigidBodyDesc.dynamic().setTranslation(3, 1, 0),
+    );
+    physics.world.createCollider(rapier.ColliderDesc.ball(0.5), body);
+    physics.step(1 / 60);
+
+    system.explode(new Vector3(0, 1, 0), 8, 800);
+    expect(body.linvel().x).toBeGreaterThan(1);
+
+    system.dispose();
+    expect(() => physics.dispose()).not.toThrow();
+  });
+});
