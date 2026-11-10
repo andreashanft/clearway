@@ -14,9 +14,9 @@ const MAX_POPUPS = 8;
 const POPUP_MS = 1300;
 
 /**
- * The in-game HUD from the gameplay mocks: pause button and counters, the route bar with
- * its countdown and hint pill, the mini-map, the Hauler pointer, the path-clear banner,
- * free roam, and (with a keyboard) the vehicle card and key hints. It listens to game
+ * The in-game HUD: pause button and counters, the countdown to the next impact with the
+ * hint pill under it, the mini-map, the Hauler pointer, the path-clear banner, and (with
+ * a keyboard) the vehicle card and key hints. It listens to game
  * events and sends commands; it never touches the game directly.
  */
 export class Hud {
@@ -29,10 +29,8 @@ export class Hud {
   private readonly scoreStat = stat('SCORE', '0', 'hazard');
   private readonly popups = h('div', { class: 'cw-hud__popups', attrs: { 'aria-hidden': 'true' } });
   private readonly routePanel = h('div', { class: 'cw-hud__route cw-glass' });
-  private readonly routeLabel = h('div', { class: 'cw-hud__route-label', text: 'HAULER STARTING' });
+  private readonly routeLabel = h('div', { class: 'cw-hud__route-label', text: 'NEXT IMPACT' });
   private readonly routeTimer = h('div', { class: 'cw-hud__route-timer' });
-  private readonly routeFill = h('div', { class: 'cw-hud__route-fill' });
-  private readonly routeTrack = h('div', { class: 'cw-hud__route-track' }, this.routeFill);
   private readonly hintPill = h('div', { class: 'cw-hud__hint', attrs: { role: 'status' } });
   private readonly minimap = new Minimap();
   private readonly minimapBox = h('div', { class: 'cw-hud__minimap cw-glass' });
@@ -43,24 +41,16 @@ export class Hud {
   private readonly pointerLabel = h('span');
   private readonly banner = h('div', { class: 'cw-hud__banner', attrs: { role: 'status' } });
   private readonly bannerChip = chip('', 'go');
-  private readonly roam = h('div', { class: 'cw-hud__roam' });
-  private readonly roamText = h('span');
-  private readonly finish: HTMLButtonElement;
   private readonly vehicleCard = h('div', { class: 'cw-hud__vehicle' });
   private readonly vehicleName = h('div', { class: 'cw-hud__vehicle-name' });
   private readonly vehicleSpeed = h('div', { class: 'cw-label' });
   private readonly vehicleAction = h('div', { class: 'cw-hud__vehicle-action' });
   private readonly keys = h('div', { class: 'cw-hud__keys cw-glass' });
   private readonly context = h('div', { class: 'cw-hud__context' });
-  private readonly ticks = new Map<string, { element: HTMLElement; label: string }>();
   private readonly unsubscribe: (() => void)[] = [];
   private bannerLeft = 0;
   private hintLeft = 0;
   private buildingsTotal = 0;
-  private buildingsLeft = 0;
-  private beaconsTotal = 0;
-  private beaconsFound = 0;
-  private dishPending = false;
   private actionLabel = 'ACTION';
 
   constructor(parent: HTMLElement, bus: GameBus, commands: CommandBus) {
@@ -89,10 +79,7 @@ export class Hud {
       this.levelStat,
     );
 
-    this.routePanel.append(
-      h('div', { class: 'cw-hud__route-head' }, this.routeLabel, this.routeTimer),
-      this.routeTrack,
-    );
+    this.routePanel.append(this.routeLabel, this.routeTimer);
     const top = h('div', { class: 'cw-hud__top' }, this.routePanel, this.hintPill);
     this.hintPill.hidden = true;
 
@@ -120,18 +107,11 @@ export class Hud {
           'div',
           { class: 'cw-hud__banner-sub' },
           this.bannerChip,
-          h('span', { text: 'The Hauler is rolling to the safe zone.' }),
+          h('span', { text: 'Flatten what you can before the Hauler leaves.' }),
         ),
       ),
     );
     this.banner.hidden = true;
-
-    this.roam.append(h('span', { class: 'cw-hud__roam-title', text: 'FREE ROAM' }), this.roamText);
-    this.roam.hidden = true;
-    this.finish = button('Finish level', 'secondary', () => commands.emit('finish', undefined), {
-      class: 'cw-hud__finish',
-    });
-    this.finish.hidden = true;
 
     this.vehicleCard.append(
       h('div', { class: 'cw-hud__vehicle-head' }, this.vehicleName, this.vehicleSpeed),
@@ -155,8 +135,6 @@ export class Hud {
       this.minimapBox,
       this.pointer,
       this.banner,
-      this.roam,
-      this.finish,
       this.vehicleCard,
       this.keys,
       this.context,
@@ -165,15 +143,7 @@ export class Hud {
     parent.append(this.element);
 
     this.unsubscribe.push(
-      bus.on('session:obstacles', ({ obstacles, routeLength }) => {
-        for (const tick of this.ticks.values()) tick.element.remove();
-        this.ticks.clear();
-        for (const o of obstacles) {
-          const element = h('div', { class: 'cw-hud__tick', attrs: { title: o.label } });
-          element.style.left = `${(o.distance / routeLength) * 100}%`;
-          this.routeTrack.append(element);
-          this.ticks.set(o.id, { element, label: o.label });
-        }
+      bus.on('session:obstacles', ({ obstacles }) => {
         setStat(this.obstaclesStat, `${obstacles.length} LEFT`);
       }),
       bus.on('map:setup', (setup) => {
@@ -181,47 +151,36 @@ export class Hud {
       }),
       bus.on('hud:frame', (frame) => {
         this.minimap.draw(frame);
-        this.placePointer(frame.hauler);
+        this.placePointer(frame);
         if (frame.player) {
           this.vehicleSpeed.textContent = `${Math.abs(Math.round(frame.player.speed * 3.6))} KM/H`;
         }
       }),
       bus.on('hauler:status', (s) => {
-        this.routeFill.style.width = `${Math.min(100, (s.distance / s.routeLength) * 100)}%`;
         this.routePanel.dataset.urgency = s.urgency;
         setStat(this.obstaclesStat, `${s.obstaclesLeft} LEFT`);
         setStat(
           this.buildingsStat,
           `${this.buildingsTotal - s.buildingsLeft} / ${this.buildingsTotal}`,
         );
-        this.buildingsLeft = s.buildingsLeft;
-        this.updateRoamText();
         if (s.countdown !== null && s.next !== null) {
           this.routeLabel.textContent = `NEXT IMPACT · ${s.next.toUpperCase()}`;
           this.routeTimer.textContent = formatClock(s.countdown);
+        } else if (this.element.dataset.phase === 'pathClear') {
+          // The path is clear: what counts down now is the rest of the run.
+          this.routeLabel.textContent = 'PATH CLEAR · TIME LEFT';
+          this.routeTimer.textContent = formatClock(s.timeLeft);
         }
-        for (const tick of this.ticks.values()) {
-          tick.element.classList.toggle('is-next', tick.label === s.next);
-        }
-      }),
-      bus.on('obstacle:cleared', ({ id }) => {
-        this.ticks.get(id)?.element.classList.add('is-cleared');
       }),
       bus.on('session:phase', ({ phase }) => {
         this.element.dataset.phase = phase;
         if (phase === 'pathClear') {
-          this.routeLabel.textContent = 'PATH CLEAR';
-          this.routeTimer.textContent = '';
+          this.routeLabel.textContent = 'PATH CLEAR · TIME LEFT';
           this.banner.hidden = false;
           this.bannerLeft = 3;
-        }
-        if (phase === 'freeRoam' || phase === 'pathClear') {
           this.obstaclesStat.hidden = true;
           this.buildingsStat.hidden = false;
-          this.roam.hidden = false;
-          this.finish.hidden = false;
         }
-        if (phase === 'freeRoam') this.routePanel.hidden = true;
       }),
       bus.on('path:cleared', ({ seconds }) => {
         this.bannerChip.textContent = `CLEARED IN ${formatClock(seconds)}`;
@@ -231,28 +190,18 @@ export class Hud {
         if (context) this.context.replaceChildren(chip('E', 'hazard'), ` ${context.label}`);
       }),
       bus.on('pickup:beacon', ({ found, total }) => {
-        this.beaconsFound = found;
         setStat(this.beaconsStat, `${found} / ${total}`);
         // Restart the flash on the next frame, so back-to-back beacons each flash.
         this.beaconsStat.classList.remove('is-flash');
         requestAnimationFrame(() => this.beaconsStat.classList.add('is-flash'));
-        if (found === total) this.showHint('Every beacon is lit.');
-        this.updateRoamText();
       }),
       bus.on('score', (score) => {
         setStat(this.scoreStat, formatScore(score.total));
         // Scenery adds up quietly; buildings, pickups and the path clear pop up.
         if (score.kind !== 'prop' && score.onScreen) this.popUp(score);
       }),
-      bus.on('pickup:dish', () => {
-        this.dishPending = false;
-        this.updateRoamText();
-      }),
       bus.on('hint', ({ text }) => {
         this.showHint(text);
-      }),
-      bus.on('hauler:stalled', ({ seconds }) => {
-        this.showHint(`The Hauler stalled. ${seconds} seconds of grace.`);
       }),
       bus.on('tnt:lit', ({ seconds }) => {
         this.showHint(`Fuse lit: ${seconds.toFixed(0)} seconds. Push it into place and back off.`);
@@ -292,26 +241,8 @@ export class Hud {
     }, POPUP_MS);
   }
 
-  /** What is left for gold, in the free-roam strip. */
-  private updateRoamText(): void {
-    const left: string[] = [];
-    const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
-    if (this.buildingsLeft > 0) left.push(plural(this.buildingsLeft, 'building'));
-    const beaconsLeft = this.beaconsTotal - this.beaconsFound;
-    if (beaconsLeft > 0) left.push(plural(beaconsLeft, 'beacon'));
-    if (this.dishPending) left.push('the relay dish');
-    this.roamText.textContent =
-      left.length === 0
-        ? 'No timer. Everything is done: finish for gold.'
-        : `No timer. For gold: ${left.join(', ')}.`;
-  }
-
   /** Sets up for a fresh attempt at a level. */
-  reset(levelName: string, buildingsTotal: number, beaconsTotal = 0, dishExists = false): void {
-    this.beaconsTotal = beaconsTotal;
-    this.beaconsFound = 0;
-    this.buildingsLeft = buildingsTotal;
-    this.dishPending = dishExists;
+  reset(levelName: string, buildingsTotal: number, beaconsTotal = 0): void {
     this.beaconsStat.hidden = beaconsTotal === 0;
     setStat(this.beaconsStat, `0 / ${beaconsTotal}`);
     setStat(this.scoreStat, '0');
@@ -320,13 +251,10 @@ export class Hud {
     this.obstaclesStat.hidden = false;
     this.buildingsStat.hidden = true;
     this.banner.hidden = true;
-    this.roam.hidden = true;
-    this.finish.hidden = true;
     this.hintPill.hidden = true;
     this.pointer.hidden = true;
-    this.routeLabel.textContent = 'HAULER STARTING';
+    this.routeLabel.textContent = 'NEXT IMPACT';
     this.routeTimer.textContent = '';
-    this.routeFill.style.width = '0%';
     this.routePanel.dataset.urgency = 'calm';
     this.buildingsTotal = buildingsTotal;
     setStat(this.levelStat, levelName.toUpperCase());
@@ -369,11 +297,10 @@ export class Hud {
   }
 
   /** An arrow at the screen edge pointing at the Hauler when it is out of view. */
-  private placePointer(
-    hauler: { screenX: number; screenY: number; onScreen: boolean; distance: number } | null,
-  ): void {
-    if (!hauler || hauler.onScreen || this.element.dataset.phase === 'freeRoam') {
+  private placePointer({ hauler, player, cameraYaw }: GameEvents['hud:frame']): void {
+    if (!hauler || hauler.onScreen) {
       this.pointer.hidden = true;
+      this.pointer.classList.remove('is-tracking');
       return;
     }
     const rect = this.element.getBoundingClientRect();
@@ -381,23 +308,41 @@ export class Hud {
     const cy = rect.height / 2;
     let dx = hauler.screenX - cx;
     let dy = hauler.screenY - cy;
+    if (player) {
+      // Point along the ground from the player to the Hauler, turned into the view. The
+      // Hauler's projected position is no use here: it mirrors once it is behind the camera.
+      const wx = hauler.x - player.x;
+      const wz = hauler.z - player.z;
+      dx = wx * Math.cos(cameraYaw) - wz * Math.sin(cameraYaw);
+      dy = wx * Math.sin(cameraYaw) + wz * Math.cos(cameraYaw);
+    }
     const len = Math.hypot(dx, dy) || 1;
     dx /= len;
     dy /= len;
-    // Push the arrow out to the edge of an inset rectangle.
-    // Keep clear of the corner panels: more inset on bigger screens.
-    const marginX = Math.max(10, cx - Math.max(90, rect.width * 0.14));
-    const marginY = Math.max(10, cy - Math.max(70, rect.height * 0.2));
-    const t = Math.min(
-      Math.abs(marginX / (Math.abs(dx) > 1e-6 ? dx : 1e-6)),
-      Math.abs(marginY / (Math.abs(dy) > 1e-6 ? dy : 1e-6)),
-    );
-    this.pointer.style.transform = `translate(${cx + dx * t}px, ${cy + dy * t}px) translate(-50%, -50%)`;
+    // Push the arrow out to the edge of a rectangle that stays clear of the panels along
+    // the top and, with touch controls, of the stick and buttons along the bottom.
+    const touch = this.element.dataset.input === 'touch';
+    const portrait = rect.height > rect.width;
+    const insetX = Math.max(100, rect.width * 0.14);
+    const insetTop = portrait ? 230 : rect.height < 340 ? 100 : rect.height < 600 ? 128 : 215;
+    const insetBottom = touch ? (portrait ? 240 : 180) : Math.max(70, rect.height * 0.2);
+    // On the shortest views the two insets meet; the arrow then slides along one line.
+    let top = insetTop;
+    let bottom = rect.height - insetBottom;
+    if (bottom < top) top = bottom = (top + bottom) / 2;
+    // Send the arrow far out along the bearing, then pull it back inside the rectangle:
+    // it slides into a corner instead of sitting on top of the player.
+    const far = rect.width + rect.height;
+    const px = Math.max(insetX, Math.min(rect.width - insetX, cx + dx * far));
+    const py = Math.max(top, Math.min(bottom, cy + dy * far));
+    this.pointer.style.transform = `translate(${px}px, ${py}px) translate(-50%, -50%)`;
     const svg = this.pointer.querySelector('svg');
     // The arrow icon points to the upper right; rotate it towards the Hauler.
     if (svg) svg.style.transform = `rotate(${(Math.atan2(dy, dx) * 180) / Math.PI + 45}deg)`;
     this.pointerLabel.textContent = `HAULER ${Math.round(hauler.distance)} M`;
     this.pointer.hidden = false;
+    // Positions arrive ten times a second; from the second one on, glide between them.
+    requestAnimationFrame(() => this.pointer.classList.add('is-tracking'));
   }
 }
 

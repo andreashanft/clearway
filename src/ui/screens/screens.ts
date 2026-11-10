@@ -39,7 +39,7 @@ export interface TitleActions {
 }
 
 export function titleScreen(
-  info: { version: string; levels: number; medals: number; maxMedals: number; vehicles: number },
+  info: { version: string; levels: number; cleared: number },
   actions: TitleActions,
 ): Screen {
   const element = h(
@@ -55,10 +55,6 @@ export function titleScreen(
         chip(`${info.levels} LEVELS`, 'hazard'),
       ),
       h('h1', { class: 'cw-hero' }, 'Clear', h('br'), 'the ', h('em', { text: 'path.' })),
-      h('p', {
-        class: 'cw-body cw-title__lead',
-        text: "The Hauler can't stop and can't steer. You have four machines and about three minutes.",
-      }),
       h(
         'div',
         { class: 'cw-title__actions' },
@@ -69,15 +65,8 @@ export function titleScreen(
     ),
     h(
       'div',
-      { class: 'cw-title__status' },
-      h('span', { class: 'cw-dot' }),
-      'HAULER EN ROUTE · HOLLOW CREEK',
-    ),
-    h(
-      'div',
       { class: 'cw-title__counters' },
-      stat('VEHICLES', String(info.vehicles)),
-      stat('MEDALS', `${info.medals} / ${info.maxMedals}`, 'hazard'),
+      stat('CLEARED', `${info.cleared} / ${info.levels}`, 'hazard'),
     ),
   );
   return { element };
@@ -97,7 +86,7 @@ export interface CampaignEntryView {
 export function campaignScreen(
   entries: readonly CampaignEntryView[],
   totals: { medals: number; maxMedals: number; cleared: number },
-  actions: { back: () => void; brief: (id: string) => void },
+  actions: { back: () => void; start: (id: string) => void },
 ): Screen {
   const cards = entries.map((entry) => {
     const { level, record } = entry;
@@ -122,11 +111,11 @@ export function campaignScreen(
         actionsRow.append(chip(`BEST ${formatClock(record.bestTime)}`, 'hazard'));
       if (record.bestScore) actionsRow.append(chip(`${formatScore(record.bestScore)} PTS`));
       actionsRow.append(
-        button('Replay', 'ghost', () => actions.brief(level.id), { size: 'small' }),
+        button('Replay', 'ghost', () => actions.start(level.id), { size: 'small' }),
       );
     } else {
       actionsRow.append(
-        button('BRIEFING', 'primary', () => actions.brief(level.id), { size: 'small' }),
+        button('START', 'primary', () => actions.start(level.id), { size: 'small' }),
       );
     }
 
@@ -185,83 +174,7 @@ export function campaignScreen(
   return { element };
 }
 
-/* Briefing --------------------------------------------------------------- */
-
-export interface BriefingInfo {
-  readonly level: CampaignLevel;
-  readonly description: string;
-  readonly firstHit: number;
-  readonly best: Medal | null;
-  readonly vehicles: readonly string[];
-  readonly tnt: number;
-}
-
-export function briefingScreen(
-  info: BriefingInfo,
-  progress: () => number,
-  actions: { back: () => void; skip: () => void; start: () => void },
-): Screen {
-  const fill = h('div');
-  const skip = button('Skip', 'ghost', actions.skip, { size: 'small' });
-  const element = h(
-    'section',
-    { class: 'cw-screen cw-briefing', attrs: { 'aria-label': `${info.level.name} briefing` } },
-    h(
-      'div',
-      { class: 'cw-briefing__flyover' },
-      button('', 'ghost', actions.back, {
-        icon: icon('back'),
-        ariaLabel: 'Back to campaign',
-        class: 'cw-back',
-      }),
-      h(
-        'span',
-        { class: 'cw-chip cw-chip--alarm', style: { height: '30px', gap: '8px' } },
-        h('span', { class: 'cw-dot' }),
-        'ROUTE FLY-OVER',
-      ),
-    ),
-    h('div', { class: 'cw-briefing__progress' }, h('div', { class: 'cw-progress' }, fill), skip),
-    h(
-      'aside',
-      { class: 'cw-briefing__panel' },
-      h(
-        'div',
-        { class: 'cw-title__tags' },
-        chip(`LEVEL ${String(info.level.index).padStart(2, '0')}`),
-        chip(info.level.setting.toUpperCase()),
-      ),
-      h('h1', { class: 'cw-heading', text: info.level.name }),
-      h('p', { class: 'cw-body', text: info.description, style: { 'font-size': '13px' } }),
-      h(
-        'div',
-        { class: 'cw-briefing__stats' },
-        h('div', { class: 'cw-card' }, stat('ROUTE', `${info.level.routeLength} M`)),
-        h('div', { class: 'cw-card' }, stat('FIRST HIT', formatClock(info.firstHit), 'hazard')),
-        h(
-          'div',
-          { class: 'cw-card' },
-          stat('BEST', info.best ? info.best.toUpperCase() : '–', info.best ? undefined : 'muted'),
-        ),
-      ),
-      h(
-        'div',
-        { class: 'cw-briefing__vehicles' },
-        ...info.vehicles.map((v) => h('span', { text: v })),
-        info.tnt > 0 ? h('span', { text: `TNT ×${info.tnt}` }) : null,
-      ),
-      button('START', 'primary', actions.start),
-    ),
-  );
-  return {
-    element,
-    update() {
-      const p = Math.min(1, progress());
-      fill.style.width = `${p * 100}%`;
-      skip.hidden = p >= 1;
-    },
-  };
-}
+/* 3-2-1 countdown -------------------------------------------------------- */
 
 export function countdownScreen(): Screen & { show: (n: number) => void } {
   const element = h('section', {
@@ -282,6 +195,8 @@ export function countdownScreen(): Screen & { show: (n: number) => void } {
 
 export interface PauseInfo {
   countdown: number | null;
+  /** Seconds until the Hauler leaves the level. */
+  timeLeft: number;
   obstaclesCleared: number;
   obstaclesTotal: number;
   beacons: string;
@@ -325,7 +240,9 @@ export function pauseScreen(
   const update = (): void => {
     const i = info();
     impact.textContent =
-      i.countdown === null ? 'FREE ROAM' : `${formatClock(i.countdown)} TO IMPACT`;
+      i.countdown === null
+        ? `PATH CLEAR · ${formatClock(i.timeLeft)} LEFT`
+        : `${formatClock(i.countdown)} TO IMPACT`;
     stats.replaceChildren(
       stat('OBSTACLES', `${i.obstaclesCleared} / ${i.obstaclesTotal}`),
       stat('BEACONS', i.beacons, 'signal'),
@@ -390,7 +307,7 @@ export function resultsScreen(
     obstaclesTotal: number;
     hasNext: boolean;
   },
-  actions: { keepExploring: () => void; replay: () => void; next: () => void },
+  actions: { replay: () => void; next: () => void },
 ): Screen {
   const { stats, medal } = info;
   const bar = (
@@ -497,7 +414,6 @@ export function resultsScreen(
       h(
         'div',
         { class: 'cw-results__actions' },
-        button('Keep exploring', 'ghost', actions.keepExploring),
         button('Replay', 'secondary', actions.replay),
         button(info.hasNext ? 'NEXT LEVEL' : 'CAMPAIGN', 'primary', actions.next),
       ),
@@ -609,7 +525,7 @@ export function settingsScreen(
           toggle('Auto-skid (Fishtail)', 'Holds the skid angle for you', s.autoSkid, (on) =>
             change({ autoSkid: on }),
           ),
-          toggle('Easy mode', 'The Hauler stalls once for 8 seconds per level', s.easyMode, (on) =>
+          toggle('Easy mode', 'The Hauler drives a quarter slower', s.easyMode, (on) =>
             change({ easyMode: on }),
           ),
           toggle('Haptics', 'Vibrate on impacts and warnings', s.haptics, (on) =>
@@ -630,18 +546,6 @@ export function settingsScreen(
           ] as const,
           s.graphics,
           (graphics) => change({ graphics }),
-        ),
-        slider(
-          'hud-scale',
-          'HUD scale',
-          {
-            min: 0.8,
-            max: 1.3,
-            step: 0.05,
-            value: s.hudScale,
-            format: (v) => `${Math.round(v * 100)}%`,
-          },
-          (hudScale) => change({ hudScale }),
         ),
         h(
           'div',
@@ -703,44 +607,4 @@ export function settingsScreen(
   );
   render();
   return { element };
-}
-
-/* Rotate device ---------------------------------------------------------- */
-
-export function rotateScreen(countdown: () => number | null, quit: () => void): Screen {
-  const status = h('span', {
-    class: 'cw-chip cw-chip--amber',
-    style: { height: '32px', gap: '8px' },
-  });
-  const art = svgFrom(
-    '<rect x="58" y="30" width="44" height="80" rx="8" fill="none" stroke="#8FA3C8" stroke-width="3" stroke-dasharray="6 6"/>' +
-      '<rect x="40" y="62" width="80" height="44" rx="8" fill="#14234A" stroke="#FFD23F" stroke-width="4"/>' +
-      '<circle cx="112" cy="84" r="3" fill="#FFD23F"/>' +
-      '<path d="M122 46 A 46 46 0 0 1 132 82" stroke="#2EE6FF" stroke-width="4" fill="none" stroke-linecap="round"/>' +
-      '<path d="M124 76 L132 84 L139 74" stroke="#2EE6FF" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
-    '0 0 160 160',
-  );
-  art.setAttribute('width', '160');
-  art.setAttribute('height', '160');
-  const element = h(
-    'section',
-    {
-      class: 'cw-screen cw-rotate',
-      attrs: { role: 'alertdialog', 'aria-label': 'Rotate your phone' },
-    },
-    art,
-    h('h1', { class: 'cw-heading' }, 'Turn your', h('br'), 'phone'),
-    h('p', {
-      class: 'cw-body',
-      text: 'Levels play in landscape. The Hauler is paused until you rotate.',
-    }),
-    status,
-    button('Quit to map', 'ghost', quit),
-  );
-  const update = (): void => {
-    const c = countdown();
-    status.textContent = c === null ? 'PAUSED' : `PAUSED · ${formatClock(c)} TO IMPACT`;
-  };
-  update();
-  return { element, update };
 }

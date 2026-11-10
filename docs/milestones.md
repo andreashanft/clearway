@@ -335,3 +335,68 @@ These changes follow play-testing feedback and replace parts of the brief's leve
 
 - **The routes are straight.** The brief describes an S-curve for Hollow Creek and hairpins for Ferrow Junction and Cinder Quarry; the obstacle distances and arrival times are unchanged.
 - **The Hauler fords the creek** in Hollow Creek rather than crossing on a road.
+
+## After milestone 7: closer camera, faster machines and touch fixes
+
+This pass makes the game play closer to the action and faster, and fixes the touch interface.
+
+### What changed
+
+- **The camera sits closer.** The zoom presets show 20, 30 and 48 m across the shorter screen side (they were 25, 45 and 70 m). The field of view is 40° and the pitch 50°, and the camera pulls back by up to 22% at speed.
+- **Every machine is quicker and corners tighter.** The Hauler keeps its pace.
+  - The Bruiser reaches 72 km/h in about three seconds (it was 50 km/h), and the Fishtail 100 km/h.
+  - The Liftoff and the Tumbler accelerate and turn faster, the Railbed runs at 60 km/h and the pilot runs at 21 km/h.
+  - A new arcade grip cancels sideways sliding while the wheels are down, so a vehicle goes where it points. The Fishtail lets go of it in a skid.
+  - A vehicle keeps 92% of its speed when it smashes through a building, and wheels kick up dust at speed.
+- **A Bruiser at full speed drops a house in one ram** and brick in two, because damage grows with the square of the speed.
+- **Touch controls work.** An empty full-screen menu layer took every tap during play, so the stick, the buttons, the pause button and the pinch gestures never received a touch.
+- **Levels play in portrait.** The rotate card is gone, the HUD has a portrait layout and the app manifest allows any orientation.
+- **The Hauler arrow points at the Hauler.** Its icon was drawn pointing the opposite way, and its bearing flipped when the Hauler was behind the camera. It now stays clear of the stick and the top panels.
+- **Menus fit short phones.** The title buttons no longer wrap off the screen, **START** stays in view on the briefing, and dialogs lay out wide when a phone browser's toolbar leaves under 340 px of height.
+- **The HUD respects the notch.** In landscape the counters no longer slide under the route panel.
+- **The touch stick gives full throttle at 60% of its travel.**
+
+### How to test
+
+1. Run `npm run dev` and open `http://localhost:5173/?level=hollow-creek` in the iOS Simulator's Safari.
+2. Drag the stick towards the tool shed. The Bruiser reaches it within a few seconds and knocks it down.
+3. Rotate the device. The level keeps running, and the HUD changes layout.
+4. Drive away from the Hauler and check that the arrow points back at it.
+
+### Deviations
+
+- **Vehicle speeds, the pilot's speed and the camera differ from the brief's numbers**, as listed above.
+- **Portrait play replaces the rotate card** from the design brief.
+
+## After milestone 7: one continuous run
+
+This pass turns a level into a single run at the Hauler's pace and trims the interface.
+
+### What changed
+
+- **The Hauler never changes speed.** It begins `leadIn` seconds short of its route (the level files' `startDelay` is now `leadIn`), already at full speed, and carries on past the end. It no longer waits at the start, hurries after the path is clear or parks.
+- **A level starts with the Hauler rolling in.** The player's machine waits beside the start of the route. During the 3-2-1 the Hauler drives into frame while the machine stays put.
+- **The run ends when the Hauler leaves the level.** Once the path is clear, the countdown panel shows the time left and everything destroyed until then counts. Free roam, **Finish level** and **Keep exploring** are gone.
+- **Easy mode slows the Hauler by a quarter** for the whole run. It no longer stalls.
+- **The campaign button reads START** and goes straight to the countdown. The briefing screen and its fly-over are gone.
+- **Hints only teach.** A level keeps its opening hint and one hint per new mechanic (TNT, the Railbed, landing on a roof, rolling). The countdown panel already names the next obstacle.
+- **The HUD loses the progress bar and the scale setting.** The Hauler arrow glides between its position updates.
+- **The title screen** drops its subline, the status pill and the vehicle and medal boxes, and shows a **CLEARED** box.
+- **No hit-stop.** Hits and blasts shake the camera, and the action never pauses.
+- **More power.** The Bruiser reaches 95 km/h and the Fishtail 125 km/h, with about 70% more acceleration. How far you push the stick sets the speed to hold.
+- **Fences and hay bales never stop a machine.** Any touch flattens them and the machine keeps all of its speed.
+- **Knocked-over trees, bushes and rocks shrink away** after about a second.
+- **The Fishtail's second rear axle** turns on its own axle instead of swinging round the first.
+- **The settings headline fits its column**, including next to a notch.
+
+### How to test
+
+1. Run `npm run dev`, choose **PLAY** and then **START** on Hollow Creek.
+2. Watch the Hauler roll in during the count. At **GO**, drive through the paddock fences at any speed.
+3. Clear all six obstacles. The panel turns green and counts down the time left.
+4. Wait for the Hauler to leave the level. The results appear.
+
+### Deviations
+
+- **No start delay, safe-zone run, free roam or briefing**, all of which the brief describes.
+- **A full-speed Bruiser drops brick in one ram**, because damage grows with the square of the speed.

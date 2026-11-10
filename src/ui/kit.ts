@@ -162,7 +162,7 @@ const ICONS: Readonly<Record<string, string>> = {
   clock:
     '<circle cx="9" cy="9" r="6.5" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="M9 5 V9 L11.5 10.5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>',
   arrow:
-    '<path d="M3 15 L3 7 M3 15 L11 15 M3 15 L15 3" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/>',
+    '<path d="M15 3 L15 11 M15 3 L7 3 M15 3 L3 15" stroke="currentColor" stroke-width="2.2" fill="none" stroke-linecap="round"/>',
 };
 
 /** An inline stroke icon that takes the text colour. Decorative unless labelled. */

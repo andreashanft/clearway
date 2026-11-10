@@ -5,12 +5,12 @@ import { wrapAngle } from './drive';
  * Zoom presets: metres of ground visible across the shorter side of the screen. The
  * camera distance follows from the field of view (see `distanceForSpan`).
  */
-export const ZOOM_PRESETS = [25, 45, 70] as const;
+export const ZOOM_PRESETS = [20, 30, 48] as const;
 export const DEFAULT_ZOOM = 1;
 /** How far the camera looks down, in radians. */
-export const PITCH = (55 * Math.PI) / 180;
+export const PITCH = (50 * Math.PI) / 180;
 /** Field of view across the shorter screen side, in degrees. */
-export const SHORT_SIDE_FOV = 30;
+export const SHORT_SIDE_FOV = 40;
 export const YAW_STEP = Math.PI / 4;
 
 /** Camera distance that shows `span` metres across the shorter side of the screen. */
@@ -25,7 +25,13 @@ function presetDistance(index: number): number {
 /** How far the focus moves towards a point of interest. */
 const INTEREST_PULL = 0.42;
 /** Seconds of travel the camera looks ahead of a moving vehicle. */
-const LOOK_AHEAD_SECONDS = 0.9;
+const LOOK_AHEAD_SECONDS = 0.65;
+/** The camera pulls back by this fraction at `SPEED_ZOOM_FULL`, so speed reads as speed. */
+export const SPEED_ZOOM = 0.3;
+/** Ground speed, m/s, at which the pull-back is complete. */
+const SPEED_ZOOM_FULL = 30;
+/** Ground speed, m/s, below which the camera doesn't pull back at all. */
+const SPEED_ZOOM_START = 6;
 
 /** Exponential smoothing factor for a rate (1/s) over `dt` seconds. */
 export function smoothing(rate: number, dt: number): number {
@@ -36,13 +42,13 @@ export function smoothing(rate: number, dt: number): number {
 export function verticalFov(aspect: number): number {
   if (aspect >= 1) return SHORT_SIDE_FOV;
   const half = Math.atan(Math.tan((SHORT_SIDE_FOV * Math.PI) / 360) / aspect);
-  return Math.min(60, (half * 360) / Math.PI);
+  return Math.min(76, (half * 360) / Math.PI);
 }
 
 /**
- * The three-quarter follow camera: narrow field of view, pitched 55° down, leading the
- * vehicle in its direction of travel. Zoom moves between three presets and the view
- * rotates in 45° steps.
+ * The three-quarter follow camera: close to the action, pitched 50° down, leading the
+ * vehicle in its direction of travel and pulling back a little at speed. Zoom moves
+ * between three presets and the view rotates in 45° steps.
  */
 /** Trauma lost per second, so a full-strength shake settles in under a second. */
 const SHAKE_DECAY = 1.5;
@@ -61,6 +67,8 @@ export class FollowCamera {
   private yawCurrent = 0;
   private zoomIndex: number = DEFAULT_ZOOM;
   private distanceCurrent = presetDistance(DEFAULT_ZOOM);
+  /** Extra distance factor from the target's speed, 0 to `SPEED_ZOOM`. */
+  private speedZoom = 0;
   private placed = false;
   private interest: Vector3 | null = null;
   /** Shake energy, 0–1; the offset grows with its square so small knocks stay subtle. */
@@ -125,6 +133,7 @@ export class FollowCamera {
     this.focus.copy(target);
     this.lead.set(0, 0, 0);
     this.yawCurrent = this.yawTarget;
+    this.speedZoom = 0;
     this.distanceCurrent = presetDistance(this.zoomIndex);
     this.placed = true;
     this.applyTransform();
@@ -142,17 +151,26 @@ export class FollowCamera {
       this.snapTo(target);
       return;
     }
-    const preset = presetDistance(this.zoomIndex);
-    this.distanceCurrent += (preset - this.distanceCurrent) * smoothing(5, dt);
+    // Pull back a little at speed: quick to open up, slower to close in again.
+    const groundSpeed = Math.hypot(velocity.x, velocity.z);
+    const pull =
+      SPEED_ZOOM *
+      Math.max(
+        0,
+        Math.min(1, (groundSpeed - SPEED_ZOOM_START) / (SPEED_ZOOM_FULL - SPEED_ZOOM_START)),
+      );
+    this.speedZoom += (pull - this.speedZoom) * smoothing(pull > this.speedZoom ? 2.2 : 1.1, dt);
+    const preset = presetDistance(this.zoomIndex) * (1 + this.speedZoom);
+    this.distanceCurrent += (preset - this.distanceCurrent) * smoothing(6, dt);
     this.yawCurrent = wrapAngle(
       this.yawCurrent + wrapAngle(this.yawTarget - this.yawCurrent) * smoothing(7, dt),
     );
 
     // Lead the vehicle by where it will be shortly, within a fraction of the view.
-    const maxLead = this.viewSpan * 0.3;
+    const maxLead = this.viewSpan * 0.28;
     this.tmp.set(velocity.x, 0, velocity.z).multiplyScalar(LOOK_AHEAD_SECONDS);
     if (this.tmp.length() > maxLead) this.tmp.setLength(maxLead);
-    this.lead.lerp(this.tmp, smoothing(1.8, dt));
+    this.lead.lerp(this.tmp, smoothing(2.6, dt));
 
     this.tmp.copy(target).add(this.lead);
     // Nudge towards a point of interest (the Hauler near impact) if it is close enough.
@@ -160,7 +178,7 @@ export class FollowCamera {
       const gap = Math.hypot(this.interest.x - target.x, this.interest.z - target.z);
       if (gap < this.viewSpan * 1.2) this.tmp.lerp(this.interest, INTEREST_PULL);
     }
-    this.focus.lerp(this.tmp, smoothing(this.interest ? 3 : 9, dt));
+    this.focus.lerp(this.tmp, smoothing(this.interest ? 3.5 : 12, dt));
     this.applyTransform();
   }
 

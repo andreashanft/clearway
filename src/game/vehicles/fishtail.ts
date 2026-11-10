@@ -34,7 +34,7 @@ export const FISHTAIL_SPEC: VehicleSpec = {
     stiffness: 30,
     compression: 4.2,
     relaxation: 3,
-    frictionSlip: 2.6,
+    frictionSlip: 3.4,
     sideFriction: 1.2,
     layout: [
       { x: 1.12, z: 2.55, steer: 1, driven: false },
@@ -43,14 +43,15 @@ export const FISHTAIL_SPEC: VehicleSpec = {
       { x: -1.12, z: -2.45, steer: 0, driven: true },
     ],
   },
-  topSpeed: 80 * KMH,
-  reverseSpeed: 25 * KMH,
-  acceleration: 6,
-  brakeDecel: 12,
-  coastDecel: 2.5,
+  topSpeed: 125 * KMH,
+  reverseSpeed: 50 * KMH,
+  acceleration: 20,
+  brakeDecel: 30,
+  coastDecel: 4,
   maxSteer: 0.55,
-  steerRate: 3,
-  yawAssist: { maxRate: 1.3, strength: 0.14, pivotInPlace: false },
+  steerRate: 5,
+  grip: 6,
+  yawAssist: { maxRate: 2.4, strength: 0.25, pivotInPlace: false },
 };
 
 function wheel(): Group {
@@ -81,6 +82,8 @@ export class Fishtail extends Vehicle {
   private glowTime = 0;
   private trailClock = 0;
   private readonly tmp = new Vector3();
+  /** The second rear axle: each wheel copies the driven wheel in front of it. */
+  private readonly twins: { readonly pivot: Group; readonly source: number }[] = [];
 
   constructor(physics: Physics) {
     super(physics, FISHTAIL_SPEC);
@@ -103,14 +106,17 @@ export class Fishtail extends Vehicle {
   }
 
   /** Calls `spawn` with each rear wheel's ground point while skidding (ghost trails). */
-  emitTrails(frameSeconds: number, spawn: (at: Vector3) => void): void {
-    if (!this.skidding) return;
+  override emitTrails(frameSeconds: number, spawn: (at: Vector3, skid?: boolean) => void): void {
+    if (!this.skidding) {
+      super.emitTrails(frameSeconds, spawn);
+      return;
+    }
     this.trailClock -= frameSeconds;
     if (this.trailClock > 0) return;
     this.trailClock = 0.05;
     for (const x of [1.12, -1.12]) {
       this.tmp.set(x, -RIDE_HEIGHT + 0.2, -2.45);
-      spawn(this.root.localToWorld(this.tmp.clone()));
+      spawn(this.root.localToWorld(this.tmp.clone()), true);
     }
   }
 
@@ -126,6 +132,9 @@ export class Fishtail extends Vehicle {
   }
 
   override step(dt: number): void {
+    // A skid needs the tail to slide, so the arcade grip lets go with the rear tyres.
+    this.gripScale = this.skidding ? 0 : 1;
+    this.yawAssistScale = this.skidding ? 0.3 : 1;
     const rearGrip = this.skidding ? 0.55 : FISHTAIL_SPEC.wheels.frictionSlip;
     const rearSide = this.skidding ? 0.25 : FISHTAIL_SPEC.wheels.sideFriction;
     for (const i of [2, 3]) {
@@ -144,6 +153,12 @@ export class Fishtail extends Vehicle {
   }
 
   protected animate(frameSeconds: number): void {
+    for (const { pivot, source } of this.twins) {
+      const lead = this.wheelMeshes[source];
+      if (!lead) continue;
+      pivot.position.y = lead.position.y;
+      pivot.rotation.copy(lead.rotation);
+    }
     this.glowTime += frameSeconds;
     this.tailGlow.emissiveIntensity = this.skidding
       ? 2.6
@@ -190,20 +205,26 @@ export class Fishtail extends Vehicle {
       pivot.position.set(layout.x, 0, layout.z);
       const w = wheel();
       pivot.add(w);
-      if (layout.z < 0) {
-        const twin = wheel();
-        twin.position.z = -1.0;
-        pivot.add(twin);
-      }
       root.add(pivot);
       this.wheelMeshes[i] = pivot;
+      if (layout.z < 0) {
+        // On its own pivot one metre back, so it spins about its own axle and doesn't
+        // swing round the driven wheel's.
+        const twin = new Group();
+        twin.position.set(layout.x, 0, layout.z - 1.0);
+        twin.add(wheel());
+        root.add(twin);
+        this.twins.push({ pivot: twin, source: i });
+      }
     });
     // The wheel pivots are positioned in body space; the model root is not offset.
     const wrapper = new Group();
     wrapper.add(root);
     // Shift the drawn body (built with the ground at y = 0) but keep wheel pivots in body space.
     for (const child of root.children) {
-      if (!this.wheelMeshes.includes(child)) child.position.y -= RIDE_HEIGHT;
+      const wheelPivot =
+        this.wheelMeshes.includes(child) || this.twins.some((twin) => twin.pivot === child);
+      if (!wheelPivot) child.position.y -= RIDE_HEIGHT;
     }
     return wrapper;
   }

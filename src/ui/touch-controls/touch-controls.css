@@ -2,7 +2,6 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  --cw-touch-scale: var(--cw-hud-scale);
 }
 
 .cw-touch[hidden] {
@@ -33,7 +32,6 @@
   display: grid;
   place-items: center;
   opacity: 0.7;
-  transform: scale(var(--cw-touch-scale));
   transition: opacity var(--cw-fast) var(--cw-ease);
 }
 
@@ -61,7 +59,6 @@
   font-size: 10px;
   font-weight: 700;
   letter-spacing: 0.04em;
-  transform: scale(var(--cw-touch-scale));
   transition:
     transform var(--cw-fast) var(--cw-ease),
     box-shadow var(--cw-fast) var(--cw-ease);
@@ -69,7 +66,7 @@
 }
 
 .cw-touch__button.is-pressed {
-  transform: scale(calc(var(--cw-touch-scale) * 0.92));
+  transform: scale(0.92);
 }
 
 .cw-touch__brake {
@@ -115,6 +112,35 @@
   border: 2px solid var(--cw-line);
   color: var(--cw-muted-dim);
   box-shadow: none;
+}
+
+/* Portrait: the stick gets the lower-left half; the top is the HUD's. */
+@media (max-aspect-ratio: 1/1) {
+  .cw-touch__zone {
+    width: 56%;
+    height: 46%;
+  }
+
+  .cw-touch__stick {
+    left: calc(28px + 58px + env(safe-area-inset-left));
+    top: calc(100% - 40px - 58px - env(safe-area-inset-bottom));
+  }
+
+  .cw-touch.is-left-handed .cw-touch__stick {
+    left: calc(100% - 28px - 58px - env(safe-area-inset-right));
+  }
+
+  .cw-touch__action {
+    bottom: calc(36px + env(safe-area-inset-bottom));
+  }
+
+  .cw-touch__brake {
+    bottom: calc(42px + env(safe-area-inset-bottom));
+  }
+
+  .cw-touch__context {
+    bottom: calc(126px + env(safe-area-inset-bottom));
+  }
 }
 
 /* Classic layout: gas and reverse pedals beside the action button. */

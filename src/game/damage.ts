@@ -11,9 +11,9 @@ export const STRENGTH_HP: Readonly<Record<Strength, number>> = {
 };
 
 /**
- * Impact energy (joules) per hit point. A Bruiser ramming at its 50 km/h top speed deals
- * about 248 damage, and about 135 at the 37 km/h a short run-up gives: a shed falls to one
- * ram, a house to two.
+ * Impact energy (joules) per hit point. A Bruiser ramming at its 95 km/h top speed deals
+ * about 895 damage, and about 250 at 50 km/h: a shed falls to any ram, a house to one ram
+ * with a short run-up, and brick to one at full speed.
  */
 export const JOULES_PER_HP = 3500;
 /** Hits slower than this (m/s along the contact normal) do nothing, so scraping is harmless. */

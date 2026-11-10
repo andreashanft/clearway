@@ -122,11 +122,8 @@ export class GameAudio {
       bus.on('hint', () => {
         this.playVoice();
       }),
-      bus.on('hauler:stalled', () => {
-        this.playVoice();
-      }),
       bus.on('hauler:status', ({ countdown, urgency }) => {
-        if (this.phase === 'countdown' || this.phase === 'clearing') {
+        if (this.phase === 'clearing') {
           this.music.setIntensity(this.tension ? tensionFor(countdown) : 0.35);
         }
         this.music.alarm =
@@ -189,7 +186,7 @@ export class GameAudio {
         break;
       case 'playing':
         if (this.phase === 'failed') music.setMood('silent');
-        else if (this.phase === 'pathClear' || this.phase === 'freeRoam') music.setMood('resolved');
+        else if (this.phase === 'pathClear') music.setMood('resolved');
         else music.setMood('play');
         engine.setMusicBrightness(1);
         break;

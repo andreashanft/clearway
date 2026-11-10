@@ -4,8 +4,6 @@ import type { EventBus } from '../engine/events';
 export interface UiCommands {
   /** Restart the current level. */
   retry: undefined;
-  /** End free roam and show the results. */
-  finish: undefined;
   /** Go on to the next level. */
   next: undefined;
   /** Leave the level. */

@@ -23,7 +23,7 @@ export const BRUISER_SPEC: VehicleSpec = {
     stiffness: 38,
     compression: 4.6,
     relaxation: 3.2,
-    frictionSlip: 2.2,
+    frictionSlip: 3.2,
     sideFriction: 1.4,
     layout: [
       { x: TRACK_HALF_SPAN, z: 1.5, steer: 1, driven: true },
@@ -32,15 +32,16 @@ export const BRUISER_SPEC: VehicleSpec = {
       { x: -TRACK_HALF_SPAN, z: -1.5, steer: -1, driven: true },
     ],
   },
-  topSpeed: 50 * KMH,
-  reverseSpeed: 20 * KMH,
-  acceleration: 5,
-  brakeDecel: 14,
-  coastDecel: 4,
+  topSpeed: 95 * KMH,
+  reverseSpeed: 50 * KMH,
+  acceleration: 22,
+  brakeDecel: 32,
+  coastDecel: 9,
   maxSteer: 0.42,
   pivotSteer: 0.72,
-  steerRate: 3,
-  yawAssist: { maxRate: 1.4, strength: 0.3, pivotInPlace: true },
+  steerRate: 6,
+  grip: 9,
+  yawAssist: { maxRate: 3, strength: 0.4, pivotInPlace: true },
 };
 
 /**

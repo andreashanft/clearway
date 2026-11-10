@@ -6,6 +6,7 @@ import type { GameBus } from './events';
 import type { Effects } from './fx/effects';
 import type { Hauler } from './hauler/hauler';
 import type { LevelDefinition } from './level-data';
+import type { BuildingStyle } from './world/building-styles';
 import { type Building, Buildings } from './world/buildings';
 import type { Heightfield } from './world/heightfield';
 import type { Props } from './world/props';
@@ -29,7 +30,12 @@ const KIOSK_DAMAGE = 450;
 /** Seconds before the same vehicle can damage the same building again. */
 const HIT_COOLDOWN = 0.4;
 /** Fraction of its speed a vehicle keeps when it smashes straight through a building. */
-const PLOUGH_THROUGH = 0.8;
+const PLOUGH_THROUGH = 0.95;
+/**
+ * Structures any machine goes straight through: the lightest touch flattens them, and the
+ * machine keeps all of its speed.
+ */
+const FLIMSY: ReadonlySet<BuildingStyle> = new Set(['fence', 'bales']);
 /** Speed change, m/s, given to a body at the centre of a blast. */
 const BLAST_KICK = 9;
 
@@ -323,11 +329,10 @@ export class DestructionSystem {
     normal: { x: number; y: number; z: number } | undefined,
   ): void {
     const velocity = vehicle.preStepVelocity;
-    const damage = impactDamage(
-      vehicle.spec.mass,
-      normalSpeed,
-      vehicle.impactMultiplier(mine, normal),
-    );
+    const flimsy = FLIMSY.has(building.def.style) && vehicle.damageMultiplier > 0;
+    const damage = flimsy
+      ? building.maxHp
+      : impactDamage(vehicle.spec.mass, normalSpeed, vehicle.impactMultiplier(mine, normal));
     if (damage <= 0) return;
     vehicle.onImpact?.(damage);
     this.lastHit.set(`${vehicle.spec.name}:${building.def.id}`, this.time);
@@ -339,13 +344,14 @@ export class DestructionSystem {
       { kind: 'vehicle', vehicle: vehicle.spec.type },
       { point: this.hitPoint, direction: this.hitDir, speed: normalSpeed },
     );
-    this.bus.emit('impact', { strength: Math.min(1, damage / 250) });
+    this.bus.emit('impact', { strength: flimsy ? 0.12 : Math.min(1, damage / 250) });
     if (destroyed) {
-      // Smash on through rather than stopping dead against a wall that just fell.
-      vehicle.body.setLinvel(
-        { x: velocity.x * PLOUGH_THROUGH, y: velocity.y, z: velocity.z * PLOUGH_THROUGH },
-        true,
-      );
+      // Smash on through rather than stopping dead against a wall that just fell. The
+      // contact has already slowed and turned the machine, so undo both.
+      const keep = flimsy ? 1 : PLOUGH_THROUGH;
+      vehicle.body.setLinvel({ x: velocity.x * keep, y: velocity.y, z: velocity.z * keep }, true);
+      const spin = vehicle.body.angvel();
+      vehicle.body.setAngvel({ x: 0, y: spin.y * (flimsy ? 0.3 : 1), z: 0 }, true);
     }
   }
 }

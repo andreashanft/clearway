@@ -271,6 +271,21 @@ export class Effects {
     });
   }
 
+  /** A small puff of dirt kicked up by a wheel at speed. */
+  wheelDust(at: Vector3): void {
+    this.dust.spawn({
+      position: at.clone(),
+      velocity: new Vector3((Math.random() - 0.5) * 0.8, 0.5, (Math.random() - 0.5) * 0.8),
+      life: 0.9,
+      startSize: 0.7,
+      endSize: 2.4,
+      colour: new Color('#C9B48C'),
+      opacity: 0.3,
+      drag: 2,
+      rise: 0.25,
+    });
+  }
+
   /** Fragments thrown from a hit point, tinted like the building. */
   debrisBurst(
     at: Vector3,

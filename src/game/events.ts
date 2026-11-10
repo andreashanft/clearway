@@ -32,14 +32,14 @@ export interface GameEvents {
     distance: number;
     routeLength: number;
     countdown: number | null;
+    /** Seconds until the Hauler leaves the level and the run ends. */
+    timeLeft: number;
     next: string | null;
     urgency: Urgency;
     obstaclesLeft: number;
     buildingsLeft: number;
   };
   'obstacle:cleared': { id: string };
-  /** Easy mode: the Hauler paused once to give the player time. */
-  'hauler:stalled': { seconds: number };
   'session:results': { stats: LevelStats; medal: Medal | null };
   /** The Hauler was destroyed and the slow motion has played out. */
   'hauler:destroyed': { hit: string; time: number; cleared: number; total: number };
@@ -85,8 +85,8 @@ export interface GameEvents {
   'pickup:dish': { x: number; y: number; z: number };
   /** A short tutorial or context hint. */
   hint: { text: string };
-  /** The last obstacle fell `seconds` after the Hauler started. */
-  'path:cleared': { seconds: number };
+  /** The last obstacle fell `seconds` into the run, with `timeLeft` seconds of it to go. */
+  'path:cleared': { seconds: number; timeLeft: number };
 }
 
 export type GameBus = EventBus<GameEvents>;

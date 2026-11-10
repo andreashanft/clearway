@@ -14,7 +14,7 @@ import type { LevelDefinition } from './level-data';
 import { type LoadedWorld, loadWorld } from './level-loader';
 import { Pilot } from './pilot';
 import { Route } from './route';
-import { type Difficulty, labelFor, LevelSession, urgencyFor } from './session';
+import { type Difficulty, EASY_SPEED_FACTOR, labelFor, LevelSession, urgencyFor } from './session';
 import { createVehicle } from './vehicles/factory';
 import { Fishtail } from './vehicles/fishtail';
 import { DECK_HEIGHT, Railbed } from './vehicles/railbed';
@@ -44,12 +44,6 @@ const HAULER_BLAST_DAMAGE = 1200;
 /** Slow motion after the Hauler is destroyed: speed and real seconds. */
 const FAIL_SLOWMO_SCALE = 0.25;
 const FAIL_SLOWMO_SECONDS = 2.2;
-/** Hit-stop: hits at least this strong (0–1) freeze the action for a moment. */
-const HIT_STOP_THRESHOLD = 0.3;
-const HIT_STOP_BASE = 0.03;
-const HIT_STOP_EXTRA = 0.07;
-/** Simulation speed during hit-stop: nearly frozen, so it reads as a beat, not a stall. */
-const HIT_STOP_SCALE = 0.05;
 /** Shake multiplier with the reduced-shake setting. */
 const REDUCED_SHAKE = 0.35;
 /** How often the HUD hears about the Hauler, per second. */
@@ -67,11 +61,12 @@ const DEFAULT_OPTIONS: GameOptions = {
   autoSkid: true,
 };
 
-/** What the game is doing: a title-screen backdrop, a briefing fly-over, or play. */
-export type GameMode = 'attract' | 'briefing' | 'play';
+/** What the game is doing: a title-screen backdrop, or play. */
+export type GameMode = 'attract' | 'play';
 
-/** Seconds the briefing camera takes to fly the whole route. */
-const FLYOVER_SECONDS = 9;
+/** The player's machine starts this far along the route and this far to its side. */
+const START_AHEAD = 7;
+const START_ASIDE = 8.5;
 /** Title backdrop: the Hauler loops this far before the first obstacle, a bit faster. */
 const ATTRACT_MARGIN = 18;
 const ATTRACT_SPEEDUP = 1.6;
@@ -119,15 +114,14 @@ export class Game {
   private rails: Rails | null = null;
   private readonly lockedBy = new Map<Vehicle, string>();
   private pickups: Pickups | null = null;
-  private hitStopLeft = 0;
   private readonly scoreAt = new Vector3();
   private readonly subscriptions: (() => void)[] = [];
   private def: LevelDefinition | null = null;
   private modeValue: GameMode = 'play';
-  private flyover = 0;
   private lastHintFor = '';
+  /** True while the start countdown runs: the Hauler rolls, the player can't move yet. */
+  private frozen = false;
   private failInfo = { hit: '', time: 0, cleared: 0 };
-  private readonly flyTarget = new Vector3();
   private readonly zero = new Vector3();
   private readonly projected = new Vector3();
   private viewport: Viewport = { width: 1, height: 1 };
@@ -156,51 +150,37 @@ export class Game {
     return this.modeValue;
   }
 
-  /** Progress of the briefing fly-over, 0–1. */
-  get flyoverProgress(): number {
-    return this.flyover;
-  }
-
   get definition(): LevelDefinition | null {
     return this.def;
   }
 
   /**
-   * Switches between the title backdrop, the briefing fly-over and play. Play starts the
-   * level's rules (start delay, then the Hauler).
+   * Switches between the title backdrop and play. In play the Hauler is already rolling:
+   * it begins `leadIn` seconds short of the route's start and never changes speed.
    */
   setMode(mode: GameMode): void {
     this.modeValue = mode;
     const hauler = this.hauler;
     if (!hauler) return;
     if (mode === 'attract') {
-      hauler.resetTo(0);
       hauler.setSpeedFactor(ATTRACT_SPEEDUP);
-      hauler.start();
+      hauler.resetTo(0);
       this.camera.snapTo(hauler.worldPosition);
-    } else if (mode === 'briefing') {
-      this.flyover = 0;
-      hauler.resetTo(0);
-      hauler.setSpeedFactor(1);
-      hauler.state = 'waiting';
-      while (this.camera.zoomLevel < 2) this.camera.zoom(1);
-      const start = this.route?.sampleAt(0);
-      if (start)
-        this.camera.snapTo(this.flyTarget.set(start.x, this.groundAt(start.x, start.z), start.z));
     } else {
-      hauler.resetTo(0);
-      hauler.setSpeedFactor(1);
-      hauler.state = 'waiting';
-      while (this.camera.zoomLevel > 1) this.camera.zoom(-1);
+      hauler.setSpeedFactor(this.options.difficulty === 'easy' ? EASY_SPEED_FACTOR : 1);
+      hauler.resetTo(-hauler.cruiseSpeed * (this.def?.hauler.leadIn ?? 0));
       if (this.active) this.camera.snapTo(this.active.position);
       this.lastHintFor = '';
       this.hint(this.def?.hints?.start);
     }
   }
 
-  /** Jumps the briefing fly-over to its end. */
-  skipFlyover(): void {
-    this.flyover = 1;
+  /**
+   * Holds the player still for the start countdown, or lets them go. The Hauler rolls on
+   * either way.
+   */
+  setFrozen(frozen: boolean): void {
+    this.frozen = frozen;
   }
 
   /** Turns steering assist on or off for every vehicle. */
@@ -216,9 +196,8 @@ export class Game {
     this.world?.lighting.setShadowMapSize(size);
   }
 
-  /** Multiplier on simulation speed: hit-stop after a big hit, slow motion after a failure. */
+  /** Multiplier on simulation speed: slow motion after a failure. */
   get timeScale(): number {
-    if (this.hitStopLeft > 0) return HIT_STOP_SCALE;
     return this.slowmoLeft > 0 ? FAIL_SLOWMO_SCALE : 1;
   }
 
@@ -227,13 +206,10 @@ export class Game {
     this.camera.shakeScale = full ? 1 : REDUCED_SHAKE;
   }
 
-  /** A hard hit or a blast: freeze the action for a beat and shake the camera. */
+  /** A hard hit or a blast shakes the camera. The action never pauses for it. */
   private onImpact(strength: number): void {
     if (this.modeValue !== 'play') return;
     this.camera.shake(strength * 0.7);
-    if (strength >= HIT_STOP_THRESHOLD) {
-      this.hitStopLeft = Math.max(this.hitStopLeft, HIT_STOP_BASE + HIT_STOP_EXTRA * strength);
-    }
   }
 
   async load(def: LevelDefinition): Promise<void> {
@@ -319,8 +295,7 @@ export class Game {
       hauler,
       destruction.buildings,
       this.bus,
-      def.hauler.startDelay,
-      this.options.difficulty,
+      route.length,
     );
     this.session = session;
     session.pickups = pickups;
@@ -371,10 +346,22 @@ export class Game {
       }),
     );
 
+    let playerPlaced = false;
     for (const spawn of def.vehicles) {
       const vehicle = createVehicle(spawn.type, this.physics);
-      const [x, z] = spawn.pos;
-      vehicle.place(x, field.heightAt(x, z), z, bearingToHeading(spawn.yaw));
+      // The player's machine waits beside the start of the route, facing along it, on
+      // the side the level put it: the Hauler rolls in past it during the countdown.
+      let [x, z] = spawn.pos;
+      let heading = bearingToHeading(spawn.yaw);
+      if (spawn.type === def.player.vehicle && !playerPlaced) {
+        playerPlaced = true;
+        const at = route.sampleAt(START_AHEAD);
+        const side = (x - at.x) * at.dz - (z - at.z) * at.dx >= 0 ? 1 : -1;
+        x = at.x + at.dz * side * START_ASIDE;
+        z = at.z - at.dx * side * START_ASIDE;
+        heading = Math.atan2(at.dx, at.dz);
+      }
+      vehicle.place(x, field.heightAt(x, z), z, heading);
       if (spawn.lockedBy) {
         vehicle.locked = true;
         this.lockedBy.set(vehicle, spawn.lockedBy);
@@ -418,7 +405,7 @@ export class Game {
     this.camera.setViewport(viewport.width, viewport.height);
   }
 
-  /** Ends free roam and shows the results. */
+  /** Ends the run early and shows the results, once the path is clear (debug). */
   finish(): void {
     this.session?.finish();
   }
@@ -450,7 +437,7 @@ export class Game {
     const frame = this.firstStepOfFrame ? this.frame : withoutEdges(this.frame);
     this.firstStepOfFrame = false;
     const playing = this.modeValue === 'play';
-    const playable = playing && this.session?.phase !== 'results';
+    const playable = playing && !this.frozen && this.session?.phase !== 'results';
     if (playable && frame.enterExitPressed) this.toggleVehicle();
     for (const vehicle of this.vehicles) {
       if (vehicle === this.active && playable) vehicle.control(frame, this.camera.yaw, dt);
@@ -479,20 +466,22 @@ export class Game {
   }
 
   render(alpha: number, frameSeconds: number): void {
-    // Hit-stop counts down in real time, whatever the simulation speed.
-    this.hitStopLeft = Math.max(0, this.hitStopLeft - frameSeconds);
     for (const vehicle of this.vehicles) vehicle.render(alpha, frameSeconds);
     this.pilot?.render(alpha, frameSeconds);
     this.hauler?.render(alpha, frameSeconds);
     this.destruction?.render(alpha, frameSeconds, this.camera.camera);
-    this.routeLine?.update(frameSeconds, this.hauler?.state === 'rolling' ? this.hauler.speed : 0);
+    this.routeLine?.update(
+      frameSeconds,
+      this.hauler?.state === 'rolling' ? this.hauler.cruiseSpeed : 0,
+    );
     this.rails?.update(frameSeconds, this.railbed?.snapped ?? false);
     this.pickups?.update(frameSeconds);
     const effects = this.effects;
     if (effects) {
       for (const vehicle of this.vehicles) {
-        vehicle.emitTrails?.(frameSeconds, (at) => {
-          effects.skidPuff(at);
+        vehicle.emitTrails?.(frameSeconds, (at, skid) => {
+          if (skid) effects.skidPuff(at);
+          else effects.wheelDust(at);
         });
       }
     }
@@ -501,20 +490,14 @@ export class Game {
     if (this.modeValue === 'attract' && this.hauler) {
       this.camera.turnBy(ATTRACT_ORBIT * frameSeconds);
       this.camera.update(frameSeconds, this.hauler.worldPosition, this.zero);
-    } else if (this.modeValue === 'briefing' && this.route) {
-      this.flyover = Math.min(1, this.flyover + frameSeconds / FLYOVER_SECONDS);
-      const eased = this.flyover * this.flyover * (3 - 2 * this.flyover);
-      const p = this.route.sampleAt(eased * this.route.length);
-      this.flyTarget.set(p.x, this.groundAt(p.x, p.z), p.z);
-      this.camera.update(frameSeconds, this.flyTarget, this.zero);
     } else {
+      // Keep the Hauler in frame as it rolls in at the start, and when an impact is close.
       const countdown = this.session?.countdown ?? null;
-      const watchHauler = this.hauler && this.hauler.state !== 'destroyed' && countdown !== null;
-      this.camera.setInterest(
-        watchHauler && urgencyFor(countdown) === 'red'
-          ? (this.hauler?.worldPosition ?? null)
-          : null,
-      );
+      const watchHauler =
+        this.hauler &&
+        this.hauler.state !== 'destroyed' &&
+        (this.frozen || (countdown !== null && urgencyFor(countdown) === 'red'));
+      this.camera.setInterest(watchHauler ? (this.hauler?.worldPosition ?? null) : null);
       const followed = this.player;
       if (followed) {
         this.camera.update(frameSeconds, followed.position, this.playerVelocity(this.velocity));
@@ -589,6 +572,8 @@ export class Game {
     if (this.statusClock > 0) return;
     this.statusClock = 1 / STATUS_RATE;
     const countdown = session.countdown;
+    // A level's hints teach a mechanic the first time its obstacle comes up. They never
+    // just name the next target: the countdown panel does that.
     const next = session.next;
     if (next && next.id !== this.lastHintFor) {
       this.lastHintFor = next.id;
@@ -599,6 +584,7 @@ export class Game {
       distance: hauler.distance,
       routeLength: route.length,
       countdown,
+      timeLeft: session.timeLeft,
       next: session.next?.label ?? null,
       urgency: urgencyFor(countdown),
       obstaclesLeft: session.obstacles.filter((o) => !o.cleared).length,

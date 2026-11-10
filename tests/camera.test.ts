@@ -6,6 +6,7 @@ import {
   FollowCamera,
   PITCH,
   SHORT_SIDE_FOV,
+  SPEED_ZOOM,
   verticalFov,
   ZOOM_PRESETS,
 } from '../src/game/camera';
@@ -59,6 +60,17 @@ describe('FollowCamera', () => {
     expect(cam.camera.position.x).toBeGreaterThan(0);
   });
 
+  it('pulls back at speed and closes in again at rest', () => {
+    const cam = new FollowCamera();
+    const target = new Vector3();
+    cam.snapTo(target);
+    const rest = cam.viewSpan;
+    for (let i = 0; i < 300; i++) cam.update(1 / 60, target, new Vector3(40, 0, 0));
+    expect(cam.viewSpan).toBeCloseTo(rest * (1 + SPEED_ZOOM), 1);
+    for (let i = 0; i < 900; i++) cam.update(1 / 60, target, new Vector3());
+    expect(cam.viewSpan).toBeCloseTo(rest, 1);
+  });
+
   it('leads a moving target in its direction of travel', () => {
     const cam = new FollowCamera();
     const target = new Vector3();
@@ -66,6 +78,6 @@ describe('FollowCamera', () => {
     const velocity = new Vector3(0, 0, -10);
     for (let i = 0; i < 240; i++) cam.update(1 / 60, target, velocity);
     expect(cam.focus.z).toBeLessThan(-3);
-    expect(Math.abs(cam.focus.z)).toBeLessThanOrEqual(cam.viewSpan * 0.3 + 1e-6);
+    expect(Math.abs(cam.focus.z)).toBeLessThanOrEqual(cam.viewSpan * 0.28 + 1e-6);
   });
 });

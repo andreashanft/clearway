@@ -49,8 +49,11 @@ export interface LevelDefinition {
   readonly hauler: {
     /** Metres per second. */
     readonly speed: number;
-    /** Seconds before the Hauler starts rolling. */
-    readonly startDelay: number;
+    /**
+     * Seconds the Hauler takes to reach the start of its route: it begins this far back,
+     * already at full speed.
+     */
+    readonly leadIn: number;
     readonly route: readonly GroundPoint[];
   };
   readonly player: { readonly vehicle: VehicleType };

@@ -19,7 +19,7 @@ interface BuildingEntry {
 }
 
 interface LevelFile {
-  hauler: { speed: number; startDelay: number; route: Point2[] };
+  hauler: { speed: number; leadIn: number; route: Point2[] };
   buildings?: BuildingEntry[];
   targets?: Record<string, number>;
 }
@@ -76,7 +76,7 @@ if (flag === '--fix') {
 }
 
 console.log(
-  `${id}: route ${route.length.toFixed(0)} m at ${speed} m/s, start delay ${level.hauler.startDelay} s`,
+  `${id}: route ${route.length.toFixed(0)} m at ${speed} m/s, lead-in ${level.hauler.leadIn} s`,
 );
 console.log('obstacle          distance  arrives   target    error');
 for (const obstacle of sweepRoute(route, toTargets(level.buildings ?? []))) {

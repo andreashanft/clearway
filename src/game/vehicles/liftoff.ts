@@ -53,14 +53,15 @@ export const LIFTOFF_SPEC: VehicleSpec = {
       { x: -1.08, z: -1.35, steer: 0, driven: true },
     ],
   },
-  topSpeed: 110 * KMH,
+  topSpeed: 125 * KMH,
   reverseSpeed: 30 * KMH,
-  acceleration: 9,
-  brakeDecel: 14,
-  coastDecel: 2,
+  acceleration: 22,
+  brakeDecel: 30,
+  coastDecel: 3,
   maxSteer: 0.5,
-  steerRate: 4,
-  yawAssist: { maxRate: 2, strength: 0.12, pivotInPlace: false },
+  steerRate: 6,
+  grip: 7,
+  yawAssist: { maxRate: 2.6, strength: 0.22, pivotInPlace: false },
 };
 
 /**

@@ -28,13 +28,11 @@ import type { UiCommands } from './ui/commands';
 import { Hud } from './ui/hud/hud';
 import { button, h } from './ui/kit';
 import {
-  briefingScreen,
   campaignScreen,
   countdownScreen,
   failScreen,
   pauseScreen,
   resultsScreen,
-  rotateScreen,
   type Screen,
   settingsScreen,
   titleScreen,
@@ -45,7 +43,6 @@ import { TouchControls } from './ui/touch-controls/touch-controls';
 type Flow =
   | 'title'
   | 'campaign'
-  | 'briefing'
   | 'countdown'
   | 'playing'
   | 'paused'
@@ -53,14 +50,6 @@ type Flow =
   | 'results'
   | 'settings'
   | 'help';
-
-const VEHICLE_NAMES: Readonly<Record<string, string>> = {
-  bruiser: 'Bruiser',
-  fishtail: 'Fishtail',
-  liftoff: 'Liftoff',
-  tumbler: 'Tumbler',
-  railbed: 'Railbed',
-};
 
 /** The part of the Battery Status API this uses. */
 interface BatteryLike extends EventTarget {
@@ -70,7 +59,6 @@ interface BatteryLike extends EventTarget {
 /** The sound scene for each step of the flow; settings and help keep the scene they opened over. */
 function audioSceneFor(flow: Flow, returnTo: Flow): AudioScene {
   switch (flow) {
-    case 'briefing':
     case 'countdown':
       return 'briefing';
     case 'playing':
@@ -134,7 +122,6 @@ export class App {
   private sceneHidden = false;
   /** True once the loaded level has been played and needs a fresh copy for the backdrop. */
   private dirty = false;
-  private rotateShown = false;
   private overlay: DebugOverlay | null = null;
   private physicsLines: PhysicsLines | null = null;
   private invincible = false;
@@ -166,7 +153,6 @@ export class App {
 
     renderer.onResize((viewport) => {
       this.game?.setViewport(viewport);
-      this.checkOrientation();
     });
 
     this.loop = new GameLoop({
@@ -237,17 +223,17 @@ export class App {
   async boot(): Promise<void> {
     const direct = this.flags.level ? findLevel(this.flags.level) : undefined;
     if (direct) {
-      await this.loadLevel(direct);
-      this.beginPlay();
+      await this.start(direct);
       return;
     }
     await this.showTitle();
   }
 
-  /** Starts (or restarts) a level straight into play, skipping the briefing. */
+  /** Starts (or restarts) a level: a fresh world, then the countdown. */
   async start(level: LevelDefinition): Promise<void> {
+    this.show(null);
     await this.loadLevel(level);
-    this.beginPlay();
+    this.countdown();
   }
 
   // Flow ----------------------------------------------------------------------
@@ -263,9 +249,7 @@ export class App {
         {
           version: __APP_VERSION__,
           levels: CAMPAIGN.length,
-          medals: medalPoints(this.data.levels),
-          maxMedals: CAMPAIGN.length * 3,
-          vehicles: 4,
+          cleared: Object.values(this.data.levels).filter((r) => r.medal).length,
         },
         {
           play: () => this.showCampaign(),
@@ -308,89 +292,48 @@ export class App {
         },
         {
           back: () => void this.showTitle(),
-          brief: (id) => void this.openBriefing(id),
+          start: (id) => {
+            const def = findLevel(id);
+            if (def) void this.start(def);
+          },
         },
       ),
       true,
     );
   }
 
-  private async openBriefing(id: string): Promise<void> {
-    const def = findLevel(id);
-    const level = campaignLevel(id);
-    if (!def || !level) return;
-    this.show(null);
-    await this.loadLevel(def);
-    const game = this.game;
-    if (!game) return;
-    game.setMode('briefing');
-    this.setFlow('briefing');
-    const session = game.levelSession;
-    const firstHit = (session?.obstacles[0]?.distance ?? 0) / def.hauler.speed;
-    // Every machine in the level, including the Railbed on its rails.
-    const vehicles = [
-      ...new Set([
-        ...def.vehicles.map(
-          (v) => `${VEHICLE_NAMES[v.type] ?? v.type}${v.lockedBy ? ' (locked)' : ''}`,
-        ),
-        ...(def.rail ? [VEHICLE_NAMES.railbed ?? 'Railbed'] : []),
-      ]),
-    ];
-    this.show(
-      briefingScreen(
-        {
-          level,
-          description: def.description ?? level.tagline,
-          firstHit,
-          best: this.data.levels[id]?.medal ?? null,
-          vehicles,
-          tnt: def.tnt?.length ?? 0,
-        },
-        () => game.flyoverProgress,
-        {
-          back: () => this.showCampaign(),
-          skip: () => game.skipFlyover(),
-          start: () => this.countdown(),
-        },
-      ),
-    );
-  }
-
-  /** 3-2-1, then play. The scene shows the player's vehicle while the clock is frozen. */
+  /**
+   * 3-2-1, then go. The level is already running: the Hauler rolls in past the player's
+   * machine, which stays put until the count ends.
+   */
   private countdown(): void {
     const game = this.game;
     if (!game) return;
     game.setMode('play');
-    this.loop.paused = true;
+    game.setFrozen(true);
+    this.dirty = true;
+    this.loop.paused = false;
     this.setFlow('countdown');
     const overlay = countdownScreen();
     this.show(overlay);
     let n = 3;
     overlay.show(n);
     const tick = (): void => {
-      if (this.flow !== 'countdown') return;
+      if (this.flow !== 'countdown' || this.game !== game) return;
       n--;
       overlay.show(n);
       if (n > 0) {
         window.setTimeout(tick, 700);
       } else {
+        // "GO" frees the player at once and fades on its own.
+        game.setFrozen(false);
+        this.setFlow('playing');
         window.setTimeout(() => {
-          if (this.flow === 'countdown') this.beginPlay(true);
+          if (this.screen === overlay) this.show(null);
         }, 450);
       }
     };
     window.setTimeout(tick, 700);
-  }
-
-  private beginPlay(alreadyInPlayMode = false): void {
-    const game = this.game;
-    if (!game) return;
-    if (!alreadyInPlayMode) game.setMode('play');
-    this.dirty = true;
-    this.loop.paused = false;
-    this.setFlow('playing');
-    this.show(null);
-    this.checkOrientation();
   }
 
   private pause(): void {
@@ -403,6 +346,7 @@ export class App {
       pauseScreen(
         () => ({
           countdown: session?.countdown ?? null,
+          timeLeft: session?.timeLeft ?? 0,
           obstaclesCleared: session?.obstacles.filter((o) => o.cleared).length ?? 0,
           obstaclesTotal: session?.obstacles.length ?? 0,
           ...pickupText(this.game?.pickupProgress),
@@ -425,8 +369,7 @@ export class App {
   }
 
   private restart(): void {
-    if (!this.level) return;
-    void this.openBriefing(this.level.id);
+    if (this.level) void this.start(this.level);
   }
 
   private quitToMap(): void {
@@ -480,11 +423,6 @@ export class App {
             next !== undefined && findLevel(next.id) !== undefined && medalFor(stats) !== null,
         },
         {
-          keepExploring: () => {
-            this.game?.levelSession?.resumeFreeRoam();
-            this.setFlow('playing');
-            this.show(null);
-          },
           replay: () => this.restart(),
           next: () => this.showCampaign(),
         },
@@ -568,7 +506,6 @@ export class App {
         level.name,
         level.buildings?.length ?? 0,
         (level.beacons?.trails ?? []).reduce((sum, trail) => sum + trail.count, 0),
-        level.relayDish !== undefined,
       );
       this.level = level;
       this.dirty = false;
@@ -614,34 +551,6 @@ export class App {
     this.touchControls.setVisible(this.flow === 'playing' && this.input.source === 'touch');
   }
 
-  /** Phones in portrait pause gameplay behind the "rotate device" card. */
-  private checkOrientation(): void {
-    const portraitPhone =
-      this.input.source === 'touch' &&
-      window.innerHeight > window.innerWidth &&
-      window.innerWidth < 600;
-    if (
-      portraitPhone &&
-      (this.flow === 'playing' || this.flow === 'countdown') &&
-      !this.rotateShown
-    ) {
-      this.rotateShown = true;
-      this.loop.paused = true;
-      this.show(
-        rotateScreen(
-          () => this.game?.levelSession?.countdown ?? null,
-          () => {
-            this.rotateShown = false;
-            this.quitToMap();
-          },
-        ),
-      );
-    } else if (!portraitPhone && this.rotateShown) {
-      this.rotateShown = false;
-      this.resume();
-    }
-  }
-
   private quality(): { dpr: number; shadows: number } {
     const choice = this.data.settings.graphics;
     const coarse = matchMedia('(pointer: coarse)').matches;
@@ -656,7 +565,6 @@ export class App {
 
   private applySettings(): void {
     const s = this.data.settings;
-    document.documentElement.style.setProperty('--cw-hud-scale', String(s.hudScale));
     document.documentElement.dataset.patterns = String(s.patternMarkings);
     this.touchControls.setLayout(s.controlLayout, s.leftHanded);
     this.hud.setMinimapVisible(s.minimap);
@@ -682,7 +590,6 @@ export class App {
       }
     });
     this.commands.on('pause', () => this.pause());
-    this.commands.on('finish', () => this.game?.finish());
     this.commands.on('recentre', () => this.game?.recentre());
     this.commands.on('retry', () => {
       if (this.level) void this.start(this.level);
@@ -693,7 +600,6 @@ export class App {
       if (this.flow === 'paused') this.resume();
       else if (this.flow === 'settings' || this.flow === 'help') this.closeSettings();
     });
-    window.addEventListener('orientationchange', () => this.checkOrientation());
   }
 
   private createDebugTools(): void {
@@ -741,7 +647,7 @@ export class App {
         this.physicsLines = null;
       }
     });
-    overlay.addButton('Finish free roam', () => this.game?.finish());
+    overlay.addButton('Finish run', () => this.game?.finish());
     overlay.addButton('Print arrivals', () => {
       const session = this.game?.levelSession;
       const speed = this.level?.hauler.speed ?? 1;

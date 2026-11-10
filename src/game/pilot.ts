@@ -18,8 +18,8 @@ import type { Physics } from '../engine/physics';
 import type { Finish } from './models/finish';
 import { ModelBuilder } from './models/model-builder';
 
-/** 12 km/h, from the brief. */
-export const PILOT_SPEED = 12 / 3.6;
+/** 26 km/h: a sprint, so getting between machines doesn't stall the action. */
+export const PILOT_SPEED = 26 / 3.6;
 const HALF_HEIGHT = 0.55;
 const RADIUS = 0.35;
 /** Height of the body centre above the ground. */
@@ -65,7 +65,7 @@ export function stickToWorld(
 
 /**
  * The crew member on foot: a capsule moved by Rapier's kinematic character controller.
- * Walks at 12 km/h, does no damage, and climbs into vehicles.
+ * Runs at 26 km/h, does no damage, and climbs into vehicles.
  */
 export class Pilot {
   readonly root = new Group();

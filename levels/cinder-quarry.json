@@ -13,7 +13,7 @@
   },
   "hauler": {
     "speed": 5,
-    "startDelay": 5,
+    "leadIn": 5,
     "route": [
       [-380, 10],
       [380, 10]
@@ -264,12 +264,8 @@
   "description": "Clear 6 obstacles before the Hauler reaches them. Free the Tumbler from its hangar for the concrete plant.",
   "hints": {
     "start": "Drive off the rim onto the site cabins below. Action fires a boost.",
-    "site-cabins": "Drive off the terrace edge at a moderate speed and land on the cabins.",
-    "gantry": "Boost off the spoil heap beside the line into the conveyor gantry.",
     "hangar": "Land on the hangar roof to break it. The Tumbler inside is yours.",
-    "crushers-ab": "Concrete. Roll the Tumbler into both crushers; quick rolls hit harder.",
-    "crusher-c-chimney": "Roll into crusher C and the chimney, or push TNT with the Bruiser.",
-    "huts": "Workers’ huts fall to anything. Finish the job."
+    "crushers-ab": "Concrete. Roll the Tumbler into both crushers; quick rolls hit harder."
   },
   "tips": {
     "site-cabins": "Head for the terrace edge straight away and drop onto the cabins: they are only 18 seconds away.",

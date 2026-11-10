@@ -62,7 +62,4 @@
   --cw-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --cw-fast: 150ms;
   --cw-normal: 220ms;
-
-  /* HUD scale (set from Settings) */
-  --cw-hud-scale: 1;
 }

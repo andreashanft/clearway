@@ -27,8 +27,6 @@ export interface Settings {
   readonly minimap: boolean;
   readonly fullShake: boolean;
   readonly patternMarkings: boolean;
-  /** HUD size multiplier, 0.8–1.3. */
-  readonly hudScale: number;
   readonly graphics: GraphicsQuality | 'auto';
   readonly tensionMusic: boolean;
   readonly subtitles: boolean;
@@ -53,7 +51,6 @@ export const DEFAULT_SETTINGS: Settings = {
   minimap: true,
   fullShake: false,
   patternMarkings: true,
-  hudScale: 1,
   graphics: 'auto',
   tensionMusic: true,
   subtitles: true,

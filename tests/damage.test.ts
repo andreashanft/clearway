@@ -22,11 +22,12 @@ describe('impactDamage', () => {
     expect(impactDamage(9000, 10, 0)).toBe(0);
   });
 
-  it('lets a full-speed Bruiser drop a shed in one ram and a house in two', () => {
+  it('lets a Bruiser drop brick at full speed and a house at 60% of it', () => {
     const hit = impactDamage(BRUISER_SPEC.mass, BRUISER_SPEC.topSpeed, 1);
-    expect(hit).toBeGreaterThanOrEqual(STRENGTH_HP.shed);
-    expect(hit).toBeLessThan(STRENGTH_HP.house);
-    expect(hit * 2).toBeGreaterThanOrEqual(STRENGTH_HP.house);
+    expect(hit).toBeGreaterThanOrEqual(STRENGTH_HP.brick);
+    const slower = impactDamage(BRUISER_SPEC.mass, BRUISER_SPEC.topSpeed * 0.6, 1);
+    expect(slower).toBeGreaterThanOrEqual(STRENGTH_HP.house);
+    expect(slower).toBeLessThan(STRENGTH_HP.brick);
   });
 });
 

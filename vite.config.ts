@@ -36,7 +36,7 @@ export default defineConfig({
         short_name: 'Clearway',
         description: "Clear the Hauler's route before it hits anything.",
         display: 'fullscreen',
-        orientation: 'landscape',
+        orientation: 'any',
         background_color: NAVY,
         theme_color: NAVY,
         start_url: './',

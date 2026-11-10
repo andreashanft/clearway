@@ -46,10 +46,16 @@ export interface PropInstance {
   state: 'standing' | 'falling' | 'down';
 }
 
+/** Seconds a knocked-over prop lies there, and then takes to shrink away. */
+const DOWN_LINGER = 1.2;
+const DOWN_VANISH = 0.5;
+
 interface Fall {
   readonly prop: PropInstance;
   readonly axis: Vector3;
   progress: number;
+  /** Seconds since it finished falling. */
+  down: number;
   readonly duration: number;
   /** How far the prop tips over (trees) or squashes (bushes and rocks). */
   readonly kind: 'topple' | 'flatten';
@@ -214,6 +220,7 @@ export class Props {
             // Tipping about this horizontal axis rotates the top towards (fx, fz).
             axis: new Vector3(fz / len, 0, -fx / len),
             progress: 0,
+            down: 0,
             duration: topple ? 0.9 : 0.35,
             kind: topple ? 'topple' : 'flatten',
           });
@@ -224,16 +231,24 @@ export class Props {
     return hits;
   }
 
-  /** Animates falling props. */
+  /** Animates falling props, then clears them away so they don't litter the level. */
   update(dt: number): void {
     if (!this.batch || this.falls.length === 0) return;
     for (let i = this.falls.length - 1; i >= 0; i--) {
       const fall = this.falls[i];
       if (!fall) continue;
       fall.progress = Math.min(1, fall.progress + dt / fall.duration);
+      if (fall.progress >= 1) fall.down += dt;
       // Ease in, like a tree gathering speed as it goes over.
       const t = fall.progress * fall.progress;
       const { prop } = fall;
+      const left = 1 - Math.max(0, Math.min(1, (fall.down - DOWN_LINGER) / DOWN_VANISH));
+      if (left <= 0) {
+        prop.state = 'down';
+        this.batch.setVisibleAt(prop.id, false);
+        this.falls.splice(i, 1);
+        continue;
+      }
       this.quat.setFromAxisAngle(UP_AXIS, prop.yaw);
       this.scaleVec.setScalar(prop.scale);
       if (fall.kind === 'topple') {
@@ -246,11 +261,8 @@ export class Props {
           prop.scale * (1 + 0.3 * t),
         );
       }
+      this.scaleVec.multiplyScalar(left);
       this.batch.setMatrixAt(prop.id, this.matrix.compose(prop.position, this.quat, this.scaleVec));
-      if (fall.progress >= 1) {
-        prop.state = 'down';
-        this.falls.splice(i, 1);
-      }
     }
   }
 

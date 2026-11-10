@@ -63,6 +63,11 @@ export interface VehicleSpec {
   readonly pivotSteer?: number;
   /** How fast the wheels reach the requested angle, rad/s. */
   readonly steerRate: number;
+  /**
+   * Arcade grip: how fast sideways sliding is cancelled while the wheels are down, 1/s.
+   * Higher values corner tighter; 0 leaves cornering to the tyres alone.
+   */
+  readonly grip: number;
   /** Extra yaw control so turning feels responsive; tracked vehicles can pivot in place. */
   readonly yawAssist: {
     readonly maxRate: number;
@@ -107,8 +112,11 @@ export interface Machine {
   impactMultiplier(collider: Collider, normal?: { x: number; y: number; z: number }): number;
   /** Called after this machine's hit damaged a building. */
   onImpact?(damage: number): void;
-  /** Ghost trails and similar ground effects. */
-  emitTrails?(frameSeconds: number, spawn: (at: Vector3) => void): void;
+  /**
+   * Wheel dust and skid trails: calls `spawn` with ground points under the machine, and
+   * `skid` set for the heavier puffs of a skid.
+   */
+  emitTrails?(frameSeconds: number, spawn: (at: Vector3, skid?: boolean) => void): void;
   place(x: number, groundY: number, z: number, heading: number): void;
   control(frame: ControlFrame, cameraYaw: number, dt: number): void;
   idle(dt: number): void;
@@ -127,6 +135,11 @@ export interface ActionState {
 
 const UP = new Vector3(0, 1, 0);
 const FLIP_RECOVER_SECONDS = 1.5;
+/** Fraction of the speed lost to cancelled sliding that goes back into forward speed. */
+const GRIP_CARRY = 0.8;
+/** Wheels kick up dust above this speed, m/s. */
+const DUST_SPEED = 7;
+const DUST_INTERVAL = 0.07;
 
 /**
  * A drivable vehicle: a Rapier rigid body on a ray-cast wheel controller, with the
@@ -171,9 +184,16 @@ export abstract class Vehicle implements Machine {
   drive: DriveOutput = { steer: 0, throttle: 0 };
   braking = false;
 
+  /** Scales `spec.grip`; a skidding vehicle lowers it to let the tail slide. */
+  protected gripScale = 1;
+  /** Scales the yaw assist; a skidding vehicle lowers it so the assist doesn't fight the swing. */
+  protected yawAssistScale = 1;
+  private dustClock = 0;
+
   private readonly tmpQuat = new Quaternion();
   private readonly tmpForward = new Vector3();
   private readonly tmpUp = new Vector3();
+  private readonly tmpDust = new Vector3();
 
   protected constructor(
     physics: Physics,
@@ -312,10 +332,24 @@ export abstract class Vehicle implements Machine {
   /** Advances the wheel controller. Call once per fixed step before the world steps. */
   step(dt: number): void {
     this.controller.updateVehicle(dt, undefined, WHEEL_RAY_GROUPS);
+    this.applyGrip(dt);
     const v = this.body.linvel();
     this.preStepVelocity.set(v.x, v.y, v.z);
     this.readMotion();
     this.recoverIfFlipped(dt);
+  }
+
+  /** Dust from the rear wheels at speed. Subclasses add their own trails on top. */
+  emitTrails(frameSeconds: number, spawn: (at: Vector3, skid?: boolean) => void): void {
+    this.dustClock -= frameSeconds;
+    if (this.dustClock > 0 || !this.grounded) return;
+    if (Math.hypot(this.preStepVelocity.x, this.preStepVelocity.z) < DUST_SPEED) return;
+    this.dustClock = DUST_INTERVAL;
+    const rear = Math.min(...this.spec.wheels.layout.map((w) => w.z));
+    const side = Math.max(...this.spec.wheels.layout.map((w) => Math.abs(w.x)));
+    const x = Math.random() < 0.5 ? side : -side;
+    this.tmpDust.set(x, -this.rideHeight + 0.2, this.forwardSpeed >= 0 ? rear : -rear);
+    spawn(this.root.localToWorld(this.tmpDust));
   }
 
   /** Call after the physics world has stepped. */
@@ -382,12 +416,18 @@ export abstract class Vehicle implements Machine {
 
     let engine = 0;
     let brakeDecel = brake ? spec.brakeDecel : 0;
+    // The throttle sets the speed to hold, not just the push: full power up to that
+    // speed, so a light touch on the stick still pulls away hard but tops out sooner.
     if (drive.throttle > 0.02) {
+      const limit = spec.topSpeed * drive.throttle;
       if (speed < -0.8) brakeDecel = Math.max(brakeDecel, spec.brakeDecel);
-      else engine = drive.throttle * maxForce * taper(speed / spec.topSpeed);
+      else if (speed > limit * 1.08) brakeDecel = Math.max(brakeDecel, spec.coastDecel);
+      else engine = maxForce * taper(speed / limit);
     } else if (drive.throttle < -0.02) {
+      const limit = spec.reverseSpeed * -drive.throttle;
       if (speed > 0.8) brakeDecel = Math.max(brakeDecel, spec.brakeDecel);
-      else engine = drive.throttle * maxForce * 0.7 * taper(-speed / spec.reverseSpeed);
+      else if (-speed > limit * 1.08) brakeDecel = Math.max(brakeDecel, spec.coastDecel);
+      else engine = -maxForce * 0.7 * taper(-speed / limit);
     } else {
       brakeDecel = Math.max(brakeDecel, spec.coastDecel);
     }
@@ -399,7 +439,7 @@ export abstract class Vehicle implements Machine {
 
     // Less steering lock at speed keeps fast vehicles stable; pivoting vehicles get extra
     // lock near standstill so their wheels line up with the turn.
-    const speedFactor = 1 - 0.55 * Math.min(1, Math.abs(speed) / Math.max(1, spec.topSpeed));
+    const speedFactor = 1 - 0.45 * Math.min(1, Math.abs(speed) / Math.max(1, spec.topSpeed));
     const pivotBlend = spec.pivotSteer ? 1 - Math.min(1, Math.abs(speed) / 3) : 0;
     const lock = spec.maxSteer + ((spec.pivotSteer ?? spec.maxSteer) - spec.maxSteer) * pivotBlend;
     const targetSteer = -drive.steer * lock * speedFactor;
@@ -415,6 +455,34 @@ export abstract class Vehicle implements Machine {
     this.applyYawAssist(drive, speed);
   }
 
+  /**
+   * Cancels sideways sliding while the wheels are down, so the vehicle goes where it
+   * points. It changes the velocity directly, which can't tip the vehicle the way tyre
+   * forces at ground level do.
+   */
+  private applyGrip(dt: number): void {
+    const rate = this.spec.grip * this.gripScale;
+    if (rate <= 0 || !this.grounded) return;
+    const r = this.body.rotation();
+    this.tmpQuat.set(r.x, r.y, r.z, r.w);
+    this.tmpForward.set(0, 0, 1).applyQuaternion(this.tmpQuat);
+    const fl = Math.hypot(this.tmpForward.x, this.tmpForward.z);
+    if (fl < 0.5) return;
+    const fx = this.tmpForward.x / fl;
+    const fz = this.tmpForward.z / fl;
+    const v = this.body.linvel();
+    const along = v.x * fx + v.z * fz;
+    const sideways = v.x * fz - v.z * fx;
+    if (Math.abs(sideways) < 0.05) return;
+    const kept = sideways * Math.exp(-rate * dt);
+    // Hand part of the lost sliding speed back to the forward speed, so a hard turn
+    // doesn't feel like braking.
+    const before = Math.hypot(along, sideways);
+    const after = Math.hypot(along, kept);
+    const carried = along + Math.sign(along) * (before - after) * GRIP_CARRY;
+    this.body.setLinvel({ x: fx * carried + fz * kept, y: v.y, z: fz * carried - fx * kept }, true);
+  }
+
   private applyYawAssist(drive: DriveOutput, speed: number): void {
     const { yawAssist, topSpeed } = this.spec;
     if (!this.grounded || yawAssist.strength <= 0) return;
@@ -424,11 +492,11 @@ export abstract class Vehicle implements Machine {
     else if (drive.throttle < -0.02) direction = -1;
     // Wheeled vehicles need some speed to turn; tracked ones pivot from standstill.
     const speedGate = yawAssist.pivotInPlace ? 1 : Math.min(1, Math.abs(speed) / 3);
-    const atSpeed = 1 - 0.4 * Math.min(1, Math.abs(speed) / topSpeed);
+    const atSpeed = 1 - 0.3 * Math.min(1, Math.abs(speed) / topSpeed);
     const desired = -drive.steer * yawAssist.maxRate * speedGate * atSpeed * direction;
     const current = this.body.angvel().y;
     const inertia = this.body.principalInertia().y;
-    const impulse = (desired - current) * inertia * yawAssist.strength;
+    const impulse = (desired - current) * inertia * yawAssist.strength * this.yawAssistScale;
     this.body.applyTorqueImpulse({ x: 0, y: impulse, z: 0 }, true);
   }
 

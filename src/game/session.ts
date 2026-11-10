@@ -4,7 +4,7 @@ import type { RouteObstacle } from './hauler/route-sweep';
 import { type LevelStats, medalFor } from './scoring';
 import type { Buildings } from './world/buildings';
 
-export type Phase = 'countdown' | 'clearing' | 'pathClear' | 'freeRoam' | 'results' | 'failed';
+export type Phase = 'clearing' | 'pathClear' | 'results' | 'failed';
 export type Difficulty = 'easy' | 'normal';
 
 export interface ObstacleState {
@@ -16,11 +16,8 @@ export interface ObstacleState {
   cleared: boolean;
 }
 
-/** Seconds the "Path clear" banner plays before free roam. */
-export const PATH_CLEAR_BANNER = 3;
-/** Easy mode: the Hauler stalls once for this long when an impact is this close. */
-export const EASY_STALL_SECONDS = 8;
-export const EASY_STALL_TRIGGER = 3;
+/** Easy mode: the Hauler drives at this share of the level's speed for the whole run. */
+export const EASY_SPEED_FACTOR = 0.75;
 /** Countdown thresholds for the HUD: amber under 15 s, red under 5 s. */
 export const AMBER_SECONDS = 15;
 export const RED_SECONDS = 5;
@@ -40,11 +37,6 @@ export function labelFor(id: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-/**
- * The rules of one attempt at a level: start delay, the race against the Hauler, path
- * clear, free roam, results, or failure. It reads the Hauler and buildings and reports
- * progress on the event bus.
- */
 /** What the session needs to know about the level's pickups for the medal. */
 export interface PickupCounts {
   readonly beaconsFound: number;
@@ -53,27 +45,29 @@ export interface PickupCounts {
   readonly dishExists: boolean;
 }
 
+/**
+ * The rules of one attempt at a level. The Hauler rolls from the first moment. The player
+ * clears its path, then has until the Hauler leaves the level to destroy more for a
+ * better medal. Touching anything fails the run. It reads the Hauler and buildings and
+ * reports progress on the event bus.
+ */
 export class LevelSession {
-  phase: Phase = 'countdown';
+  phase: Phase = 'clearing';
   readonly obstacles: ObstacleState[];
   /** Ignore Hauler contact (debug). */
   invincible = false;
-  /** Seconds since the Hauler started rolling. */
+  /** Seconds since the run began. */
   elapsed = 0;
   clearTime: number | null = null;
-  private delayLeft: number;
-  private bannerLeft = 0;
-  private stallUsed = false;
 
   constructor(
     obstacles: readonly RouteObstacle[],
     private readonly hauler: Hauler,
     private readonly buildings: Buildings,
     private readonly bus: GameBus,
-    startDelay: number,
-    private readonly difficulty: Difficulty = 'normal',
+    /** Length of the Hauler's route; the run ends when its nose passes this. */
+    private readonly routeLength: number,
   ) {
-    this.delayLeft = startDelay;
     this.obstacles = obstacles.map((o) => ({
       id: o.id,
       label: labelFor(o.id),
@@ -93,9 +87,13 @@ export class LevelSession {
   /** Seconds until the Hauler reaches the next obstacle, or null when there is none. */
   get countdown(): number | null {
     const next = this.next;
-    if (!next || (this.phase !== 'countdown' && this.phase !== 'clearing')) return null;
-    const travel = (next.distance - this.hauler.distance) / this.hauler.speed;
-    return Math.max(0, travel + (this.phase === 'countdown' ? this.delayLeft : 0));
+    if (!next || this.phase !== 'clearing') return null;
+    return Math.max(0, (next.distance - this.hauler.distance) / this.hauler.cruiseSpeed);
+  }
+
+  /** Seconds until the Hauler leaves the level and the run ends. */
+  get timeLeft(): number {
+    return Math.max(0, (this.routeLength - this.hauler.distance) / this.hauler.cruiseSpeed);
   }
 
   /** Beacon and relay dish counts, when the level has pickups. */
@@ -123,27 +121,10 @@ export class LevelSession {
   }
 
   step(dt: number): void {
-    switch (this.phase) {
-      case 'countdown':
-        this.delayLeft -= dt;
-        if (this.delayLeft <= 0) {
-          this.hauler.start();
-          this.setPhase('clearing');
-        }
-        break;
-      case 'clearing':
-        this.elapsed += dt;
-        this.maybeStall();
-        break;
-      case 'pathClear':
-        this.elapsed += dt;
-        this.bannerLeft -= dt;
-        if (this.bannerLeft <= 0) this.setPhase('freeRoam');
-        break;
-      case 'freeRoam':
-      case 'results':
-      case 'failed':
-        break;
+    if (this.phase === 'clearing' || this.phase === 'pathClear') {
+      this.elapsed += dt;
+      // The Hauler is through: whatever still stands, the run is over.
+      if (this.hauler.pastEnd && this.phase === 'pathClear') this.finish();
     }
     this.hauler.setAlarm(urgencyFor(this.countdown) === 'red' ? 1 : 0);
   }
@@ -173,46 +154,25 @@ export class LevelSession {
   }
 
   private checkPathClear(): void {
-    if (
-      (this.phase === 'clearing' || this.phase === 'countdown') &&
-      this.obstacles.every((o) => o.cleared)
-    ) {
-      this.clearTime = this.elapsed;
-      this.bus.emit('path:cleared', { seconds: this.elapsed });
-      this.bannerLeft = PATH_CLEAR_BANNER;
-      this.hauler.headForSafeZone();
-      this.setPhase('pathClear');
-    }
+    if (this.phase !== 'clearing' || !this.obstacles.every((o) => o.cleared)) return;
+    this.clearTime = this.elapsed;
+    this.setPhase('pathClear');
+    this.bus.emit('path:cleared', { seconds: this.elapsed, timeLeft: this.timeLeft });
   }
 
   /** The Hauler touched something solid. Returns true if this fails the level. */
   haulerContact(): boolean {
-    if (this.invincible || (this.phase !== 'clearing' && this.phase !== 'countdown')) return false;
+    if (this.invincible || this.phase !== 'clearing') return false;
     this.setPhase('failed');
     return true;
   }
 
-  /** Ends free roam and shows the results. */
+  /** Ends the run and shows the results. The path must be clear. */
   finish(): void {
-    if (this.phase !== 'freeRoam' && this.phase !== 'pathClear') return;
+    if (this.phase !== 'pathClear') return;
     this.setPhase('results');
     const stats = this.stats;
     this.bus.emit('session:results', { stats, medal: medalFor(stats) });
-  }
-
-  /** Results were shown, and the player chose to keep exploring. */
-  resumeFreeRoam(): void {
-    if (this.phase === 'results') this.setPhase('freeRoam');
-  }
-
-  private maybeStall(): void {
-    if (this.difficulty !== 'easy' || this.stallUsed) return;
-    const countdown = this.countdown;
-    if (countdown !== null && countdown < EASY_STALL_TRIGGER) {
-      this.stallUsed = true;
-      this.hauler.stall(EASY_STALL_SECONDS);
-      this.bus.emit('hauler:stalled', { seconds: EASY_STALL_SECONDS });
-    }
   }
 
   private setPhase(phase: Phase): void {

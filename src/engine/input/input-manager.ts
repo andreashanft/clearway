@@ -19,6 +19,7 @@ export class InputManager {
     this.keyboard = new Keyboard();
     this.lastSource = matchMedia('(pointer: coarse)').matches ? 'touch' : 'keyboard';
     wheelTarget.addEventListener('wheel', this.onWheel, { passive: false });
+    window.addEventListener('pointerdown', this.onPointerDown);
   }
 
   get source(): InputSource {
@@ -118,6 +119,7 @@ export class InputManager {
   dispose(): void {
     this.keyboard.dispose();
     this.wheelTarget.removeEventListener('wheel', this.onWheel);
+    window.removeEventListener('pointerdown', this.onPointerDown);
     this.sourceListeners.clear();
   }
 
@@ -126,6 +128,11 @@ export class InputManager {
     this.lastSource = source;
     for (const listener of this.sourceListeners) listener(source);
   }
+
+  /** Any finger on the screen brings up the touch controls, on hybrid devices too. */
+  private readonly onPointerDown = (event: PointerEvent): void => {
+    if (event.pointerType === 'touch') this.touch.active = true;
+  };
 
   private readonly onWheel = (event: WheelEvent): void => {
     event.preventDefault();

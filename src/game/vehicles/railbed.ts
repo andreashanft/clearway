@@ -14,9 +14,9 @@ import type { Heightfield } from '../world/heightfield';
 import type { ActionState, Machine, MachineSpec } from './vehicle';
 
 const KMH = 1 / 3.6;
-export const RAILBED_TOP_SPEED = 45 * KMH;
-const ACCELERATION = 4;
-const BRAKE = 6;
+export const RAILBED_TOP_SPEED = 80 * KMH;
+const ACCELERATION = 13;
+const BRAKE = 20;
 /** Height of the deck top above the rails; the cutting is this deep, so it bridges flush. */
 export const DECK_HEIGHT = 1.6;
 const HALF_HEIGHT = 0.7;

@@ -57,7 +57,7 @@ export interface PointToDriveOptions {
 export class PointToDrive {
   private reversing = false;
 
-  constructor(private readonly options: PointToDriveOptions = { fullLockAngle: 35 * DEG }) {}
+  constructor(private readonly options: PointToDriveOptions = { fullLockAngle: 24 * DEG }) {}
 
   get isReversing(): boolean {
     return this.reversing;
@@ -83,7 +83,7 @@ export class PointToDrive {
     this.reversing = false;
     // A positive heading change turns left, so steering right is the negative of it.
     const steer = clampUnit(-diff / this.options.fullLockAngle);
-    const turnSlowdown = 1 - 0.65 * smoothstep(0.35, 2.4, absDiff);
+    const turnSlowdown = 1 - 0.4 * smoothstep(0.6, 2.4, absDiff);
     return { steer, throttle: magnitude * turnSlowdown };
   }
 }

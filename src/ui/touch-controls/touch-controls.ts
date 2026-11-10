@@ -4,6 +4,10 @@ import type { GameBus } from '../../game/events';
 
 /** Stick travel from centre to rim, in CSS pixels (half the 116 px base). */
 const STICK_RADIUS = 58;
+/** Fraction of the travel that already means full throttle, so a short push is enough. */
+const FULL_THROTTLE_AT = 0.6;
+/** Travel below this fraction is ignored, so a resting thumb doesn't creep. */
+const STICK_DEAD_ZONE = 0.12;
 
 /**
  * The default "point-to-drive" touch layout from the gameplay mocks: a floating stick
@@ -182,8 +186,14 @@ export class TouchControls {
       this.touch.steer = dx / STICK_RADIUS;
     } else {
       this.knob.style.transform = `translate(${dx}px, ${dy}px)`;
-      this.touch.stickX = dx / STICK_RADIUS;
-      this.touch.stickY = -dy / STICK_RADIUS;
+      const travel = Math.min(1, length / STICK_RADIUS);
+      const push =
+        travel <= STICK_DEAD_ZONE
+          ? 0
+          : Math.min(1, (travel - STICK_DEAD_ZONE) / (FULL_THROTTLE_AT - STICK_DEAD_ZONE));
+      const scale = length > 0 ? push / length : 0;
+      this.touch.stickX = dx * scale;
+      this.touch.stickY = -dy * scale;
     }
     this.touch.active = true;
   }

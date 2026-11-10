@@ -50,9 +50,9 @@ body {
     env(safe-area-inset-left);
 }
 
-#ui > * {
-  pointer-events: auto;
-}
+/* Each layer inside #ui decides for itself what takes taps: the touch controls, the HUD
+   and the screen layer all cover the whole view, so none of them may swallow input meant
+   for a layer below. */
 
 .cw-boot-error {
   position: absolute;

@@ -13,7 +13,7 @@
   },
   "hauler": {
     "speed": 4,
-    "startDelay": 5,
+    "leadIn": 5,
     "route": [
       [-300, 110],
       [301.4, -108.9]
@@ -264,12 +264,8 @@
   "description": "Clear 5 obstacles and bridge the rail cutting before the Hauler reaches them.",
   "hints": {
     "start": "Hold Action to skid. The Fishtail’s tail does the damage.",
-    "terrace-a": "Skid past the terraces so the tail swings into them.",
-    "shop-pub": "Brick. Build speed down the high street, then skid into the shop and the pub.",
     "rail-cutting": "The Hauler can’t cross the cutting. Fetch the Railbed from down the line and park it in the glowing slot.",
-    "terrace-b": "Skid along terrace B on both sides of the street.",
-    "signal-box": "Concrete. Bring the TNT crate from the goods yard with the Bruiser.",
-    "warehouses": "Brick warehouses: skid hard into both, or ram them with the Bruiser."
+    "signal-box": "Concrete. Bring the TNT crate from the goods yard with the Bruiser."
   },
   "tips": {
     "terrace-a": "Hold Action to skid. Only the tail hits hard, so swing it into the houses.",

@@ -8,7 +8,7 @@ import type { Route } from '../route';
 import type { Heightfield } from '../world/heightfield';
 import { HAULER } from './route-sweep';
 
-export type HaulerState = 'waiting' | 'rolling' | 'stalled' | 'parked' | 'destroyed';
+export type HaulerState = 'rolling' | 'destroyed';
 
 /** A route gap: across it the Hauler rides on the bridge deck, if there is one. */
 export interface HaulerGap {
@@ -17,9 +17,6 @@ export interface HaulerGap {
   readonly deckHeight: number;
   bridged(): boolean;
 }
-
-/** Speed multiplier once the path is clear and the Hauler heads for the safe zone. */
-export const SAFE_ZONE_SPEEDUP = 2.5;
 
 /** What the Hauler's bumper sensor may touch: anything solid except rubble and the ground. */
 const SENSOR_GROUPS = interactionGroups(
@@ -30,21 +27,20 @@ const SENSOR_GROUPS = interactionGroups(
 const BODY_GROUPS = interactionGroups(GROUP.hauler, GROUP.vehicle | GROUP.pilot | GROUP.tnt);
 
 /**
- * The carrier. It follows the route spline at a fixed speed as a kinematic body, never
- * steering or stopping, and reports anything its bumper sensor touches.
+ * The carrier. It drives its straight route at one constant speed as a kinematic body. It
+ * never steers, slows or stops: it rolls in from before the route's start and carries on
+ * past its end. It reports anything its bumper sensor touches.
  */
 export class Hauler {
   readonly model: HaulerModel;
   readonly body: RigidBody;
   readonly sensor: Collider;
   readonly solid: Collider;
-  state: HaulerState = 'waiting';
+  state: HaulerState = 'rolling';
   /** Distance of the nose along the route, in metres. */
   distance = 0;
   /** Route gaps the Hauler must cross on a bridge. */
   gaps: HaulerGap[] = [];
-  /** Seconds left on an easy-mode stall. */
-  private stallLeft = 0;
   private speedFactor = 1;
   private readonly pose: InterpolatedPose;
   private readonly position = new Vector3();
@@ -107,16 +103,17 @@ export class Hauler {
     return this.model.root.position;
   }
 
-  /** True when the Hauler has reached the end of its route. */
-  get atSafeZone(): boolean {
+  /** True once the nose has passed the end of the route. */
+  get pastEnd(): boolean {
     return this.distance >= this.route.length;
   }
 
-  start(): void {
-    if (this.state === 'waiting') this.state = 'rolling';
+  /** The speed it actually drives at, in metres per second. */
+  get cruiseSpeed(): number {
+    return this.speed * this.speedFactor;
   }
 
-  /** Jumps the nose to `distance` with no blending (title-screen loop). */
+  /** Jumps the nose to `distance` with no blending (level start, title-screen loop). */
   resetTo(distance: number): void {
     this.distance = distance;
     this.computePose(distance);
@@ -125,22 +122,9 @@ export class Hauler {
     this.pose.snap();
   }
 
-  /** Overrides the cruise speed multiplier (title-screen loop, safe-zone run). */
+  /** Sets the cruise speed multiplier for a whole run (easy mode, title-screen loop). */
   setSpeedFactor(factor: number): void {
     this.speedFactor = factor;
-  }
-
-  /** Easy mode: pauses the Hauler once for `seconds`. */
-  stall(seconds: number): void {
-    if (this.state !== 'rolling') return;
-    this.state = 'stalled';
-    this.stallLeft = seconds;
-  }
-
-  /** Path clear: hurry on to the safe zone. */
-  headForSafeZone(): void {
-    this.speedFactor = SAFE_ZONE_SPEEDUP;
-    if (this.state === 'waiting' || this.state === 'stalled') this.state = 'rolling';
   }
 
   /** 0 = calm, 1 = under 5 s to impact (beacons strobe). */
@@ -155,15 +139,10 @@ export class Hauler {
   }
 
   step(dt: number): void {
-    if (this.state === 'stalled') {
-      this.stallLeft -= dt;
-      if (this.stallLeft <= 0) this.state = 'rolling';
-    }
     if (this.state !== 'rolling') return;
-    const advance = this.speed * this.speedFactor * dt;
-    this.distance = Math.min(this.route.length, this.distance + advance);
+    const advance = this.cruiseSpeed * dt;
+    this.distance += advance;
     this.wheelSpin += advance / 0.58;
-    if (this.atSafeZone) this.state = 'parked';
     this.computePose(this.distance);
     this.body.setNextKinematicTranslation(this.position);
     this.body.setNextKinematicRotation(this.rotation);
@@ -209,10 +188,10 @@ export class Hauler {
       .addScaledVector(this.up, HAULER_RIDE_HEIGHT);
   }
 
-  /** Ground point at a route distance; before the start it extends the first tangent. */
+  /** Ground point at a route distance; the line carries on straight beyond both ends. */
   private groundPoint(distance: number): Vector3 {
     const s = this.route.sampleAt(distance);
-    const extra = Math.min(0, distance);
+    const extra = distance < 0 ? distance : Math.max(0, distance - this.route.length);
     const x = s.x + s.dx * extra;
     const z = s.z + s.dz * extra;
     let y = this.field.heightAt(x, z);

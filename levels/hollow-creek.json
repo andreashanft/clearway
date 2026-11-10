@@ -13,7 +13,7 @@
   },
   "hauler": {
     "speed": 3,
-    "startDelay": 5,
+    "leadIn": 5,
     "route": [
       [-250, 140],
       [231.1, -105.2]
@@ -205,16 +205,11 @@
   "description": "Clear 6 obstacles before the Hauler reaches them. The stone barn only falls to TNT.",
   "hints": {
     "start": "The Hauler drives straight on. Clear its path, starting with the tool shed.",
-    "tool-shed": "Ram the tool shed at speed. Sheds fall in one hit.",
-    "farmhouse": "Hit it at speed: houses take two rams.",
-    "fuel-kiosk": "Ram the fuel kiosk on Creek Road, then get clear. It explodes.",
-    "hay-barn": "The hay barn is across the creek. Two rams.",
-    "stone-barn": "Concrete. Push a TNT crate against the stone barn and back off.",
-    "twin-silos": "Brick silos: build speed downhill from the north-west."
+    "stone-barn": "Concrete. Push a TNT crate against the stone barn and back off."
   },
   "tips": {
     "tool-shed": "Head straight for the shed: it is only 30 seconds away.",
-    "farmhouse": "Houses take two rams. Build speed on the downhill first.",
+    "farmhouse": "A house falls to one ram at full speed. Take a longer run-up.",
     "fuel-kiosk": "Ram the kiosk once at speed and back off before it blows.",
     "hay-barn": "Leave the farmhouse early: the hay barn is across the creek.",
     "stone-barn": "Only TNT drops concrete. Light a crate by touching it with the Bruiser, then push it against the barn.",

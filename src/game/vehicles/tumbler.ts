@@ -58,7 +58,7 @@ export const TUMBLER_SPEC: VehicleSpec = {
     stiffness: 45,
     compression: 5,
     relaxation: 3.5,
-    frictionSlip: 2.4,
+    frictionSlip: 3,
     sideFriction: 1.6,
     layout: [
       { x: 1.5, z: 1.3, steer: 1, driven: true },
@@ -67,15 +67,16 @@ export const TUMBLER_SPEC: VehicleSpec = {
       { x: -1.5, z: -1.3, steer: -1, driven: true },
     ],
   },
-  topSpeed: 40 * KMH,
-  reverseSpeed: 12 * KMH,
-  acceleration: 3.5,
-  brakeDecel: 10,
-  coastDecel: 5,
+  topSpeed: 66 * KMH,
+  reverseSpeed: 30 * KMH,
+  acceleration: 15,
+  brakeDecel: 20,
+  coastDecel: 8,
   maxSteer: 0.3,
   pivotSteer: 0.7,
-  steerRate: 1.5,
-  yawAssist: { maxRate: 0.75, strength: 0.3, pivotInPlace: true },
+  steerRate: 3,
+  grip: 9,
+  yawAssist: { maxRate: 1.7, strength: 0.35, pivotInPlace: true },
 };
 
 const STEEL: Finish = { colour: '#C9CED6', roughness: 0.35, metalness: 0.7 };

@@ -1,5 +1,4 @@
-/* The in-game HUD. Sizes follow the phone-landscape mock and grow on iPad and desktop.
-   --cw-hud-scale (Settings) scales every panel. */
+/* The in-game HUD. Sizes follow the phone-landscape mock and grow on iPad and desktop. */
 
 .cw-hud {
   position: absolute;
@@ -9,8 +8,8 @@
   font-family: var(--cw-font-body);
   --pad: 14px;
   --gap: 8px;
-  /* Width of the route panel, top centre; the counters wrap to stay clear of it. */
-  --route-w: min(320px, 40vw);
+  /* Width of the countdown panel, top centre; the counters wrap to stay clear of it. */
+  --route-w: min(280px, 38vw);
 }
 
 .cw-hud[hidden],
@@ -23,16 +22,6 @@
   pointer-events: auto;
 }
 
-.cw-hud__counters,
-.cw-hud__top,
-.cw-hud__minimap,
-.cw-hud__vehicle,
-.cw-hud__keys,
-.cw-hud__finish,
-.cw-hud__roam {
-  transform: scale(var(--cw-hud-scale));
-}
-
 /* Counters, top left. */
 .cw-hud__counters {
   position: absolute;
@@ -42,10 +31,8 @@
   flex-wrap: wrap;
   gap: var(--gap);
   align-items: flex-start;
-  max-width: calc(
-    (100vw - var(--route-w) * var(--cw-hud-scale)) / 2 / var(--cw-hud-scale) - var(--pad) - 12px
-  );
-  transform-origin: top left;
+  /* Stay clear of the route panel, also when a notch pushes the counters inwards. */
+  max-width: calc((100vw - var(--route-w)) / 2 - env(safe-area-inset-left) - var(--pad) - 12px);
 }
 
 .cw-hud__counter {
@@ -151,7 +138,7 @@
   display: none;
 }
 
-/* Route bar and hint, top centre. */
+/* Countdown and hint, top centre. */
 .cw-hud__top {
   position: absolute;
   top: calc(12px + env(safe-area-inset-top));
@@ -162,20 +149,26 @@
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  transform-origin: top center;
 }
 
 .cw-hud__route {
   width: 100%;
-  padding: 7px 14px 9px;
+  padding: 7px 14px;
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--gap);
   background: var(--cw-glass-strong);
   transition:
     border-color var(--cw-normal) var(--cw-ease),
     box-shadow var(--cw-normal) var(--cw-ease);
   --tone: var(--cw-ink);
+}
+
+/* With the path clear, the panel counts down the rest of the run in green. */
+.cw-hud[data-phase='pathClear'] .cw-hud__route {
+  --tone: var(--cw-go);
+  border-color: rgb(61 245 160 / 0.45);
 }
 
 .cw-hud__route[data-urgency='amber'] {
@@ -189,13 +182,6 @@
   border-color: rgb(255 61 90 / 0.6);
   box-shadow: 0 0 22px rgb(255 61 90 / 0.35);
   animation: cw-pulse 0.6s var(--cw-ease) infinite alternate;
-}
-
-.cw-hud__route-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--gap);
 }
 
 .cw-hud__route-label {
@@ -215,38 +201,6 @@
   color: var(--tone);
   text-shadow: 0 0 14px color-mix(in srgb, var(--tone) 60%, transparent);
   font-variant-numeric: tabular-nums;
-}
-
-.cw-hud__route-track {
-  position: relative;
-  height: 8px;
-  background: rgb(238 243 255 / 0.12);
-}
-
-.cw-hud__route-fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 0%;
-  background: linear-gradient(90deg, var(--cw-alarm), var(--cw-amber));
-  box-shadow: 0 0 10px rgb(255 61 90 / 0.7);
-}
-
-.cw-hud__tick {
-  position: absolute;
-  top: -3px;
-  width: 3px;
-  height: 14px;
-  margin-left: -1.5px;
-  border-radius: 2px;
-  background: var(--cw-ink);
-}
-
-.cw-hud__tick.is-next {
-  background: var(--cw-amber);
-}
-
-.cw-hud__tick.is-cleared {
-  background: var(--cw-go);
 }
 
 .cw-hud__hint {
@@ -281,7 +235,6 @@
   height: 92px;
   overflow: hidden;
   border-radius: 12px;
-  transform-origin: top right;
   cursor: pointer;
 }
 
@@ -314,6 +267,11 @@
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
+}
+
+/* Positions arrive ten times a second; glide between them. */
+.cw-hud__pointer.is-tracking {
+  transition: transform 110ms linear;
 }
 
 .cw-hud__pointer span {
@@ -383,42 +341,6 @@
   color: var(--cw-ink-soft);
 }
 
-/* Free roam. */
-.cw-hud__roam {
-  position: absolute;
-  left: 50%;
-  bottom: calc(18px + env(safe-area-inset-bottom));
-  translate: -50% 0;
-  max-width: calc(100% - 340px);
-  padding: 9px 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: rgb(14 28 64 / 0.88);
-  border: 1px solid rgb(46 230 255 / 0.45);
-  box-shadow: 0 0 20px rgb(46 230 255 / 0.2);
-  border-radius: 12px;
-  font-size: 13px;
-  color: var(--cw-ink-soft);
-  transform-origin: bottom center;
-}
-
-.cw-hud__roam-title {
-  font-family: var(--cw-font-display);
-  font-weight: 900;
-  font-size: 20px;
-  letter-spacing: 0.04em;
-  color: var(--cw-signal);
-  white-space: nowrap;
-}
-
-.cw-hud__finish {
-  position: absolute;
-  right: calc(18px + env(safe-area-inset-right));
-  top: calc(116px + env(safe-area-inset-top));
-  transform-origin: top right;
-}
-
 /* Vehicle card and key hints: keyboard and gamepad only. */
 .cw-hud__vehicle,
 .cw-hud__keys {
@@ -438,7 +360,6 @@
   background: linear-gradient(180deg, rgb(26 43 88 / 0.92), rgb(19 34 72 / 0.92));
   border: 1px solid rgb(255 210 63 / 0.45);
   box-shadow: 0 0 24px rgb(255 210 63 / 0.15);
-  transform-origin: bottom left;
 }
 
 .cw-hud__vehicle-head {
@@ -472,7 +393,6 @@
   gap: 8px 18px;
   font-size: 12px;
   color: var(--cw-ink-soft);
-  transform-origin: bottom right;
 }
 
 .cw-hud__keys b {
@@ -520,7 +440,7 @@
   }
 
   .cw-hud__route {
-    padding: 12px 20px 14px;
+    padding: 10px 20px;
   }
 
   .cw-hud__route-label {
@@ -529,10 +449,6 @@
 
   .cw-hud__route-timer {
     font-size: 46px;
-  }
-
-  .cw-hud__route-track {
-    height: 10px;
   }
 
   .cw-hud__hint {
@@ -544,10 +460,6 @@
     width: 220px;
     height: 154px;
   }
-
-  .cw-hud__finish {
-    top: calc(196px + env(safe-area-inset-top));
-  }
 }
 
 /* Desktop: room for the level name next to the counters. */
@@ -557,11 +469,136 @@
   }
 }
 
-/* Phone portrait never plays (the rotate card shows), but keep things on screen. */
+/* Phone landscape: slimmer panels, so more of the view is the game. */
+@media (max-height: 480px) and (min-aspect-ratio: 1/1) {
+  .cw-hud {
+    --pad: 12px;
+    --gap: 6px;
+    --route-w: min(300px, 38vw);
+  }
+
+  .cw-hud__counter {
+    height: 38px;
+    padding: 3px 10px;
+  }
+
+  .cw-hud__counter .cw-stat__label {
+    font-size: 8px;
+  }
+
+  .cw-hud__counter .cw-stat__value {
+    font-size: 17px;
+  }
+
+  .cw-hud__route {
+    padding: 5px 12px;
+  }
+
+  .cw-hud__route-timer {
+    font-size: 26px;
+  }
+
+  .cw-hud__minimap {
+    width: 116px;
+    height: 80px;
+  }
+
+  .cw-hud__pointer {
+    padding: 4px 10px 4px 6px;
+    font-size: 10px;
+  }
+}
+
+/* The shortest views, such as a phone browser in landscape with its toolbar showing. */
+@media (max-height: 340px) and (min-aspect-ratio: 1/1) {
+  .cw-hud__counters,
+  .cw-hud__top,
+  .cw-hud__minimap {
+    top: calc(8px + env(safe-area-inset-top));
+  }
+
+  .cw-hud__counter {
+    height: 34px;
+    padding: 2px 8px;
+  }
+
+  .cw-hud__counter .cw-stat__value {
+    font-size: 15px;
+  }
+
+  .cw-hud__route-timer {
+    font-size: 22px;
+  }
+
+  .cw-hud__hint {
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+
+  .cw-hud__minimap {
+    width: 96px;
+    height: 66px;
+  }
+}
+
+/* Portrait: counters in a row, the countdown across the full width below them, then the
+   hint on the left and the mini-map on the right. */
 @media (max-aspect-ratio: 1/1) {
+  .cw-hud {
+    --pad: 12px;
+    --gap: 6px;
+    --row: 44px;
+    --map-w: 108px;
+    --map-h: 76px;
+    --route-top: calc(12px + var(--row) + 8px + env(safe-area-inset-top));
+    --below-route: calc(var(--route-top) + 52px);
+  }
+
+  .cw-hud__counters {
+    max-width: calc(
+      100vw - 2 * var(--pad) - env(safe-area-inset-left) - env(safe-area-inset-right)
+    );
+  }
+
+  .cw-hud__counter {
+    padding: 4px 10px;
+  }
+
   .cw-hud__top {
-    top: calc(64px + env(safe-area-inset-top));
+    top: var(--route-top);
     width: calc(100% - 2 * var(--pad));
+    align-items: flex-start;
+  }
+
+  .cw-hud__hint {
+    max-width: calc(100% - var(--map-w) - 10px);
+    border-radius: 14px;
+  }
+
+  .cw-hud__minimap {
+    top: var(--below-route);
+    width: var(--map-w);
+    height: var(--map-h);
+  }
+
+  .cw-hud__banner {
+    flex-direction: column;
+    gap: 12px;
+    padding: 18px var(--pad);
+    text-align: center;
+  }
+
+  .cw-hud__banner-text {
+    align-items: center;
+  }
+
+  .cw-hud__banner-sub {
+    justify-content: center;
+  }
+
+  .cw-hud[data-input='keyboard'] .cw-hud__context,
+  .cw-hud[data-input='gamepad'] .cw-hud__context {
+    bottom: calc(28px + env(safe-area-inset-bottom));
   }
 }
 

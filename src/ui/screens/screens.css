@@ -1,5 +1,5 @@
 /* Full-screen menus and overlays. Phone landscape (844 × 390) is the design size; larger
-   screens scale up and portrait screens stack. */
+   screens scale up, portrait screens stack and short phones tighten up. */
 
 .cw-screen {
   position: absolute;
@@ -91,10 +91,6 @@
   font-size: clamp(64px, 19cqh, 132px);
 }
 
-.cw-title__lead {
-  max-width: 34ch;
-}
-
 .cw-title__actions {
   margin-top: auto;
   display: flex;
@@ -107,22 +103,6 @@
   height: 52px;
   padding: 0 34px;
   font-size: 26px;
-}
-
-.cw-title__status {
-  position: absolute;
-  right: calc(18px + env(safe-area-inset-right));
-  top: calc(18px + env(safe-area-inset-top));
-  height: 34px;
-  padding: 0 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--cw-glass);
-  border: 1px solid rgb(255 61 90 / 0.5);
-  border-radius: 999px;
-  font-family: var(--cw-font-mono);
-  font-size: 11px;
 }
 
 .cw-title__counters {
@@ -171,14 +151,11 @@
     height: 56px;
   }
 
-  .cw-title__status {
-    left: 16px;
-    right: auto;
-    top: calc(16px + env(safe-area-inset-top));
-  }
-
   .cw-title__counters {
-    display: none;
+    right: auto;
+    left: 16px;
+    bottom: auto;
+    top: calc(16px + env(safe-area-inset-top));
   }
 }
 
@@ -346,124 +323,6 @@
 
   .cw-level-card__art {
     flex-basis: 120px;
-  }
-}
-
-/* Briefing --------------------------------------------------------------- */
-
-.cw-briefing__flyover {
-  position: absolute;
-  left: calc(16px + env(safe-area-inset-left));
-  top: calc(16px + env(safe-area-inset-top));
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.cw-briefing__progress {
-  position: absolute;
-  left: calc(16px + env(safe-area-inset-left));
-  bottom: calc(16px + env(safe-area-inset-bottom));
-  width: min(330px, 40vw);
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.cw-progress {
-  flex: 1;
-  height: 6px;
-  background: rgb(238 243 255 / 0.2);
-  position: relative;
-}
-
-.cw-progress > div {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: linear-gradient(90deg, var(--cw-blue), var(--cw-signal));
-  box-shadow: 0 0 10px rgb(46 230 255 / 0.6);
-}
-
-.cw-briefing__panel {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: min(360px, 42vw);
-  padding: calc(18px + env(safe-area-inset-top)) calc(22px + env(safe-area-inset-right))
-    calc(20px + env(safe-area-inset-bottom)) 22px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background: var(--cw-ground);
-  background-image: radial-gradient(circle at 100% 0%, rgb(61 123 255 / 0.35), transparent 55%);
-  overflow-y: auto;
-}
-
-.cw-briefing__panel::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: 100%;
-  width: 180px;
-  background: linear-gradient(90deg, transparent, rgb(11 20 48 / 0.95));
-  pointer-events: none;
-}
-
-.cw-briefing__panel .cw-heading {
-  font-size: 44px;
-  line-height: 0.88;
-}
-
-.cw-briefing__stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.cw-briefing__stats > * {
-  padding: 7px 10px;
-}
-
-.cw-briefing__vehicles {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.cw-briefing__vehicles > span {
-  height: 32px;
-  padding: 0 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--cw-glass);
-  border: 1px solid var(--cw-line);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.cw-briefing__panel .cw-button--primary {
-  margin-top: auto;
-  height: 52px;
-  flex-shrink: 0;
-}
-
-@media (max-aspect-ratio: 1/1) {
-  .cw-briefing__panel {
-    top: auto;
-    left: 0;
-    width: auto;
-    height: 58%;
-  }
-
-  .cw-briefing__panel::before {
-    display: none;
-  }
-
-  .cw-briefing__progress {
-    bottom: calc(58% + 12px);
   }
 }
 
@@ -709,7 +568,7 @@
 .cw-results__actions {
   margin-top: auto;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -744,7 +603,8 @@
 }
 
 .cw-settings__nav {
-  width: 210px;
+  /* The column grows by the notch inset, so its content always has the same room. */
+  width: calc(210px + env(safe-area-inset-left));
   flex-shrink: 0;
   padding: calc(16px + env(safe-area-inset-top)) 16px 16px calc(16px + env(safe-area-inset-left));
   display: flex;
@@ -754,12 +614,18 @@
   border-right: 1px solid var(--cw-line-faint);
 }
 
-.cw-settings__nav .cw-screen__head {
+.cw-settings__nav > .cw-screen__head {
   margin-bottom: 12px;
 }
 
+.cw-settings__nav .cw-screen__head {
+  gap: 8px;
+  min-width: 0;
+}
+
 .cw-settings__nav .cw-heading {
-  font-size: 30px;
+  font-size: 26px;
+  min-width: 0;
 }
 
 .cw-tab {
@@ -867,33 +733,14 @@
     margin-bottom: 4px;
   }
 
+  /* The tabs sit in a row here; a label beside them reads as a fourth tab. */
+  .cw-settings__nav > .cw-label {
+    display: none;
+  }
+
   .cw-layouts {
     grid-template-columns: 1fr;
   }
-}
-
-/* Rotate device ---------------------------------------------------------- */
-
-.cw-rotate {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  padding: 40px 28px;
-  text-align: center;
-  background: rgb(11 20 48 / 0.85);
-  background-image: radial-gradient(circle at 50% 40%, rgb(61 123 255 / 0.35), transparent 50%);
-}
-
-.cw-rotate .cw-heading {
-  font-size: 56px;
-  line-height: 0.88;
-}
-
-.cw-rotate .cw-body {
-  max-width: 280px;
-  font-size: 15px;
 }
 
 /* Larger screens: iPad and desktop. */
@@ -918,14 +765,6 @@
     font-size: 14px;
   }
 
-  .cw-briefing__panel {
-    width: min(460px, 40vw);
-  }
-
-  .cw-briefing__panel .cw-heading {
-    font-size: 64px;
-  }
-
   .cw-dialog {
     width: min(460px, calc(100vw - 32px));
   }
@@ -937,5 +776,111 @@
 
   .cw-results__medal .cw-heading {
     font-size: 80px;
+  }
+}
+
+/* Anything that scrolls must say so: the page itself turns touch panning off. */
+.cw-dialog,
+.cw-results,
+.cw-results__main,
+.cw-settings__body,
+.cw-campaign__grid {
+  touch-action: pan-y;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Short landscape phones: everything has to fit in about 320 to 430 px of height. */
+@media (max-height: 480px) and (min-aspect-ratio: 1/1) {
+  .cw-title__main {
+    top: calc(16px + env(safe-area-inset-top));
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    width: min(460px, 64vw);
+    gap: 8px;
+  }
+
+  .cw-title .cw-hero {
+    font-size: clamp(40px, 17cqh, 132px);
+  }
+
+  .cw-title__actions {
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .cw-title__actions .cw-button {
+    height: 46px;
+    padding: 0 14px;
+    white-space: nowrap;
+  }
+
+  .cw-title__actions .cw-button--primary {
+    height: 46px;
+    padding: 0 26px;
+    font-size: 24px;
+  }
+
+  .cw-dialog {
+    padding: 14px 18px;
+    gap: 8px;
+  }
+
+  .cw-dialog .cw-heading {
+    font-size: 32px;
+  }
+
+  .cw-dialog .cw-button--primary,
+  .cw-dialog .cw-button--danger {
+    height: 46px;
+  }
+
+  .cw-results__medal .cw-medal {
+    width: 96px;
+    height: 96px;
+  }
+
+  .cw-results__medal .cw-heading {
+    font-size: 40px;
+  }
+
+  .cw-settings__nav {
+    overflow-y: auto;
+    touch-action: pan-y;
+  }
+}
+
+/* The shortest views, such as a phone browser in landscape with its toolbar showing:
+   drop the tags above the title and lay dialogs out wide instead of tall. */
+@media (max-height: 340px) and (min-aspect-ratio: 1/1) {
+  .cw-title__tags {
+    display: none;
+  }
+
+  .cw-dialog {
+    width: min(540px, calc(100vw - 32px));
+    max-height: calc(100% - 12px);
+    padding: 10px 16px;
+    gap: 6px;
+  }
+
+  .cw-fail .cw-dialog {
+    width: min(420px, calc(100vw - 44px));
+  }
+
+  .cw-dialog .cw-heading,
+  .cw-fail .cw-heading {
+    font-size: 28px;
+  }
+
+  .cw-dialog .cw-button,
+  .cw-dialog .cw-button--primary,
+  .cw-dialog .cw-button--danger {
+    height: 40px;
+    flex-shrink: 0;
+  }
+
+  .cw-dialog__stats {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding-top: 6px;
   }
 }
