@@ -1,7 +1,8 @@
-import { Scene, Vector3 } from 'three';
+import { type BufferGeometry, Light, Line, Mesh, Points, Scene, Vector3 } from 'three';
 import { type ControlFrame, IDLE_FRAME } from '../engine/input/controls';
 import type { InputManager } from '../engine/input/input-manager';
 import type { Physics } from '../engine/physics';
+import { record, timed } from '../engine/profile';
 import type { Viewport } from '../engine/renderer';
 import { FollowCamera } from './camera';
 import { DestructionSystem } from './destruction-system';
@@ -216,22 +217,23 @@ export class Game {
     this.def = def;
     this.world = await loadWorld(def, this.scene, this.physics);
     const { field } = this.world;
-    this.effects = new Effects(field);
-    this.scene.add(this.effects.group);
-    const destruction = new DestructionSystem(
-      def,
-      this.scene,
-      this.physics,
-      field,
-      this.world.props,
-      this.effects,
-      this.bus,
+    const effects = timed('level: effects', () => new Effects(field));
+    this.effects = effects;
+    this.scene.add(effects.group);
+    const props = this.world.props;
+    const destruction = timed(
+      'level: buildings',
+      () => new DestructionSystem(def, this.scene, this.physics, field, props, effects, this.bus),
     );
     this.destruction = destruction;
-    const pickups = new Pickups(def.beacons?.trails ?? [], def.relayDish ?? null, field);
+    const pickups = timed(
+      'level: pickups',
+      () => new Pickups(def.beacons?.trails ?? [], def.relayDish ?? null, field),
+    );
     this.pickups = pickups;
     this.scene.add(pickups.group);
 
+    const routeStart = performance.now();
     const route = new Route(def.hauler.route);
     this.route = route;
     const obstacles = sweepRoute(
@@ -346,6 +348,8 @@ export class Game {
       }),
     );
 
+    record('level: route and Hauler', routeStart);
+    const vehiclesStart = performance.now();
     let playerPlaced = false;
     for (const spawn of def.vehicles) {
       const vehicle = createVehicle(spawn.type, this.physics);
@@ -378,6 +382,7 @@ export class Game {
     this.pilot = pilot;
     this.scene.add(pilot.root);
     destruction.addPilot(pilot.collider);
+    record('level: vehicles', vehiclesStart);
 
     const start = this.vehicles.find((v) => v.spec.type === def.player.vehicle);
     this.setActive(start ?? this.vehicles[0] ?? null);
@@ -515,6 +520,16 @@ export class Game {
   }
 
   dispose(): void {
+    // Everything in the scene belongs to this attempt. Free its meshes and lights before
+    // the parts below take them out of the scene, so that restarts do not pile up memory
+    // on the graphics card. A shape that the next attempt shares is uploaded again.
+    this.scene.traverse((object) => {
+      if (object instanceof Mesh || object instanceof Line || object instanceof Points) {
+        (object.geometry as BufferGeometry).dispose();
+      } else if (object instanceof Light) {
+        object.dispose();
+      }
+    });
     this.pickups?.dispose();
     this.pickups = null;
     this.rails?.dispose();
@@ -537,6 +552,7 @@ export class Game {
     this.world?.dispose();
     this.world = null;
     this.session = null;
+    this.scene.clear();
   }
 
   private destroyHauler(): void {
@@ -573,7 +589,7 @@ export class Game {
     this.statusClock = 1 / STATUS_RATE;
     const countdown = session.countdown;
     // A level's hints teach a mechanic the first time its obstacle comes up. They never
-    // just name the next target: the countdown panel does that.
+    // just name the next target: the route line and the mini-map show that.
     const next = session.next;
     if (next && next.id !== this.lastHintFor) {
       this.lastHintFor = next.id;

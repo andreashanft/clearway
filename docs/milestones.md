@@ -400,3 +400,69 @@ This pass turns a level into a single run at the Hauler's pace and trims the int
 
 - **No start delay, safe-zone run, free roam or briefing**, all of which the brief describes.
 - **A full-speed Bruiser drops brick in one ram**, because damage grows with the square of the speed.
+
+## After milestone 7: a quieter HUD
+
+This pass removes three cards from the HUD and moves the key list into the pause menu.
+
+### What changed
+
+- **No countdown card.** The HUD no longer shows the time to the next impact or, after the path is clear, the time left. The pause menu still shows both, and the music still tightens as the Hauler closes in.
+- **No key hints during play.** The vehicle card, the key list and the **Exit** / **Enter** prompt are gone for keyboard and gamepad players. Touch players keep their buttons.
+- **The counters sit in one row** beside the mini-map, and a hint appears centred under them.
+- **The pause menu has a Controls view.** It lists the keyboard and gamepad controls, or the touch controls when you play by touch.
+- **Escape resumes properly.** The key press that closes the pause menu no longer reaches the game, where it paused again a frame later.
+
+### How to test
+
+1. Run `npm run dev` and start Hollow Creek with a keyboard.
+2. Check that the HUD shows only the pause button, the counters, the mini-map and the opening hint.
+3. Press **Esc**, select **Controls**, then **BACK**.
+4. Press **Esc** again. The game resumes and stays running.
+
+### Deviations
+
+- **No countdown and no key hints on the HUD**, both of which the brief describes.
+
+## After milestone 7: loading screens and faster loads
+
+This pass measures where load time goes, removes the avoidable part and shows a loading screen for the rest.
+
+### What the profile shows
+
+The timings come from `src/engine/profile.ts`. `?debug` prints them to the console and shows the main ones in the debug panel (`BOOT` and `LEVEL`).
+
+| Case                                                | Scripts | Level load | Of which shaders | First frame |
+| --------------------------------------------------- | ------: | ---------: | ---------------: | ----------: |
+| Desktop Chrome, WebGPU, warm                        |   95 ms |     215 ms |           106 ms |       11 ms |
+| iOS Simulator, WebGL2, production build, first run  |  350 ms |    2600 ms |          1800 ms |      530 ms |
+| iOS Simulator, WebGL2, production build, later runs |  115 ms |     620 ms |           360 ms |       70 ms |
+| iOS Simulator, WebGL2, dev server, first run        | 3200 ms |     600 ms |           340 ms |       70 ms |
+
+- **Compiling shaders is the main cost.** A level has about 25 shader pipelines. A browser compiles them from scratch on the first visit and after each new build, and keeps them in its own cache afterwards.
+- **The dev server is slow to start in Safari**, because it serves every module separately. The production build does not have this cost.
+- **Building the level itself is cheap**: 60 to 150 ms for terrain, buildings and vehicles.
+- **Every level load leaked memory on the graphics card.** The sun's shadow map (about 34 MB) and most meshes were never freed, so memory grew with every retry.
+
+### What changed
+
+- **A loading screen covers the boot.** It is part of `index.html`, so it shows before any script arrives, and it names each step.
+- **A loading screen covers each level load.** It fades in after 0.2 seconds, so a quick load never flashes it. The screen that asked for the level stays up until the level is ready.
+- **Shaders compile behind the loading screen**, and so does the first frame. A level no longer opens with a hitch.
+- **A retry reuses what it can.** The level's files stay decoded in memory, and the new world is built before the old one goes, so the renderer finds most shaders already compiled. A restart in the Simulator takes about 410 ms instead of 600 ms.
+- **The level select fetches the next level ahead of time.**
+- **Level loads free their memory**: shadow maps, the ground texture and meshes.
+- **A failed load says so**, with **TRY AGAIN** and **Back to map**.
+- **The HUD stays hidden while the first level loads.**
+
+### How to test
+
+1. Run `npm run build` and `npm run preview`, then open the page with `?debug` in a private window.
+2. Watch the loading screen run from **Loading the game** to **Preparing the view**.
+3. Read the `BOOT` and `LEVEL` lines in the debug panel.
+4. Start a level, pause and select **Restart**. The `LEVEL` line shows `download 0` and a shorter time.
+
+### Not done
+
+- **The first visit still compiles every shader.** Fewer distinct materials would shorten that: most lit surfaces use the physically based material, where a simpler one would look the same.
+- **Rapier ships as a 4.3 MB script** (1.7 MB compressed) with its WebAssembly inlined. The service worker caches it after the first visit.

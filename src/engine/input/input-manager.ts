@@ -114,6 +114,7 @@ export class InputManager {
   reset(): void {
     this.touch.reset();
     this.wheelSteps = 0;
+    this.keyboard.clearPressed();
   }
 
   dispose(): void {

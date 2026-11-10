@@ -1,4 +1,5 @@
 import './screens.css';
+import type { InputSource } from '../../engine/input/controls';
 import type { CampaignLevel } from '../../game/campaign';
 import { formatScore } from '../../game/points';
 import type { LevelRecord, Settings } from '../../game/progress';
@@ -204,39 +205,118 @@ export interface PauseInfo {
   score: number;
 }
 
+/** What each control does, per way of playing. The pause menu's help lists them. */
+const CONTROLS: Record<InputSource, readonly (readonly [string, string])[]> = {
+  keyboard: [
+    ['W A S D', 'Drive (or the arrow keys)'],
+    ['SHIFT', 'Brake'],
+    ['SPACE', "Use the machine's action"],
+    ['E', 'Enter or exit a machine'],
+    ['Q / R', 'Rotate the camera'],
+    ['Z / X', 'Zoom (or the mouse wheel)'],
+    ['ESC / P', 'Pause'],
+  ],
+  gamepad: [
+    ['LEFT STICK', 'Point where to drive'],
+    ['RT / LT', 'Gas and reverse, steering with the stick'],
+    ['A', "Use the machine's action"],
+    ['B', 'Brake'],
+    ['Y', 'Enter or exit a machine'],
+    ['LB / RB', 'Rotate the camera'],
+    ['D-PAD', 'Zoom, up and down'],
+    ['START', 'Pause'],
+  ],
+  touch: [
+    ['STICK', 'Point where to drive; push further to go faster'],
+    ['ACTION', "Use the machine's action"],
+    ['BRAKE', 'Brake'],
+    ['EXIT', 'Enter or exit a machine'],
+    ['MINI-MAP', 'Tap to fold it away, double-tap to recentre the camera'],
+  ],
+};
+
+const CONTROL_TITLES: Record<InputSource, string> = {
+  keyboard: 'KEYBOARD',
+  gamepad: 'GAMEPAD',
+  touch: 'TOUCH',
+};
+
+function controlsList(source: InputSource): HTMLElement {
+  return h(
+    'div',
+    { class: 'cw-controls__group' },
+    h('div', { class: 'cw-label', text: CONTROL_TITLES[source] }),
+    h(
+      'dl',
+      { class: 'cw-controls__list' },
+      ...CONTROLS[source].flatMap(([key, what]) => [
+        h('dt', {}, chip(key)),
+        h('dd', { text: what }),
+      ]),
+    ),
+  );
+}
+
 export function pauseScreen(
   info: () => PauseInfo,
+  /** Touch players see the touch controls in the help, everyone else keys and gamepad. */
+  source: InputSource,
   actions: { resume: () => void; restart: () => void; settings: () => void; quit: () => void },
 ): Screen {
   const impact = chip('', 'amber');
   const stats = h('div', { class: 'cw-dialog__stats' });
   const resume = button('RESUME', 'primary', actions.resume);
+  const dialog = h('div', { class: 'cw-card cw-dialog' });
   const element = h(
     'section',
     {
       class: 'cw-screen cw-screen--dim',
       attrs: { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Paused' },
     },
+    dialog,
+  );
+  const controls = button('Controls', 'ghost', () => showHelp());
+  const menu = [
     h(
       'div',
-      { class: 'cw-card cw-dialog' },
-      h(
-        'div',
-        { class: 'cw-dialog__head' },
-        h('h1', { class: 'cw-heading', text: 'Paused' }),
-        impact,
-      ),
-      resume,
-      h(
-        'div',
-        { class: 'cw-dialog__row' },
-        button('Restart', 'secondary', actions.restart),
-        button('Settings', 'ghost', actions.settings),
-      ),
-      button('Quit to map', 'text', actions.quit),
-      stats,
+      { class: 'cw-dialog__head' },
+      h('h1', { class: 'cw-heading', text: 'Paused' }),
+      impact,
     ),
-  );
+    resume,
+    h(
+      'div',
+      { class: 'cw-dialog__row' },
+      button('Restart', 'secondary', actions.restart),
+      button('Settings', 'ghost', actions.settings),
+      controls,
+      button('Quit to map', 'text', actions.quit),
+    ),
+    stats,
+  ];
+  const back = button('BACK', 'primary', () => showMenu());
+  const help = [
+    h('h1', { class: 'cw-heading', text: 'Controls' }),
+    h(
+      'div',
+      { class: 'cw-controls' },
+      ...(source === 'touch' ? (['touch'] as const) : (['keyboard', 'gamepad'] as const)).map(
+        controlsList,
+      ),
+    ),
+    back,
+  ];
+  const showMenu = (): void => {
+    dialog.classList.remove('cw-dialog--controls');
+    dialog.replaceChildren(...menu);
+    controls.focus();
+  };
+  const showHelp = (): void => {
+    dialog.classList.add('cw-dialog--controls');
+    dialog.replaceChildren(...help);
+    dialog.scrollTop = 0;
+    back.focus();
+  };
   const update = (): void => {
     const i = info();
     impact.textContent =
@@ -251,6 +331,7 @@ export function pauseScreen(
     );
   };
   update();
+  dialog.replaceChildren(...menu);
   queueMicrotask(() => resume.focus());
   return { element, update };
 }

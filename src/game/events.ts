@@ -9,7 +9,7 @@ export interface GameEvents {
   'vehicle:changed': { type: VehicleType | 'pilot'; name: string; actionLabel: string };
   /** What the Enter/Exit button would do right now, or null when it has nothing to do. */
   context: { action: 'enter' | 'exit'; label: string } | null;
-  /** The active vehicle's Action button state, for the touch button and vehicle card. */
+  /** The active vehicle's Action button state, for the touch button and the sound. */
   'action:state': { ready: boolean; active: boolean; charge: number };
   /** A building took damage. */
   'building:damaged': { id: string; hp: number; maxHp: number };
@@ -50,7 +50,7 @@ export interface GameEvents {
     background: CanvasImageSource | null;
     extent: number;
   };
-  /** Positions for the mini-map, Hauler pointer and vehicle card, about ten times a second. */
+  /** Positions for the mini-map and the Hauler pointer, about ten times a second. */
   'hud:frame': {
     hauler: {
       x: number;

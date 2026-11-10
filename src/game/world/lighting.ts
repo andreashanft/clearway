@@ -118,6 +118,12 @@ export class Lighting {
 
   dispose(): void {
     this.environment.dispose();
+    this.sun.removeFromParent();
+    this.hemi.removeFromParent();
+    this.target.removeFromParent();
+    // Disposing a light frees its shadow map, which is the largest texture in a level.
+    this.sun.dispose();
+    this.hemi.dispose();
   }
 
   /** Centres the shadow box on a world position. */

@@ -25,6 +25,11 @@ export class Keyboard {
     this.active = false;
   }
 
+  /** Forgets presses nobody has read yet, such as keys used in a menu. Held keys stay held. */
+  clearPressed(): void {
+    this.pressed.clear();
+  }
+
   dispose(): void {
     this.target.removeEventListener('keydown', this.onKeyDown);
     this.target.removeEventListener('keyup', this.onKeyUp);

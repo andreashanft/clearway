@@ -8,8 +8,12 @@
   font-family: var(--cw-font-body);
   --pad: 14px;
   --gap: 8px;
-  /* Width of the countdown panel, top centre; the counters wrap to stay clear of it. */
-  --route-w: min(280px, 38vw);
+  /* Height of a counter, and the size of the mini-map the counters stay clear of. */
+  --row: 44px;
+  --map-w: 132px;
+  --map-h: 92px;
+  /* Gap between the top edge and the panels. */
+  --top: 12px;
 }
 
 .cw-hud[hidden],
@@ -25,18 +29,21 @@
 /* Counters, top left. */
 .cw-hud__counters {
   position: absolute;
-  top: calc(12px + env(safe-area-inset-top));
+  top: calc(var(--top) + env(safe-area-inset-top));
   left: calc(var(--pad) + env(safe-area-inset-left));
   display: flex;
   flex-wrap: wrap;
   gap: var(--gap);
   align-items: flex-start;
-  /* Stay clear of the route panel, also when a notch pushes the counters inwards. */
-  max-width: calc((100vw - var(--route-w)) / 2 - env(safe-area-inset-left) - var(--pad) - 12px);
+  /* One row beside the mini-map, also when a notch pushes the counters inwards. */
+  max-width: calc(
+    100vw - var(--map-w) - 2 * var(--pad) - env(safe-area-inset-left) - env(safe-area-inset-right) -
+      12px
+  );
 }
 
 .cw-hud__counter {
-  height: 44px;
+  height: var(--row);
   padding: 4px 12px;
   display: flex;
   flex-direction: column;
@@ -138,69 +145,15 @@
   display: none;
 }
 
-/* Countdown and hint, top centre. */
+/* Hint, centred under the row of counters. */
 .cw-hud__top {
   position: absolute;
-  top: calc(12px + env(safe-area-inset-top));
+  top: calc(var(--top) + var(--row) + 8px + env(safe-area-inset-top));
   left: 50%;
   translate: -50% 0;
-  width: var(--route-w);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-}
-
-.cw-hud__route {
-  width: 100%;
-  padding: 7px 14px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--gap);
-  background: var(--cw-glass-strong);
-  transition:
-    border-color var(--cw-normal) var(--cw-ease),
-    box-shadow var(--cw-normal) var(--cw-ease);
-  --tone: var(--cw-ink);
-}
-
-/* With the path clear, the panel counts down the rest of the run in green. */
-.cw-hud[data-phase='pathClear'] .cw-hud__route {
-  --tone: var(--cw-go);
-  border-color: rgb(61 245 160 / 0.45);
-}
-
-.cw-hud__route[data-urgency='amber'] {
-  --tone: var(--cw-amber);
-  border-color: rgb(255 154 46 / 0.45);
-  box-shadow: 0 0 20px rgb(255 154 46 / 0.2);
-}
-
-.cw-hud__route[data-urgency='red'] {
-  --tone: var(--cw-alarm);
-  border-color: rgb(255 61 90 / 0.6);
-  box-shadow: 0 0 22px rgb(255 61 90 / 0.35);
-  animation: cw-pulse 0.6s var(--cw-ease) infinite alternate;
-}
-
-.cw-hud__route-label {
-  font-family: var(--cw-font-mono);
-  font-size: 10px;
-  color: var(--cw-ink-soft);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.cw-hud__route-timer {
-  font-family: var(--cw-font-display);
-  font-weight: 900;
-  font-size: 30px;
-  line-height: 0.9;
-  color: var(--tone);
-  text-shadow: 0 0 14px color-mix(in srgb, var(--tone) 60%, transparent);
-  font-variant-numeric: tabular-nums;
 }
 
 .cw-hud__hint {
@@ -229,10 +182,10 @@
 /* Mini-map, top right. */
 .cw-hud__minimap {
   position: absolute;
-  top: calc(12px + env(safe-area-inset-top));
+  top: calc(var(--top) + env(safe-area-inset-top));
   right: calc(var(--pad) + env(safe-area-inset-right));
-  width: 132px;
-  height: 92px;
+  width: var(--map-w);
+  height: var(--map-h);
   overflow: hidden;
   border-radius: 12px;
   cursor: pointer;
@@ -341,88 +294,18 @@
   color: var(--cw-ink-soft);
 }
 
-/* Vehicle card and key hints: keyboard and gamepad only. */
-.cw-hud__vehicle,
-.cw-hud__keys {
-  display: none;
-}
-
-.cw-hud[data-input='keyboard'] .cw-hud__vehicle,
-.cw-hud[data-input='gamepad'] .cw-hud__vehicle {
-  position: absolute;
-  left: calc(28px + env(safe-area-inset-left));
-  bottom: calc(28px + env(safe-area-inset-bottom));
-  width: 280px;
-  padding: 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  background: linear-gradient(180deg, rgb(26 43 88 / 0.92), rgb(19 34 72 / 0.92));
-  border: 1px solid rgb(255 210 63 / 0.45);
-  box-shadow: 0 0 24px rgb(255 210 63 / 0.15);
-}
-
-.cw-hud__vehicle-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.cw-hud__vehicle-name {
-  font-family: var(--cw-font-display);
-  font-weight: 900;
-  font-size: 28px;
-  line-height: 1;
-}
-
-.cw-hud__vehicle-action {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--cw-ink-soft);
-}
-
-.cw-hud[data-input='keyboard'] .cw-hud__keys {
-  position: absolute;
-  right: calc(28px + env(safe-area-inset-right));
-  bottom: calc(28px + env(safe-area-inset-bottom));
-  padding: 12px 16px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px 18px;
-  font-size: 12px;
-  color: var(--cw-ink-soft);
-}
-
-.cw-hud__keys b {
-  font-family: var(--cw-font-mono);
-  color: var(--cw-ink);
-}
-
-/* Vehicle card and keys only fit on larger screens. */
-@media (max-width: 899px), (max-height: 599px) {
-  .cw-hud[data-input] .cw-hud__vehicle,
-  .cw-hud[data-input] .cw-hud__keys {
-    display: none;
-  }
-}
-
 /* iPad and desktop: larger panels and a bigger mini-map. */
 @media (min-width: 1000px) and (min-height: 700px) {
   .cw-hud {
     --pad: 28px;
     --gap: 10px;
-  }
-
-  .cw-hud__counters,
-  .cw-hud__top,
-  .cw-hud__minimap {
-    top: calc(24px + env(safe-area-inset-top));
+    --top: 24px;
+    --row: 58px;
+    --map-w: 220px;
+    --map-h: 154px;
   }
 
   .cw-hud__counter {
-    height: 58px;
     padding: 6px 18px;
   }
 
@@ -434,31 +317,9 @@
     font-size: 26px;
   }
 
-  /* Narrows between iPad and desktop widths so the counters fit beside it. */
-  .cw-hud {
-    --route-w: clamp(320px, calc(100vw - 680px), 500px);
-  }
-
-  .cw-hud__route {
-    padding: 10px 20px;
-  }
-
-  .cw-hud__route-label {
-    font-size: 12px;
-  }
-
-  .cw-hud__route-timer {
-    font-size: 46px;
-  }
-
   .cw-hud__hint {
     font-size: 14px;
     padding: 8px 16px;
-  }
-
-  .cw-hud__minimap {
-    width: 220px;
-    height: 154px;
   }
 }
 
@@ -474,11 +335,12 @@
   .cw-hud {
     --pad: 12px;
     --gap: 6px;
-    --route-w: min(300px, 38vw);
+    --row: 38px;
+    --map-w: 116px;
+    --map-h: 80px;
   }
 
   .cw-hud__counter {
-    height: 38px;
     padding: 3px 10px;
   }
 
@@ -490,19 +352,6 @@
     font-size: 17px;
   }
 
-  .cw-hud__route {
-    padding: 5px 12px;
-  }
-
-  .cw-hud__route-timer {
-    font-size: 26px;
-  }
-
-  .cw-hud__minimap {
-    width: 116px;
-    height: 80px;
-  }
-
   .cw-hud__pointer {
     padding: 4px 10px 4px 6px;
     font-size: 10px;
@@ -511,14 +360,14 @@
 
 /* The shortest views, such as a phone browser in landscape with its toolbar showing. */
 @media (max-height: 340px) and (min-aspect-ratio: 1/1) {
-  .cw-hud__counters,
-  .cw-hud__top,
-  .cw-hud__minimap {
-    top: calc(8px + env(safe-area-inset-top));
+  .cw-hud {
+    --top: 8px;
+    --row: 34px;
+    --map-w: 96px;
+    --map-h: 66px;
   }
 
   .cw-hud__counter {
-    height: 34px;
     padding: 2px 8px;
   }
 
@@ -526,23 +375,13 @@
     font-size: 15px;
   }
 
-  .cw-hud__route-timer {
-    font-size: 22px;
-  }
-
   .cw-hud__hint {
     padding: 4px 10px;
     font-size: 11px;
   }
-
-  .cw-hud__minimap {
-    width: 96px;
-    height: 66px;
-  }
 }
 
-/* Portrait: counters in a row, the countdown across the full width below them, then the
-   hint on the left and the mini-map on the right. */
+/* Portrait: counters in a row, then the hint on the left and the mini-map on the right. */
 @media (max-aspect-ratio: 1/1) {
   .cw-hud {
     --pad: 12px;
@@ -550,8 +389,7 @@
     --row: 44px;
     --map-w: 108px;
     --map-h: 76px;
-    --route-top: calc(12px + var(--row) + 8px + env(safe-area-inset-top));
-    --below-route: calc(var(--route-top) + 52px);
+    --below-counters: calc(var(--top) + var(--row) + 8px + env(safe-area-inset-top));
   }
 
   .cw-hud__counters {
@@ -565,7 +403,7 @@
   }
 
   .cw-hud__top {
-    top: var(--route-top);
+    top: var(--below-counters);
     width: calc(100% - 2 * var(--pad));
     align-items: flex-start;
   }
@@ -576,9 +414,7 @@
   }
 
   .cw-hud__minimap {
-    top: var(--below-route);
-    width: var(--map-w);
-    height: var(--map-h);
+    top: var(--below-counters);
   }
 
   .cw-hud__banner {
@@ -595,17 +431,6 @@
   .cw-hud__banner-sub {
     justify-content: center;
   }
-
-  .cw-hud[data-input='keyboard'] .cw-hud__context,
-  .cw-hud[data-input='gamepad'] .cw-hud__context {
-    bottom: calc(28px + env(safe-area-inset-bottom));
-  }
-}
-
-@keyframes cw-pulse {
-  to {
-    box-shadow: 0 0 32px rgb(255 61 90 / 0.55);
-  }
 }
 
 @keyframes cw-hud-in {
@@ -621,25 +446,4 @@
     animation: none !important;
     transition: none !important;
   }
-}
-
-/* Keyboard context prompt, such as "E Enter Tumbler". */
-.cw-hud__context {
-  display: none;
-}
-
-.cw-hud[data-input='keyboard'] .cw-hud__context,
-.cw-hud[data-input='gamepad'] .cw-hud__context {
-  position: absolute;
-  left: 50%;
-  bottom: calc(96px + env(safe-area-inset-bottom));
-  translate: -50% 0;
-  padding: 10px 18px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: var(--cw-glass-strong);
-  border: 1px solid rgb(46 230 255 / 0.55);
-  font-weight: 700;
-  font-size: 14px;
 }

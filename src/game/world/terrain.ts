@@ -34,7 +34,7 @@ export class Terrain {
 
   constructor(
     readonly field: Heightfield,
-    colourMap: Texture,
+    private readonly colourMap: Texture,
   ) {
     colourMap.colorSpace = SRGBColorSpace;
     colourMap.anisotropy = 4;
@@ -97,6 +97,8 @@ export class Terrain {
       if (obj instanceof Mesh) (obj.geometry as BufferGeometry).dispose();
     });
     this.detail.dispose();
+    // The largest texture of a level: left alone, every restart would keep one more.
+    this.colourMap.dispose();
     this.material.dispose();
   }
 

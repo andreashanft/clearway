@@ -7,6 +7,7 @@ import type { LaunchFlags } from './engine/flags';
 import { InputManager } from './engine/input/input-manager';
 import { GameLoop } from './engine/loop';
 import { Physics, type Rapier } from './engine/physics';
+import { lastTiming, record, timed, timedAsync } from './engine/profile';
 import type { Renderer } from './engine/renderer';
 import { browserStorage, load, save, type Storage } from './engine/save';
 import { CAMPAIGN, campaignLevel } from './game/campaign';
@@ -14,6 +15,7 @@ import { type AudioScene, GameAudio } from './game/audio/game-audio';
 import type { GameEvents } from './game/events';
 import { Game } from './game/game';
 import { findLevel, type LevelDefinition, LEVELS } from './game/level-data';
+import { preloadWorld } from './game/level-loader';
 import {
   type GraphicsQuality,
   isUnlocked,
@@ -27,6 +29,7 @@ import { medalFor } from './game/scoring';
 import type { UiCommands } from './ui/commands';
 import { Hud } from './ui/hud/hud';
 import { button, h } from './ui/kit';
+import { type LoadingScreen, nextPaint } from './ui/loading';
 import {
   campaignScreen,
   countdownScreen,
@@ -96,6 +99,12 @@ const QUALITY: Readonly<Record<GraphicsQuality, { dpr: number; shadows: number }
   ultra: { dpr: 3, shadows: 2048 },
 };
 
+/** Share of the loading bar the boot has filled before the first level starts to load. */
+export const BOOT_SHARE = 0.4;
+
+/** Seconds the loading bar creeps while the shaders compile. */
+const SHADER_CREEP_SECONDS = 2.5;
+
 /**
  * The application shell: owns the renderer, input, UI and loop, moves between screens,
  * and runs one level at a time with a fresh physics world, so Retry and Next start clean.
@@ -133,12 +142,15 @@ export class App {
     private readonly rapier: Rapier,
     private readonly ui: HTMLElement,
     private readonly flags: LaunchFlags,
+    private readonly loader: LoadingScreen,
   ) {
     this.data = load(SAVE_SCHEMA, this.storage);
     this.input = new InputManager(renderer.three.domElement);
     this.touchControls = new TouchControls(ui, this.input.touch, this.bus);
     new CameraGestures(renderer.three.domElement, this.input.touch);
     this.hud = new Hud(ui, this.bus, this.commands);
+    // Hidden until a level is in play: the first level loads behind the loading screen.
+    this.hud.setVisible(false);
     this.sound = new GameAudio(this.audio, this.bus);
     // Every menu and HUD button clicks.
     ui.addEventListener('click', (event) => {
@@ -223,25 +235,37 @@ export class App {
   async boot(): Promise<void> {
     const direct = this.flags.level ? findLevel(this.flags.level) : undefined;
     if (direct) {
-      await this.start(direct);
+      await this.start(direct, true);
       return;
     }
-    await this.showTitle();
+    await this.showTitle(true);
   }
 
   /** Starts (or restarts) a level: a fresh world, then the countdown. */
-  async start(level: LevelDefinition): Promise<void> {
-    this.show(null);
-    await this.loadLevel(level);
-    this.countdown();
+  async start(level: LevelDefinition, booting = false): Promise<void> {
+    try {
+      // The screen that asked for the level stays up until the level is ready.
+      if (await this.loadLevel(level, booting)) this.countdown();
+    } catch (error) {
+      if (booting) throw error;
+      this.loadFailed(level, error);
+    }
   }
 
   // Flow ----------------------------------------------------------------------
 
-  private async showTitle(): Promise<void> {
+  private async showTitle(booting = false): Promise<void> {
     const backdrop = LEVELS[0];
     if (!backdrop) return;
-    if (!this.game || this.dirty || this.level?.id !== backdrop.id) await this.loadLevel(backdrop);
+    if (!this.game || this.dirty || this.level?.id !== backdrop.id) {
+      try {
+        if (!(await this.loadLevel(backdrop, booting))) return;
+      } catch (error) {
+        if (booting) throw error;
+        // The title works without its backdrop; say why it is missing.
+        console.error(error);
+      }
+    }
     this.game?.setMode('attract');
     this.setFlow('title');
     this.show(
@@ -269,7 +293,12 @@ export class App {
       const unlocked = isUnlocked(order, this.data.levels, level.id);
       const available = findLevel(level.id) !== undefined;
       const isNext = unlocked && available && !record?.medal && !nextMarked;
-      if (isNext) nextMarked = true;
+      if (isNext) {
+        nextMarked = true;
+        // Fetch the likely next level now, so START has less to wait for.
+        const def = findLevel(level.id);
+        if (def) preloadWorld(def).catch(() => undefined);
+      }
       const before = CAMPAIGN[level.index - 2];
       return {
         level,
@@ -352,6 +381,7 @@ export class App {
           ...pickupText(this.game?.pickupProgress),
           score: session?.score ?? 0,
         }),
+        this.input.source,
         {
           resume: () => this.resume(),
           restart: () => this.restart(),
@@ -363,6 +393,8 @@ export class App {
   }
 
   private resume(): void {
+    // Keys pressed in the menu, such as the Escape that closes it, must not reach the game.
+    this.input.reset();
     this.loop.paused = false;
     this.setFlow('playing');
     this.show(null);
@@ -491,44 +523,126 @@ export class App {
 
   // Helpers -------------------------------------------------------------------
 
-  private async loadLevel(level: LevelDefinition): Promise<void> {
-    if (this.loading) return;
+  /**
+   * Builds a fresh world for `level` behind the loading screen and swaps it in. Returns
+   * false when another load is already running. The boot passes `booting`: its loading
+   * screen is already up and part of its bar is filled.
+   */
+  private async loadLevel(level: LevelDefinition, booting = false): Promise<boolean> {
+    if (this.loading) return false;
     this.loading = true;
+    const loadStart = performance.now();
+    const loader = this.loader;
+    if (!booting) loader.show(`LEVEL ${level.index}`, level.name);
+    const from = booting ? BOOT_SHARE : 0;
+    const step = (fraction: number, label: string, seconds?: number): Promise<void> => {
+      loader.progress(from + (1 - from) * fraction, label, seconds);
+      // Let the browser paint the step before the next piece of work blocks the page.
+      return nextPaint();
+    };
     try {
       this.loop.stop();
       this.loop.paused = false;
-      this.game?.dispose();
-      this.physics?.dispose();
-      this.physicsLines?.dispose();
-      this.physicsLines = null;
       this.input.reset();
+      await step(0.1, 'Loading the terrain');
+      await timedAsync('level: download', () => preloadWorld(level));
+
+      await step(0.35, 'Building the level');
       this.hud.reset(
         level.name,
         level.buildings?.length ?? 0,
         (level.beacons?.trails ?? []).reduce((sum, trail) => sum + trail.count, 0),
       );
-      this.level = level;
-      this.dirty = false;
-      this.physics = new Physics(this.rapier);
       const settings = this.data.settings;
-      const game = new Game(this.physics, this.input, this.bus, {
+      const physics = new Physics(this.rapier);
+      const game = new Game(physics, this.input, this.bus, {
         difficulty: settings.easyMode ? 'easy' : 'normal',
         steeringAssist: settings.steeringAssist,
         autoSkid: settings.autoSkid,
       });
-      this.game = game;
       game.onPauseRequested = () => this.pause();
-      await game.load(level);
-      game.setViewport(this.renderer.viewport);
-      game.setShadowQuality(this.quality().shadows);
-      game.setPatternMarkings(this.data.settings.patternMarkings);
-      game.setFullShake(this.data.settings.fullShake);
-      const session = game.levelSession;
-      if (session) session.invincible = this.invincible;
+      try {
+        await game.load(level);
+        game.setViewport(this.renderer.viewport);
+        game.setShadowQuality(this.quality().shadows);
+        game.setPatternMarkings(settings.patternMarkings);
+        game.setFullShake(settings.fullShake);
+        const session = game.levelSession;
+        if (session) session.invincible = this.invincible;
+
+        // Compiling shaders is the slowest step on a first visit and reports nothing
+        // while it runs, so the bar creeps.
+        await step(0.92, 'Preparing the view', SHADER_CREEP_SECONDS);
+        await timedAsync('level: shaders', () =>
+          this.renderer.three.compileAsync(game.scene, game.camera.camera),
+        );
+      } catch (error) {
+        game.dispose();
+        physics.dispose();
+        throw error;
+      }
+
+      // The old world goes only now: while both exist, the renderer finds the shaders
+      // they share already compiled, so a retry compiles next to nothing.
+      timed('level: dispose', () => {
+        this.game?.dispose();
+        this.physics?.dispose();
+        this.physicsLines?.dispose();
+        this.physicsLines = null;
+      });
+      this.game = game;
+      this.physics = physics;
+      this.level = level;
+      this.dirty = false;
+
+      // The first frame uploads the textures and meshes. Draw it behind the loading
+      // screen, so the level does not open with a hitch.
+      timed('level: first frame', () => {
+        game.render(1, 0);
+        this.renderer.render(game.scene, game.camera.camera);
+      });
+      record('level: total', loadStart);
       this.loop.start();
+      loader.hide();
+      return true;
+    } catch (error) {
+      loader.hide();
+      throw error;
     } finally {
       this.loading = false;
     }
+  }
+
+  /** Says that a level could not load, with a way to try again. */
+  private loadFailed(level: LevelDefinition, error: unknown): void {
+    console.error(error);
+    // Whatever was loaded before is stale now; the title loads its backdrop afresh.
+    this.dirty = true;
+    const retry = button('TRY AGAIN', 'primary', () => void this.start(level));
+    this.show(
+      {
+        element: h(
+          'section',
+          {
+            class: 'cw-screen cw-screen--dim',
+            attrs: { role: 'alertdialog', 'aria-modal': 'true', 'aria-label': 'Loading failed' },
+          },
+          h(
+            'div',
+            { class: 'cw-card cw-dialog' },
+            h('h1', { class: 'cw-heading', text: "Can't load" }),
+            h('p', {
+              class: 'cw-body',
+              text: `${level.name} did not load. Check your connection and try again.`,
+            }),
+            retry,
+            button('Back to map', 'ghost', () => this.showCampaign()),
+          ),
+        ),
+      },
+      true,
+    );
+    queueMicrotask(() => retry.focus());
   }
 
   private show(screen: Screen | null, coversScene = false): void {
@@ -624,6 +738,13 @@ export class App {
       const next = session.next;
       const countdown = session.countdown;
       return `SESSION ${this.flow}/${session.phase}  t ${session.elapsed.toFixed(1)} s  next ${next ? `${next.id} @ ${next.distance.toFixed(0)} m` : '–'}  ${countdown === null ? '' : `${countdown.toFixed(1)} s`}`;
+    });
+    overlay.addReadout(() => {
+      const ms = lastTiming;
+      return [
+        `BOOT    scripts ${ms('boot: scripts')}  renderer ${ms('boot: renderer')}  physics ${ms('boot: physics')} ms`,
+        `LEVEL   ${ms('level: total')} ms  download ${ms('level: download')}  shaders ${ms('level: shaders')}  frame ${ms('level: first frame')}`,
+      ].join('\n');
     });
     overlay.addSelect(
       'Level',
