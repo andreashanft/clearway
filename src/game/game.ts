@@ -21,7 +21,9 @@ import {
   CRITICAL_SECONDS,
   createRoute,
   findObstacles,
+  HAULER_LENGTH,
   routePoint,
+  toRoute,
   secondsUntil,
   urgencyOf,
   type Route,
@@ -53,7 +55,7 @@ import {
 } from './world/damage';
 import { Debris } from './world/debris';
 import { createDecks, deckHeightAt, type Deck } from './world/decks';
-import { Effects } from './world/effects';
+import { EFFECT_COLORS, Effects } from './world/effects';
 import { createLighting, type LevelLighting } from './world/lighting';
 import { ObstacleMarkers } from './world/markers';
 import { Pickups } from './world/pickups';
@@ -85,6 +87,8 @@ const HINT_RANGE = 46;
 
 /** The pilot can climb into a vehicle within this distance of its hull, in metres. */
 const ENTER_RANGE = 6.5;
+/** The pilot does not step out closer than this to the edge of the Hauler's lane, in metres. */
+const EXIT_LANE_MARGIN = 3;
 /** With auto-skid, the Fishtail looks for a wall within this distance, in metres. */
 const AUTO_SKID_RANGE = 26;
 /** A skidding tail hits the same building segment at most once in this many seconds. */
@@ -193,6 +197,7 @@ export class Game {
   private readonly terrain: Terrain;
   readonly scenery: Scenery;
   private hitStop = 0;
+  private trailTimer = 0;
   private readonly pendingExplosions: PendingExplosion[] = [];
   private readonly markers: ObstacleMarkers;
   private readonly vehicleByCollider = new Map<number, Vehicle>();
@@ -607,6 +612,7 @@ export class Game {
     }
     this.tnt.capture();
     this.debris.step(dt);
+    this.emitTrails(dt);
 
     if (playing) {
       crushHedges(this.scenery, this.hauler.footprint, (position) => this.effects.leaves(position));
@@ -716,12 +722,32 @@ export class Game {
 
   /** Frees the physics world and the GPU resources of the level. */
   dispose(): void {
+    this.events.clear();
     this.physics.dispose();
+    this.terrain.dispose();
+    this.lighting.dispose();
+    this.buildings.dispose();
+    this.markers.dispose();
+    const materials = new Set<THREE.Material>();
     this.scene.traverse((object) => {
       if (object instanceof THREE.Mesh) {
         (object.geometry as THREE.BufferGeometry).dispose();
+        for (const material of [object.material].flat() as THREE.Material[]) {
+          materials.add(material);
+        }
+      }
+      if (object instanceof THREE.InstancedMesh) {
+        object.dispose();
       }
     });
+    for (const material of materials) {
+      // Materials that the vehicle models share live on for the next level.
+      if (material.userData.shared === true) {
+        continue;
+      }
+      (material as THREE.Material & { map?: THREE.Texture | null }).map?.dispose();
+      material.dispose();
+    }
   }
 
   private handleCameraButtons(input: InputState): void {
@@ -782,6 +808,66 @@ export class Game {
     const command = this.pointToDrive.update(target, magnitude, this.activeVehicle.heading);
     command.brake = input.brake;
     return command;
+  }
+
+  /** Kicks up dust behind fast vehicles and the Hauler, and where a vehicle lands. */
+  private emitTrails(dt: number): void {
+    this.trailTimer -= dt;
+    const puff = this.trailTimer <= 0;
+    if (puff) {
+      this.trailTimer = 0.07;
+    }
+    const position = new THREE.Vector3();
+    const velocity = new THREE.Vector3();
+    for (const vehicle of this.vehicles) {
+      if (!vehicle.enabled || !vehicle.spec.isVehicle) {
+        continue;
+      }
+      const ground = vehicle.position.y - vehicle.spec.rideHeight;
+      if (vehicle.landingSpeed > 6) {
+        // A hard landing throws up a ring of dust.
+        this.effects.dust(position.set(vehicle.position.x, ground, vehicle.position.z), 3.5, 8);
+        if (vehicle === this.activeVehicle) {
+          this.cameraRig.addShake(clamp(vehicle.landingSpeed / 30, 0.2, 0.8));
+        }
+        this.events.emit('landed', { speed: vehicle.landingSpeed });
+        vehicle.landingSpeed = 0;
+      }
+      const speed = Math.hypot(vehicle.impactVelocity.x, vehicle.impactVelocity.z);
+      const busy = vehicle.skidding || vehicle.rolling || speed > vehicle.spec.topSpeed * 0.55;
+      if (!puff || !vehicle.grounded || !busy || speed < 5) {
+        continue;
+      }
+      const back = vehicle.spec.length * 0.45;
+      position.set(
+        vehicle.position.x - Math.cos(vehicle.heading) * back + (Math.random() - 0.5) * 3,
+        ground + 0.4,
+        vehicle.position.z - Math.sin(vehicle.heading) * back + (Math.random() - 0.5) * 3,
+      );
+      this.effects.puff({
+        position,
+        velocity: velocity.set(0, 1.2 + Math.random(), 0),
+        color: EFFECT_COLORS.dust,
+        size: vehicle.skidding ? 1.5 : 0.9,
+        life: vehicle.skidding ? 0.7 : 0.45,
+      });
+    }
+    if (puff && !this.hauler.destroyed && this.isScoring) {
+      const [dx, dz] = this.route.direction;
+      const center = this.hauler.center;
+      position.set(
+        center.x - dx * 13 + (Math.random() - 0.5) * 6,
+        center.y - 2.6,
+        center.z - dz * 13 + (Math.random() - 0.5) * 6,
+      );
+      this.effects.puff({
+        position,
+        velocity: velocity.set(-dx * 2, 1.5, -dz * 2),
+        color: EFFECT_COLORS.dustDark,
+        size: 1.6,
+        life: 0.9,
+      });
+    }
   }
 
   /** Records the poses of this step. The replay shows the last moments before a crash. */
@@ -875,6 +961,10 @@ export class Game {
           this.nextBuildings.add(segment.building);
         }
       }
+    }
+    if (this.phase === 'bonus' && this.obstaclesLeft > 0) {
+      // The Railbed left its slot before the Hauler crossed: the path is blocked again.
+      this.setPhase('playing');
     }
     if (this.phase === 'playing' && this.obstaclesLeft === 0) {
       this.clearSeconds = this.time;
@@ -1020,22 +1110,64 @@ export class Game {
       }
       return;
     }
-    // The pilot steps out beside the driver's door, on the left of the vehicle.
     const vehicle = this.activeVehicle;
-    const reach = vehicle.spec.width / 2 + 1.8;
-    const leftX = Math.sin(vehicle.heading);
-    const leftZ = -Math.cos(vehicle.heading);
-    const x = vehicle.position.x + leftX * reach;
-    const z = vehicle.position.z + leftZ * reach;
+    const [x, z] = this.exitSpot(vehicle);
     pilot.setEnabled(true);
     pilot.teleport(
       [x, z],
       vehicle.heading,
-      this.groundAt(x, z, vehicle.position.y) + pilot.spec.rideHeight,
+      this.groundAt(x, z, vehicle.position.y - vehicle.spec.rideHeight) + pilot.spec.rideHeight,
     );
     this.activeVehicle = pilot;
     this.pointToDrive.reset();
     this.events.emit('vehicleChanged', { type: 'pilot' });
+  }
+
+  /**
+   * Chooses where the pilot stands after leaving a vehicle: beside the driver's door on the
+   * left when that is safe, otherwise the nearest spot that is clear of the Hauler's lane and of
+   * every building.
+   */
+  private exitSpot(vehicle: Vehicle): Vec2 {
+    const side = vehicle.spec.width / 2 + 1.8;
+    const along = vehicle.spec.length / 2 + 1.8;
+    const forward: Vec2 = [Math.cos(vehicle.heading), Math.sin(vehicle.heading)];
+    const left: Vec2 = [forward[1], -forward[0]];
+    // Local offsets as [along the vehicle, to its left], in order of preference.
+    const offsets: Vec2[] = [
+      [0, side],
+      [0, -side],
+      [along, side],
+      [-along, side],
+      [along, -side],
+      [-along, -side],
+      [-along, 0],
+      [along, 0],
+    ];
+    const lane = this.route.halfWidth + EXIT_LANE_MARGIN;
+    let fallback: Vec2 | undefined;
+    for (const [ahead, sideways] of offsets) {
+      const spot: Vec2 = [
+        vehicle.position.x + forward[0] * ahead + left[0] * sideways,
+        vehicle.position.z + forward[1] * ahead + left[1] * sideways,
+      ];
+      fallback ??= spot;
+      const [distance, offset] = toRoute(this.route, spot);
+      const aheadOfHauler = distance > this.hauler.distance - HAULER_LENGTH;
+      const inLane = aheadOfHauler && distance < this.route.length && Math.abs(offset) < lane;
+      const inBuilding = this.buildings.list.some((building) =>
+        building.segments.some(
+          (segment, index) => building.hp[index] > 0 && distanceToBox(spot, segment.box) < 1,
+        ),
+      );
+      // The pilot must also stay on the level of the vehicle, not drop into a cutting.
+      const wheels = vehicle.position.y - vehicle.spec.rideHeight;
+      const drop = wheels - this.groundAt(spot[0], spot[1], wheels);
+      if (!inLane && !inBuilding && drop < 1.5) {
+        return spot;
+      }
+    }
+    return fallback ?? [vehicle.position.x, vehicle.position.z];
   }
 
   /**

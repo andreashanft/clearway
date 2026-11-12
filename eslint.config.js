@@ -25,6 +25,11 @@ export default tseslint.config(
     languageOptions: { globals: globals.browser },
   },
   {
+    // The debug tools report to the browser console on purpose.
+    files: ['src/debug/**/*.ts'],
+    rules: { 'no-console': 'off' },
+  },
+  {
     files: ['tools/**/*.ts', 'vite.config.ts'],
     languageOptions: {
       globals: globals.node,

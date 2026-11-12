@@ -8,8 +8,8 @@ import type { VehicleSpec } from './specs';
 /**
  * Returns the height of the drivable ground below a point.
  *
- * @param fromY Height of the asking vehicle. A deck above that height does not count, so a
- *   vehicle under a bridge stays under it.
+ * @param fromY Height of the wheels of the asking vehicle. A deck well above that height does
+ *   not count, so a vehicle under a bridge stays under it.
  */
 export type GroundQuery = (x: number, z: number, fromY: number) => number;
 
@@ -219,7 +219,8 @@ export class Vehicle {
       this.groundAt(
         translation.x + fx * alongX - fz * alongZ,
         translation.z + fz * alongX + fx * alongZ,
-        translation.y,
+        // The height of the wheels decides whether a deck is above or below the vehicle.
+        translation.y - spec.rideHeight,
       );
     const front = probe(halfLength, 0);
     const rear = probe(-halfLength, 0);

@@ -2,7 +2,7 @@
 
 Clearway is a demolition-puzzle game for the browser. An unstoppable Hauler drives one straight line across each level, and you clear everything in its way before it arrives. The game runs on phones, tablets and desktops as an installable progressive web app (PWA).
 
-The game is a prototype. The [milestones](#milestones) section lists what works today.
+The game is a prototype with three campaign levels, four demolition vehicles, a pilot on foot and a rail flatbed. The [milestones](#milestones) section lists what works today.
 
 ## Run the game
 
@@ -75,6 +75,7 @@ The project pins exact package versions.
 | Physics   | `@dimforge/rapier3d-compat`                     | 0.21.0  |
 | Language  | `typescript`                                    | 6.0.3   |
 | Build     | `vite`                                          | 8.3.8   |
+| Audio     | `howler`                                        | 2.2.4   |
 | PWA       | `vite-plugin-pwa`                               | 2.0.0   |
 | Tests     | `vitest`                                        | 5.1.0   |
 | Linting   | `eslint` with `typescript-eslint`               | 10.14.0 |
@@ -126,16 +127,16 @@ npm run report:route
 
 [docs/milestones.md](docs/milestones.md) lists, for each milestone, what works, what is stubbed, how to test it on a phone, and where the build deviates from the briefs on purpose.
 
-| #   | Milestone           | State   |
-| --- | ------------------- | ------- |
-| 1   | Scaffold            | Done    |
-| 2   | Drive               | Done    |
-| 3   | Destroy             | Done    |
-| 4   | Hauler loop         | Done    |
-| 5   | Screens             | Done    |
-| 6   | Vehicles and levels | Done    |
-| 7   | Polish              | Planned |
+| #   | Milestone           | State |
+| --- | ------------------- | ----- |
+| 1   | Scaffold            | Done  |
+| 2   | Drive               | Done  |
+| 3   | Destroy             | Done  |
+| 4   | Hauler loop         | Done  |
+| 5   | Screens             | Done  |
+| 6   | Vehicles and levels | Done  |
+| 7   | Polish              | Done  |
 
 ## Licence
 
-Clearway is free software under the GNU General Public License v3.0 or later. See [LICENSE](LICENSE). The fonts use the SIL Open Font License 1.1.
+Clearway is free software under the GNU General Public License v3.0 or later. See [LICENSE](LICENSE). The fonts use the SIL Open Font License 1.1. The sound recordings are in the public domain under the Creative Commons 0 licence; [public/audio/CREDITS.md](public/audio/CREDITS.md) lists their sources.

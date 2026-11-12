@@ -28,6 +28,9 @@ export type ScreenName =
 /** Screens that cover the 3D scene completely. The scene is not drawn behind them. */
 const OPAQUE: ReadonlySet<ScreenName> = new Set(['campaign', 'results', 'settings', 'howto']);
 
+/** Screens on which the simulation runs. On every other screen it stands still. */
+const RUNNING: ReadonlySet<ScreenName> = new Set(['playing', 'failed', 'title', 'briefing']);
+
 /** Milliseconds between the crash and the fail screen, so that the explosion shows first. */
 const FAIL_DELAY = 900;
 /** Milliseconds between the end of the level and the result screen. */
@@ -135,8 +138,9 @@ export class Flow {
   async boot(levelId?: string): Promise<void> {
     if (levelId) {
       this.levelId = getLevel(levelId).id;
-      await this.loadLevel(this.levelId);
-      this.startPlay();
+      if (await this.loadLevel(this.levelId)) {
+        this.startPlay();
+      }
       return;
     }
     await this.showTitle();
@@ -153,14 +157,16 @@ export class Flow {
     const next = LEVELS.find(
       (level) => this.save.isUnlocked(level.id, ids) && !this.save.isCleared(level.id),
     );
-    await this.loadLevel((next ?? LEVELS[0]).id);
-    this.go('title');
+    if (await this.loadLevel((next ?? LEVELS[0]).id)) {
+      this.go('title');
+    }
   }
 
   private async openBriefing(levelId: string): Promise<void> {
-    this.levelId = levelId;
-    await this.loadLevel(levelId);
-    this.go('briefing');
+    if (await this.loadLevel(levelId)) {
+      this.levelId = levelId;
+      this.go('briefing');
+    }
   }
 
   private startPlay(): void {
@@ -179,8 +185,9 @@ export class Flow {
   }
 
   private async restart(): Promise<void> {
-    await this.loadLevel(this.levelId, true);
-    this.startPlay();
+    if (await this.loadLevel(this.levelId, true)) {
+      this.startPlay();
+    }
   }
 
   private openSettings(): void {
@@ -188,14 +195,18 @@ export class Flow {
     this.go('settings');
   }
 
-  /** Loads a level unless it is already loaded and has not started yet. */
-  private async loadLevel(levelId: string, force = false): Promise<void> {
+  /**
+   * Loads a level unless it is already loaded and has not started yet.
+   *
+   * @returns False when another load is still running. The caller must then do nothing.
+   */
+  private async loadLevel(levelId: string, force = false): Promise<boolean> {
+    if (this.busy) {
+      return false;
+    }
     const game = this.app.game;
     if (!force && game && game.level.id === levelId && game.phase === 'ready') {
-      return;
-    }
-    if (this.busy) {
-      return;
+      return true;
     }
     this.busy = true;
     this.loading.hidden = false;
@@ -208,6 +219,7 @@ export class Flow {
       this.loading.hidden = true;
       this.busy = false;
     }
+    return true;
   }
 
   /** Listens to a freshly loaded level. */
@@ -216,17 +228,21 @@ export class Flow {
     game.events.on('haulerDestroyed', ({ hit, cause, obstaclesCleared, obstaclesTotal }) => {
       this.vibrate([60, 40, 140]);
       this.timer = window.setTimeout(() => {
-        this.fail.show(hit, cause, obstaclesCleared, obstaclesTotal);
-        this.go('failed');
+        // The player may have left the level, or loaded another one, in the meantime.
+        if (this.app.game === game && this.current === 'playing') {
+          this.fail.show(hit, cause, obstaclesCleared, obstaclesTotal);
+          this.go('failed');
+        }
       }, FAIL_DELAY);
     });
-    game.events.on('replayChanged', ({ playing }) => this.fail.setReplaying(playing));
     game.events.on('levelEnded', ({ result }) => {
       const outcome = this.save.recordResult(game.level.id, result);
       const hasNext = LEVELS.some((level) => level.index === game.level.index + 1);
       this.timer = window.setTimeout(() => {
-        this.results.show(game.level, result, outcome, hasNext);
-        this.go('results');
+        if (this.app.game === game && this.current === 'playing') {
+          this.results.show(game.level, result, outcome, hasNext);
+          this.go('results');
+        }
       }, RESULT_DELAY);
     });
     game.events.on('impact', ({ strength, broke }) => {
@@ -245,8 +261,9 @@ export class Flow {
     const { app } = this;
     const playing = screen === 'playing';
     app.setPlayUi(playing);
-    app.stepper.paused =
-      screen === 'paused' || (screen === 'settings' && this.settingsReturn === 'paused');
+    // The level only runs during play and while the crash plays out. The title and the briefing
+    // need running time for their camera, and their level has not started yet.
+    app.setPaused(!RUNNING.has(screen));
     app.renderScene = !OPAQUE.has(screen);
     this.shell.classList.toggle('is-paused', screen === 'paused');
     this.shell.classList.toggle('is-failed', screen === 'failed');
@@ -256,6 +273,12 @@ export class Flow {
     if (app.game) {
       // The title shows the diorama without markings.
       app.game.showMarkers = screen !== 'title';
+    }
+    // Menus have their own quiet groove. During play the game state picks the music.
+    if (screen === 'failed' || screen === 'results') {
+      app.sound.setMenuMood('off');
+    } else if (screen !== 'playing' && screen !== 'paused') {
+      app.sound.setMenuMood('menu');
     }
 
     switch (screen) {
@@ -345,10 +368,19 @@ export class Flow {
     app.touch.setLeftHanded(settings.leftHanded);
     app.touch.setClassic(settings.touchLayout === 'classic');
     app.keyboard.classic = settings.touchLayout === 'classic';
+    app.audio.setVolumes({
+      music: settings.musicVolume / 100,
+      effects: settings.effectsVolume / 100,
+      voice: settings.voiceVolume / 100,
+    });
+    app.sound.tensionMusic = settings.tensionMusic;
+    app.hud.setSubtitles(settings.subtitles);
   }
 
   private vibrate(pattern: number | number[]): void {
-    if (this.save.settings.haptics && typeof navigator.vibrate === 'function') {
+    // Browsers block vibration until the player has touched the page.
+    const touched = navigator.userActivation?.hasBeenActive ?? true;
+    if (this.save.settings.haptics && touched && typeof navigator.vibrate === 'function') {
       navigator.vibrate(pattern);
     }
   }

@@ -203,3 +203,64 @@ To test on a phone, start the development server with `npm run dev -- --host` an
 - **Rail cutting.** The cutting is 12 m wide and 3 m deep, narrower than on the level map, so that one wagon can bridge it.
 - **Town density.** The level map shows about 85 terraced houses. The build keeps them, grouped into 16 rows. A row counts as one building for the medals.
 - **Hangar and gantry heights** are 9 m and 8 m, so that a boosted jump from the rim lands on the hangar roof.
+
+## Milestone 7: polish
+
+**Works**
+
+- **Sound.** 72 public-domain recordings play through Howler, which unlocks audio on the first tap. Hits sound by material: wood for sheds and houses, masonry for brick, metal on concrete. Segments collapse with rubble, TNT and tanks blast, the fuse hisses, beacons chime upwards and every button ticks.
+- **Engines.** Each vehicle has its own engine loop whose pitch follows the speed. The Hauler rumbles louder the closer it is, and its alarm sounds in the last 5 seconds before an impact. The skid and the rocket boost have their own loops.
+- **Music.** A step sequencer plays a funk bass riff over drums from the recordings. The same riff runs at 104 beats per minute while the Hauler is far, at 124 under 15 seconds and at 152 with extra layers under 5 seconds. Bonus time and the menus have their own grooves. The Tension music setting keeps the calm tempo.
+- **Volumes.** The Music, Effects and Crew voice sliders work. The sound stops while the page is hidden.
+- **Crew captions.** With Subtitles on, the crew's radio lines show as captions: "Hauler is rolling.", "Fifteen seconds to impact." and "Path clear!".
+- **Haptics.** Hits, explosions and the crash vibrate on devices that support it.
+- **Dust.** Fast vehicles, skids, hard landings and the Hauler kick up dust.
+- **Dynamic resolution.** When frames stay above 18 ms for a second, the render scale drops by 10 %, down to 50 %. After 5 seconds without slow frames it rises by one step. When a rise does not hold, the next one waits twice as long.
+- **Phone budget.** Phones draw the terrain with a quarter of the triangles, use a 2048 px ground texture and one 1024 px shadow map. Larger screens use the full terrain, a 4096 px ground texture and a 2048 px shadow map.
+- **Clean reloads.** A level frees its physics world, geometries, materials and textures when the next one loads.
+- **Debug autoplay.** `clearway.arrivals()` in the console, or **Measure arrivals** in the debug overlay, runs the level with an invincible Hauler and reports when it reaches each obstacle.
+
+**Not done**
+
+- **Crew voice.** There are no voice recordings. The radio lines are captions with a radio click.
+- **Tilt-shift depth of field** at far zoom is not in. It needs a post-processing pass that costs fill rate on phones.
+- **The 60 fps cap on battery** is not in. A web page cannot read the power source reliably.
+- **Compressed textures and glTF models** are not needed yet: the world is built from generated geometry and painted textures.
+
+**Review**
+
+A second reviewer read the game code after the milestone was built and reported twelve defects. All twelve are fixed:
+
+- A level that the player quit kept running behind the menus, and its crash or result could replace the campaign map. The simulation now only runs during play, the crash, the title and the briefing, and the delayed screens check that their level is still the current one.
+- The dynamic resolution could only go down on 60 Hz displays. It now recovers by trying a higher scale.
+- Bonus time did not end when the Railbed left its slot. The level now returns to the blocked state.
+- The pilot could step out of the Railbed into the Hauler's lane. The exit spot is now chosen clear of the lane, of buildings and of drops.
+- A level did not free its shadow map, its crack texture and a few materials. It does now.
+- A second level load during a running one continued with the old level. It is now ignored.
+- Space did not activate a focused menu button.
+- Switching tabs during a load could leave the level frozen.
+- Debris passed through the Hauler's hull.
+- Vehicles on the floor of the rail cutting were lifted onto the decks above them.
+- The campaign map focused the first button instead of the next level.
+- The slow-motion tag on the fail screen now stays on for as long as the scene runs in slow motion.
+
+**Deviations from the briefs**
+
+- **Dynamic resolution recovery.** The code brief recovers when frames fall below 14 ms. The time between two frames never falls below the refresh period of the display, which is 16.7 ms at 60 Hz, so the build recovers after a stretch without slow frames instead.
+
+**Device testing**
+
+The build was checked in a desktop Chromium browser at 844 × 390, 390 × 844, 1180 × 820 and 1440 × 900, on WebGPU and with `?webgl` on WebGL2. It was not run on a physical iPhone, Android phone or iPad. Before a release, play every level on real devices and check the frame rate with `?debug`.
+
+## Acceptance checklist
+
+| Criterion of the code brief                                                                | State                                                                                       |
+| ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| All 3 levels can be finished with touch only, in both orientations, and with keyboard only | Every level runs from start to result with scripted input. Not played by hand on a phone.   |
+| Each level's Hauler arrival times match the design brief within ±10 %                      | Met. The worst arrival is 7.6 % off. `tests/route.test.ts` guards it.                       |
+| The Hauler touching any obstacle fails the level; rubble never does                        | Met.                                                                                        |
+| Every screen in the flow is reachable and matches the mocks at all four sizes              | Met in the browser at the four sizes.                                                       |
+| Medals, best times and settings persist across reloads                                     | Met. `tests/save.test.ts` covers the storage.                                               |
+| 60 fps on an iPhone 13-class phone in Level 3's busiest moment                             | Not measured on a device. Dynamic resolution and the phone budget are in place.             |
+| Installs to the home screen and launches fullscreen in either orientation                  | The manifest, the icons and the service worker are in the build. Not installed on a device. |
+| No Blast Corps names, art or audio anywhere in the repository                              | Met. All names, models and levels are original, and the recordings are CC0.                 |

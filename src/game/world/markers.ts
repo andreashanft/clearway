@@ -56,6 +56,13 @@ export class ObstacleMarkers {
     }
   }
 
+  /** Frees the materials. Some of them may not be on any mesh at the moment. */
+  dispose(): void {
+    for (const material of [this.line, this.glow, this.nextLine, this.nextGlow]) {
+      material.dispose();
+    }
+  }
+
   /**
    * Shows the outlines of the buildings that still block the route.
    *

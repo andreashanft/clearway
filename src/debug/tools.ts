@@ -5,6 +5,7 @@ import { LEVELS } from '../game/levels';
 import { routePoint } from '../game/route';
 import { formatTime } from '../game/scoring';
 import type { Button } from '../engine/input/input';
+import { measureArrivals, type ArrivalRow } from './autoplay';
 import { DebugOverlay } from './overlay';
 
 /** Functions on `window.clearway` for testing from the browser console. */
@@ -20,6 +21,8 @@ export interface DebugApi {
   hold(buttons: { action?: boolean; brake?: boolean }): void;
   /** Returns the state of the active vehicle. */
   vehicle(): Record<string, number | boolean | string>;
+  /** Runs the level with an invincible Hauler and reports when it reaches each obstacle. */
+  arrivals(): ArrivalRow[];
 }
 
 declare global {
@@ -113,6 +116,7 @@ export function installDebugTools(app: App): void {
       colliderLines = undefined;
     }
   });
+  overlay.addButton('Measure arrivals', () => measureArrivals(app));
   overlay.addSelect(
     'Level',
     LEVELS.map((level) => ({ value: level.id, label: `${level.index} ${level.name}` })),
@@ -162,6 +166,7 @@ export function installDebugTools(app: App): void {
       app.scripted.action = buttons.action ?? app.scripted.action;
       app.scripted.brake = buttons.brake ?? app.scripted.brake;
     },
+    arrivals: () => measureArrivals(app),
     vehicle: (): Record<string, number | boolean | string> => {
       const vehicle = app.game?.activeVehicle;
       if (!vehicle) {

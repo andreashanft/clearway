@@ -72,7 +72,9 @@ export class CampaignScreen {
     this.cards.replaceChildren(
       ...this.levels.map((level) => this.createCard(level, save, ids, level === nextUp)),
     );
-    const focus = this.cards.querySelector<HTMLElement>('.campaign__card.is-next button, button');
+    const focus =
+      this.cards.querySelector<HTMLElement>('.campaign__card.is-next button') ??
+      this.cards.querySelector<HTMLElement>('button');
     focus?.focus({ preventScroll: true });
   }
 

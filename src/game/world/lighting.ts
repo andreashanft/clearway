@@ -53,6 +53,8 @@ export interface LevelLighting {
   follow(focus: THREE.Vector3): void;
   /** Sets the resolution of the shadow map, for the quality presets. */
   setShadowMapSize(size: number): void;
+  /** Frees the shadow map. */
+  dispose(): void;
 }
 
 /** Adds sky colour, ambient light and a shadow-casting sun to a scene. */
@@ -70,7 +72,10 @@ export function createLighting(scene: THREE.Scene, lighting: Lighting): LevelLig
   const sun = new THREE.DirectionalLight(preset.sun, preset.sunIntensity);
   const direction = new THREE.Vector3(...preset.sunDirection).normalize();
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  // One 1024 px shadow map on phones, a sharper one on larger screens.
+  const isPhone = Math.min(window.screen.width, window.screen.height) < 600;
+  const shadowSize = isPhone ? 1024 : 2048;
+  sun.shadow.mapSize.set(shadowSize, shadowSize);
   sun.shadow.camera.left = -SHADOW_HALF_SIZE;
   sun.shadow.camera.right = SHADOW_HALF_SIZE;
   sun.shadow.camera.top = SHADOW_HALF_SIZE;
@@ -89,6 +94,9 @@ export function createLighting(scene: THREE.Scene, lighting: Lighting): LevelLig
       const z = Math.round(focus.z / step) * step;
       sun.target.position.set(x, focus.y, z);
       sun.position.copy(sun.target.position).addScaledVector(direction, SHADOW_DISTANCE);
+    },
+    dispose() {
+      sun.dispose();
     },
     setShadowMapSize(size) {
       if (sun.shadow.mapSize.x !== size) {

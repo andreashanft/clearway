@@ -43,6 +43,8 @@ export function paint(color: number, emissive = 0): THREE.MeshLambertMaterial {
   let material = materials.get(key);
   if (!material) {
     material = new THREE.MeshLambertMaterial({ color, emissive });
+    // Shared materials outlive a level. `Game.dispose` leaves them alone.
+    material.userData.shared = true;
     materials.set(key, material);
   }
   return material;

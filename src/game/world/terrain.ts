@@ -17,6 +17,8 @@ export interface Terrain {
   /** Contains the terrain mesh, the apron and the water. */
   object: THREE.Object3D;
   collider: RAPIER.Collider;
+  /** Frees the ground textures. */
+  dispose(): void;
 }
 
 /** Loads a heightmap image and returns its grey values, row by row. */
@@ -68,31 +70,52 @@ export function createTerrain(
 
   const object = new THREE.Group();
   object.name = 'terrain';
-  object.add(createTerrainMesh(heightfield, paintGround(terrain, level.ground)));
+  const groundTexture = paintGround(terrain, level.ground);
+  const detailTexture = createGroundDetail();
+  // Phones draw the terrain with a quarter of the triangles. The physics keeps every sample.
+  const isPhone = Math.min(window.screen.width, window.screen.height) < 600;
+  object.add(createTerrainMesh(heightfield, groundTexture, detailTexture, isPhone ? 2 : 1));
   object.add(createApron(heightfield, terrain.baseColor));
   if (terrain.waterLevel !== undefined) {
     object.add(createWater(heightfield, terrain.waterLevel));
   }
 
-  return { heightfield, object, collider: createCollider(heightfield, physics) };
+  return {
+    heightfield,
+    object,
+    collider: createCollider(heightfield, physics),
+    dispose: () => {
+      groundTexture.dispose();
+      detailTexture.dispose();
+    },
+  };
 }
 
-function createTerrainMesh(heightfield: Heightfield, groundTexture: THREE.Texture): THREE.Mesh {
+/**
+ * @param stride Use every `stride`-th height sample for the mesh.
+ */
+function createTerrainMesh(
+  heightfield: Heightfield,
+  groundTexture: THREE.Texture,
+  detailTexture: THREE.Texture,
+  stride: number,
+): THREE.Mesh {
   const { samples, size } = heightfield;
-  const geometry = new THREE.PlaneGeometry(size, size, samples - 1, samples - 1);
+  const cells = Math.floor((samples - 1) / stride);
+  const geometry = new THREE.PlaneGeometry(size, size, cells, cells);
   // The plane is built in the XY plane. Lay it flat, so that its rows run along X and advance
   // along Z, like the heightfield.
   geometry.rotateX(-Math.PI / 2);
+  geometry.translate(heightfield.centerX, 0, heightfield.centerZ);
   const position = geometry.attributes.position;
   for (let i = 0; i < position.count; i += 1) {
-    position.setY(i, heightfield.heights[i]);
+    position.setY(i, heightfield.heightAt(position.getX(i), position.getZ(i)));
   }
-  geometry.translate(heightfield.centerX, 0, heightfield.centerZ);
   geometry.computeVertexNormals();
 
   // Painted ground times a repeating detail texture. Mid-grey detail times two is neutral.
   const material = new THREE.MeshLambertNodeMaterial();
-  const detail = texture(createGroundDetail(), uv().mul(size / DETAIL_TILE_METRES));
+  const detail = texture(detailTexture, uv().mul(size / DETAIL_TILE_METRES));
   material.colorNode = texture(groundTexture, uv()).mul(detail.r.mul(2));
 
   const mesh = new THREE.Mesh(geometry, material);

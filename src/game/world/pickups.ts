@@ -141,6 +141,8 @@ export class Pickups {
       if (this.dishState === 'hidden' && this.bales && distance < DISH_RADIUS - 2) {
         // A vehicle scatters the hay bales and uncovers the dish.
         this.object.remove(this.bales);
+        this.bales.geometry.dispose();
+        (this.bales.material as THREE.Material).dispose();
         this.effects.dust(this.dishPosition, 5, 12, HAY);
         this.dishState = 'visible';
         this.dish.visible = true;

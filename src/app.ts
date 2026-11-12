@@ -1,3 +1,5 @@
+import { SoundDirector } from './audio/director';
+import { AudioEngine } from './audio/engine';
 import { GamepadInput } from './engine/input/gamepad';
 import { Input, ScriptedInput } from './engine/input/input';
 import { KeyboardInput } from './engine/input/keyboard';
@@ -7,6 +9,11 @@ import { Game, type GameOptions } from './game/game';
 import { LEVELS, getLevel } from './game/levels';
 import { Hud } from './ui/hud/hud';
 import { TouchControls } from './ui/touch-controls/touch-controls';
+
+/** Frames that stay longer than this lower the render scale, in milliseconds. */
+const SLOW_FRAME_MS = 18;
+/** Seconds without slow frames before the render scale rises again. */
+const RECOVERY_SECONDS = 5;
 
 /**
  * The running application: it owns the renderer, the input devices and the current game, and
@@ -21,6 +28,10 @@ export class App {
   readonly scripted = new ScriptedInput();
   readonly touch: TouchControls;
   readonly hud: Hud;
+  readonly audio = new AudioEngine();
+  readonly sound = new SoundDirector(this.audio);
+  /** True while a level is in play, as opposed to a menu. The sound follows it. */
+  playing = false;
   readonly options: GameOptions = {
     cameraShake: 0.45,
     steeringAssist: true,
@@ -32,6 +43,13 @@ export class App {
   game: Game | undefined;
 
   private lastTime = 0;
+  private flowPaused = false;
+  /** Seconds to wait before the render scale may rise again. It grows when a rise fails. */
+  private recoverySeconds = RECOVERY_SECONDS;
+  private sinceRecovery = Infinity;
+  /** Seconds for which frames have run long, and short, for the dynamic resolution. */
+  private slowSeconds = 0;
+  private fastSeconds = 0;
   private readonly frameListeners: ((frameSeconds: number) => void)[] = [];
   private readonly gameListeners: ((game: Game) => void)[] = [];
 
@@ -54,7 +72,14 @@ export class App {
     render.onResize((width, height) => this.game?.resize(width / height));
     // The simulation pauses while the page is hidden.
     document.addEventListener('visibilitychange', () => {
-      this.stepper.paused = document.hidden;
+      this.applyPause();
+      this.audio.setMuted(document.hidden);
+    });
+    // Every button gives a short tick.
+    ui.addEventListener('click', (event) => {
+      if (event.target instanceof Element && event.target.closest('button')) {
+        this.sound.click();
+      }
     });
   }
 
@@ -79,6 +104,7 @@ export class App {
     game.resize(this.render.aspect);
     this.stepper.reset();
     this.hud.attach(game);
+    this.sound.attach(game);
     // The crash plays out in slow motion.
     this.stepper.timeScale = 1;
     game.events.on('haulerDestroyed', () => {
@@ -90,10 +116,24 @@ export class App {
     return game;
   }
 
+  /**
+   * Pauses or resumes the simulation for the screen flow. The simulation also stands still
+   * while the page is hidden, whatever the flow asks for.
+   */
+  setPaused(paused: boolean): void {
+    this.flowPaused = paused;
+    this.applyPause();
+  }
+
+  private applyPause(): void {
+    this.stepper.paused = this.flowPaused || document.hidden;
+  }
+
   /** Shows or hides the head-up display and the touch controls. */
   setPlayUi(visible: boolean): void {
     this.hud.setVisible(visible);
     this.touch.setVisible(visible);
+    this.playing = visible;
   }
 
   /** Registers a function that runs whenever a level has been loaded. */
@@ -127,7 +167,11 @@ export class App {
   private frame(time: number): void {
     const frameSeconds = (time - this.lastTime) / 1000;
     this.lastTime = time;
-    this.frameStats.sample(frameSeconds);
+    // A frame of more than 100 ms is a hitch or a background tab, not a slow device.
+    if (frameSeconds <= 0.1) {
+      this.frameStats.sample(frameSeconds);
+    }
+    this.adaptResolution(frameSeconds);
 
     const game = this.game;
     if (game) {
@@ -139,8 +183,41 @@ export class App {
       this.updateTouchControls(game);
       this.hud.update(game, game.cameraRig.camera, Math.min(frameSeconds, 0.1));
     }
+    this.sound.update(Math.min(frameSeconds, 0.1), this.playing && !this.stepper.paused);
     for (const listener of this.frameListeners) {
       listener(frameSeconds);
+    }
+  }
+
+  /**
+   * Dynamic resolution: when frames stay above 18 ms for a second, the render scale drops by
+   * 10 %. After a stretch without slow frames it rises again by one step.
+   *
+   * The time between two frames never falls below the refresh period of the display, so the
+   * recovery cannot wait for fast frames. It tries a higher scale instead, and waits twice as
+   * long before the next try when that scale turns out to be too slow.
+   */
+  private adaptResolution(frameSeconds: number): void {
+    if (!this.renderScene || document.hidden || frameSeconds > 0.1) {
+      this.slowSeconds = 0;
+      this.fastSeconds = 0;
+      return;
+    }
+    const slow = this.frameStats.frameMs > SLOW_FRAME_MS;
+    this.slowSeconds = slow ? this.slowSeconds + frameSeconds : 0;
+    this.fastSeconds = slow ? 0 : this.fastSeconds + frameSeconds;
+    this.sinceRecovery += frameSeconds;
+    if (this.slowSeconds > 1) {
+      if (this.sinceRecovery < 10) {
+        // The last rise did not hold. Be more patient with the next one.
+        this.recoverySeconds = Math.min(60, this.recoverySeconds * 2);
+      }
+      this.render.setScale(this.render.scale - 0.1);
+      this.slowSeconds = 0;
+    } else if (this.fastSeconds > this.recoverySeconds && this.render.scale < 1) {
+      this.render.setScale(this.render.scale + 0.1);
+      this.fastSeconds = 0;
+      this.sinceRecovery = 0;
     }
   }
 

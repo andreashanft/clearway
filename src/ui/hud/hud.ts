@@ -58,6 +58,8 @@ export class Hud {
   private readonly projected = new THREE.Vector3();
   private readonly gapTarget = new THREE.Vector3();
   private lastMinimapTap = 0;
+  private subtitles = true;
+  private warned = false;
 
   constructor(parent: HTMLElement, handlers: HudHandlers) {
     const pause = button('Pause', 'ghost', handlers.onPause, {
@@ -183,6 +185,11 @@ export class Hud {
     this.root.classList.toggle('has-touch', touch);
   }
 
+  /** Turns the captions for the crew's radio lines on or off, for the Subtitles setting. */
+  setSubtitles(subtitles: boolean): void {
+    this.subtitles = subtitles;
+  }
+
   /** Shows or hides the mini-map, for the Display setting. */
   setMinimapVisible(visible: boolean): void {
     this.minimapFrame.hidden = !visible;
@@ -210,10 +217,15 @@ export class Hud {
         this.bannerTimer = BANNER_SECONDS;
         this.medal = 'bronze';
       }),
-      game.events.on('hint', ({ text }) => {
-        setText(this.hint, text);
-        this.hint.classList.add('is-on');
-        this.hintTimer = HINT_SECONDS;
+      game.events.on('hint', ({ text }) => this.showCallout(text, HINT_SECONDS)),
+      // The crew's radio lines have no recorded voice, so they only show as captions.
+      game.events.on('phaseChanged', ({ phase }) => {
+        if (phase === 'playing') {
+          this.warned = false;
+          this.caption('Hauler is rolling.');
+        } else if (phase === 'bonus') {
+          this.caption('Path clear!');
+        }
       }),
     ];
   }
@@ -246,6 +258,10 @@ export class Hud {
       this.counters.setAttribute('aria-label', summary);
     }
 
+    if (!this.warned && game.urgency === 'warning') {
+      this.warned = true;
+      this.caption('Fifteen seconds to impact.');
+    }
     this.updatePointer(game, camera);
     this.updateCard(game);
     if (!this.minimapFrame.hidden) {
@@ -284,6 +300,20 @@ export class Hud {
           this.toastTimer = MEDAL_TOAST_SECONDS;
         }
       }
+    }
+  }
+
+  /** Shows a text callout below the top row for a few seconds. */
+  private showCallout(text: string, seconds: number): void {
+    setText(this.hint, text);
+    this.hint.classList.add('is-on');
+    this.hintTimer = seconds;
+  }
+
+  /** Shows a radio line of the crew as a caption, when subtitles are on and no hint shows. */
+  private caption(text: string): void {
+    if (this.subtitles && this.hintTimer <= 0) {
+      this.showCallout(`Crew · ${text}`, 3);
     }
   }
 

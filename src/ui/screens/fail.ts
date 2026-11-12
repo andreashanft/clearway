@@ -34,7 +34,7 @@ export class FailScreen {
     this.progress = el('span');
     this.tip = el('span');
     this.replayTag = el('div', {
-      className: 'cw-tag cw-tag--alarm fail__replay',
+      className: 'cw-tag cw-tag--alarm fail__replay is-on',
       children: [el('span', { className: 'fail__dot' }), el('span', { text: 'REPLAY 0.25×' })],
     });
     this.retry = button('Retry', 'danger', handlers.onRetry, { className: 'fail__retry' });
@@ -84,13 +84,7 @@ export class FailScreen {
     setText(this.hit, hit);
     setText(this.progress, `${cleared} of ${total} cleared`);
     setText(this.tip, TIPS[cause]);
-    this.setReplaying(true);
     // Retry is the default action.
     this.retry.focus({ preventScroll: true });
-  }
-
-  /** Shows the replay tag while the crash plays in slow motion. */
-  setReplaying(replaying: boolean): void {
-    this.replayTag.classList.toggle('is-on', replaying);
   }
 }

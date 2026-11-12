@@ -36,7 +36,8 @@ export class KeyboardInput implements InputSource {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) {
         return;
       }
-      if (CAPTURED_KEYS.has(event.code)) {
+      // Space and the arrows must not scroll the page. A focused button still gets its Space.
+      if (CAPTURED_KEYS.has(event.code) && !(event.target instanceof HTMLButtonElement)) {
         event.preventDefault();
       }
       if (event.repeat) {

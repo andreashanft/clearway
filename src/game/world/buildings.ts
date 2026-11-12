@@ -133,6 +133,13 @@ export class Buildings {
     this.object.add(this.dustPatches, this.rubble);
   }
 
+  /** Frees the materials and the crack texture. They may not be on any mesh at the moment. */
+  dispose(): void {
+    this.crackedMaterial.map?.dispose();
+    this.crackedMaterial.dispose();
+    this.intactMaterial.dispose();
+  }
+
   /** Returns the building segment that a collider belongs to. */
   lookup(colliderHandle: number): SegmentRef | undefined {
     return this.byCollider.get(colliderHandle);

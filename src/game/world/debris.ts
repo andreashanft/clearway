@@ -104,7 +104,8 @@ export class Debris {
               Layer.debris |
               Layer.vehicle |
               Layer.crate |
-              Layer.bridge,
+              Layer.bridge |
+              Layer.hauler,
           ),
         ),
       body,
