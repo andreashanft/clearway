@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import { Layer, RAPIER, collisionGroups, type PhysicsWorld } from '../../engine/physics';
 import type { LevelData } from '../level';
-import { seededRandom, type Vec2 } from '../math';
+import { seededRandom, toBoxLocal, type OrientedBox, type Vec2 } from '../math';
 import type { Heightfield } from './heightfield';
 
 const CROWN_COLORS = [0x4f7f3e, 0x5a8a45, 0x467238, 0x558443];
@@ -21,6 +21,10 @@ export interface HedgePiece {
   /** Index of the piece in the instanced mesh. */
   index: number;
   crushed: boolean;
+  /** Placement of the piece while it stands. */
+  position: THREE.Vector3;
+  rotation: THREE.Quaternion;
+  scale: THREE.Vector3;
 }
 
 /** Trees and hedges of a level. */
@@ -177,14 +181,24 @@ function addHedges(
     const height = HEDGE_HEIGHT * (0.88 + random() * 0.24);
     const ground = heightfield.heightAt(placement.x, placement.z);
     rotation.setFromAxisAngle(up, -placement.heading);
-    matrix.compose(
-      new THREE.Vector3(placement.x, ground + height / 2 - 0.15, placement.z),
-      rotation,
-      new THREE.Vector3(placement.length + 0.3, height, HEDGE_WIDTH * (0.9 + random() * 0.2)),
+    const position = new THREE.Vector3(placement.x, ground + height / 2 - 0.15, placement.z);
+    const scale = new THREE.Vector3(
+      placement.length + 0.3,
+      height,
+      HEDGE_WIDTH * (0.9 + random() * 0.2),
     );
+    matrix.compose(position, rotation, scale);
     mesh.setMatrixAt(index, matrix);
     mesh.setColorAt(index, color.setHex(HEDGE_COLORS[index % HEDGE_COLORS.length]));
-    pieces.push({ x: placement.x, z: placement.z, index, crushed: false });
+    pieces.push({
+      x: placement.x,
+      z: placement.z,
+      index,
+      crushed: false,
+      position,
+      rotation: rotation.clone(),
+      scale,
+    });
   });
 
   mesh.castShadow = true;
@@ -192,4 +206,60 @@ function addHedges(
   mesh.instanceMatrix.needsUpdate = true;
   parent.add(mesh);
   return { pieces, mesh };
+}
+
+/** How far a hedge piece reaches from its centre, for the overlap test. */
+const HEDGE_REACH = 1.8;
+/** A crushed hedge piece keeps this fraction of its height. */
+const CRUSHED_HEIGHT = 0.14;
+
+const crushMatrix = new THREE.Matrix4();
+const crushPosition = new THREE.Vector3();
+const crushScale = new THREE.Vector3();
+
+/**
+ * Flattens every hedge piece under a box, for example under a vehicle.
+ *
+ * @param onCrush Called for each piece that was flattened in this call.
+ */
+export function crushHedges(
+  scenery: Scenery,
+  box: OrientedBox,
+  onCrush: (position: THREE.Vector3) => void,
+): void {
+  const mesh = scenery.hedgeMesh;
+  if (!mesh) {
+    return;
+  }
+  const reach = Math.hypot(box.half[0], box.half[1]) + HEDGE_REACH;
+  let changed = false;
+  for (const piece of scenery.hedgePieces) {
+    if (
+      piece.crushed ||
+      Math.abs(piece.x - box.center[0]) > reach ||
+      Math.abs(piece.z - box.center[1]) > reach
+    ) {
+      continue;
+    }
+    const local = toBoxLocal([piece.x, piece.z], box);
+    if (
+      Math.abs(local[0]) > box.half[0] + HEDGE_REACH ||
+      Math.abs(local[1]) > box.half[1] + HEDGE_REACH
+    ) {
+      continue;
+    }
+    piece.crushed = true;
+    crushScale.copy(piece.scale);
+    crushScale.y *= CRUSHED_HEIGHT;
+    crushScale.z *= 1.25;
+    crushPosition.copy(piece.position);
+    crushPosition.y -= (piece.scale.y * (1 - CRUSHED_HEIGHT)) / 2;
+    crushMatrix.compose(crushPosition, piece.rotation, crushScale);
+    mesh.setMatrixAt(piece.index, crushMatrix);
+    changed = true;
+    onCrush(piece.position);
+  }
+  if (changed) {
+    mesh.instanceMatrix.needsUpdate = true;
+  }
 }

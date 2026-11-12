@@ -51,3 +51,40 @@ To test on a phone, start the development server with `npm run dev -- --host` an
 - **Scale.** The level maps of the design fix the size of the world: Hollow Creek is about 525 m wide and its farmhouse is 24 m long. The vehicles are scaled to match, so the Bruiser is 8.4 m long. The camera distances are 48, 66 and 96 m instead of 25, 45 and 70 m, which keeps the vehicle at the same size on the screen.
 - **Heightmap resolution.** A heightmap pixel covers 2.5 m instead of about 4 m, so that ramps and the creek banks have clean edges.
 - **Ground texture.** The level file describes the ground as vector shapes, and the game paints them into a texture at load time. This is the look of the scene artboard, draped over the 3D terrain.
+
+## Milestone 3: destroy
+
+**Works**
+
+- The 14 buildings of Hollow Creek stand in the level: houses, barns, sheds, silos, a greenhouse and a diesel tank.
+- A building is cut into segments along its longer side. A house has two segments and the hay barn has three.
+- Buildings come in four strengths: shed (100 hit points per segment), house (250), brick (600) and concrete (1500).
+- A ram deals damage by speed and mass. A segment cracks at half of its hit points and falls at zero.
+- When a segment falls, the damage that is left over passes to its neighbours, and each neighbour loses half of its hit points. One ram charge therefore drops a whole house.
+- A fallen segment breaks into chunks that tumble for 4 seconds, then lose their collider and shrink away. A dust patch and loose rubble without colliders stay behind.
+- A vehicle that breaks through a wall keeps 82 % of its speed. A vehicle that a wall stops bounces back.
+- Concrete ignores every vehicle except the Tumbler. A hit throws sparks.
+- TNT crates: the first touch lights a 10 second fuse, and a ring on the ground burns down. The explosion damages buildings, throws vehicles and debris, and lights other crates.
+- The diesel tank explodes shortly after it is destroyed.
+- Heavy hits freeze the world for a few hundredths of a second and shake the camera.
+- Vehicles flatten hedges.
+
+**Stubbed**
+
+- The Hauler, the route obstacles and the head-up display come in milestone 4.
+- There is no sound yet.
+
+**Test on a phone**
+
+- Ram the tool shed north-east of the start. It falls in one hit.
+- Ram the farmhouse twice, or tap **RAM** just before the impact and drop it in one hit.
+- Ram the stone barn. Nothing happens except sparks. Push a TNT crate against it and drive away.
+- Ram the diesel tank and watch the Bruiser get thrown back.
+
+**Deviations from the briefs**
+
+- **TNT numbers.** The code brief gives 800 damage within 8 m. With those numbers, two crates cannot drop one 1500-point concrete segment, and the brief asks for tuning towards an arcade feel. The build uses 3000 damage at the centre, falling to zero at 22 m. One crate against the wall drops the stone barn.
+- **TNT failsafe.** A crate comes back at its starting place 6 seconds after it explodes or leaves the map. The brief asks for a failsafe and names this option.
+- **Collapse.** The spread of damage between segments is an addition. It makes "one ram charge drops a house" true although every segment has the full hit points of its strength.
+- **Ram burst.** The burst raises the top speed by 25 % for 0.5 seconds. Together with the 1.8 times damage bonus, a charged ram deals 2.8 times the damage of a plain ram. A larger burst would drop brick on flat ground and make the "ram with downhill speed" solution of the twin silos pointless.
+- **Hit-stop and camera shake** are listed under milestone 7 in the brief. Basic versions are in now, because impacts feel weak without them.

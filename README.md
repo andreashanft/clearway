@@ -116,7 +116,7 @@ npm run build:terrain
 | --- | ------------------- | ------- |
 | 1   | Scaffold            | Done    |
 | 2   | Drive               | Done    |
-| 3   | Destroy             | Planned |
+| 3   | Destroy             | Done    |
 | 4   | Hauler loop         | Planned |
 | 5   | Screens             | Planned |
 | 6   | Vehicles and levels | Planned |

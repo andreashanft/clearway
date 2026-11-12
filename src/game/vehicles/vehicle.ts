@@ -1,6 +1,6 @@
 import * as THREE from 'three/webgpu';
 import { Layer, RAPIER, collisionGroups, type PhysicsWorld } from '../../engine/physics';
-import { approach, clamp, damp, lerp, wrapAngle, type Vec2 } from '../math';
+import { approach, clamp, damp, lerp, wrapAngle, type OrientedBox, type Vec2 } from '../math';
 import type { DriveCommand } from './drive-control';
 import type { VehicleModel } from './models';
 import type { VehicleSpec } from './specs';
@@ -15,9 +15,11 @@ const SPRING_DAMPING = 30;
 /** How far above its ride height a chassis still counts as on the ground, in metres. */
 const GROUND_REACH = 0.45;
 /** How strongly a slope speeds a vehicle up or slows it down, in m/s². */
-const SLOPE_GRAVITY = 13;
+const SLOPE_GRAVITY = 16;
+/** A vehicle that is faster than its engine allows, for example downhill, slows by this, in m/s². */
+const OVERSPEED_DRAG = 1.5;
 /** While the ram charge burns, the top speed and the acceleration rise by these factors. */
-const RAM_SPEED_FACTOR = 1.6;
+const RAM_SPEED_FACTOR = 1.25;
 const RAM_ACCELERATION_FACTOR = 3;
 /** How long a ram charge stays armed for its damage bonus after it fires, in seconds. */
 const RAM_ARMED_SECONDS = 1.1;
@@ -28,6 +30,8 @@ export interface ActionInput {
   /** True in the step in which the button went down. */
   pressed: boolean;
 }
+
+const NO_ACTION: Readonly<ActionInput> = { held: false, pressed: false };
 
 /**
  * A drivable vehicle.
@@ -58,6 +62,10 @@ export class Vehicle {
   readonly impactVelocity = new THREE.Vector3();
   /** Downward speed at the moment the vehicle last touched down, in m/s. */
   landingSpeed = 0;
+  /** Seconds for which the driver has no control, for example after an explosion. */
+  stunned = 0;
+  /** Seconds until the next impact counts. It keeps one crash from counting twice. */
+  impactCooldown = 0;
 
   private yawRate = 0;
   private actionTimer = 0;
@@ -172,12 +180,20 @@ export class Vehicle {
       }
     }
 
-    this.updateAction(dt, action);
+    const stunned = this.stunned > 0;
+    this.stunned = Math.max(0, this.stunned - dt);
+    this.impactCooldown = Math.max(0, this.impactCooldown - dt);
+    this.updateAction(dt, stunned ? NO_ACTION : action);
 
     const slopePitch = Math.atan2(front - rear, halfLength * 2);
     const slopeRoll = Math.atan2(right - left, halfWidth * 2);
 
-    if (this.grounded) {
+    if (this.grounded && stunned) {
+      // Thrown by an explosion: the vehicle slides until the driver has control again.
+      forward = approach(forward, 0, spec.coasting * 0.5 * dt);
+      sideways *= Math.exp(-1.5 * dt);
+      this.yawRate = lerp(this.yawRate, 0, damp(1.5, dt));
+    } else if (this.grounded) {
       const boost = this.actionActive && spec.actionKind === 'ram';
       const topSpeed = spec.topSpeed * (boost ? RAM_SPEED_FACTOR : 1);
       const acceleration = spec.acceleration * (boost ? RAM_ACCELERATION_FACTOR : 1);
@@ -195,7 +211,7 @@ export class Vehicle {
         forward = approach(forward, target, acceleration * dt);
       } else {
         // Faster than the engine can go, for example downhill: lose the extra speed slowly.
-        forward = approach(forward, target, spec.coasting * 0.4 * dt);
+        forward = approach(forward, target, OVERSPEED_DRAG * dt);
       }
       forward -= SLOPE_GRAVITY * Math.sin(slopePitch) * dt;
       sideways *= Math.exp(-spec.grip * dt);
@@ -258,6 +274,35 @@ export class Vehicle {
       actionActive: this.actionActive,
       grounded: this.grounded,
     });
+  }
+
+  /** Returns the footprint of the vehicle on the ground plane. */
+  get footprint(): OrientedBox {
+    return {
+      center: [this.currentPosition.x, this.currentPosition.z],
+      half: [this.spec.length / 2, this.spec.width / 2],
+      heading: this.heading,
+    };
+  }
+
+  /**
+   * Throws the vehicle, for example away from an explosion, and takes the controls from the
+   * driver for a moment.
+   */
+  knock(velocity: THREE.Vector3, stunSeconds: number): void {
+    const current = this.body.linvel();
+    this.body.setLinvel(
+      { x: current.x + velocity.x, y: current.y + velocity.y, z: current.z + velocity.z },
+      true,
+    );
+    this.yawRate += (Math.random() - 0.5) * 6;
+    this.stunned = Math.max(this.stunned, stunSeconds);
+    this.actionActive = false;
+  }
+
+  /** Sets the velocity of the body directly, for example to carry speed through a wall. */
+  setVelocity(x: number, y: number, z: number): void {
+    this.body.setLinvel({ x, y, z }, true);
   }
 
   /** Moves the vehicle to a position and stops it. */

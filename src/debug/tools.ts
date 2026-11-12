@@ -51,6 +51,12 @@ export function installDebugTools(app: App): void {
       return position ? `${position.x.toFixed(0)}, ${position.z.toFixed(0)}` : '';
     },
   });
+  overlay.addStat({ label: 'Debris', read: () => String(app.game?.debris.activeCount ?? 0) });
+  overlay.addStat({
+    label: 'Buildings',
+    read: () =>
+      app.game ? `${app.game.buildings.destroyedCount} / ${app.game.buildings.list.length}` : '',
+  });
   overlay.addSlider('Time scale', { min: 0, max: 2, step: 0.05, value: 1 }, (value) => {
     app.stepper.timeScale = value;
   });
