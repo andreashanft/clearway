@@ -1,5 +1,6 @@
 import type * as THREE from 'three/webgpu';
 import type { Strength } from './level';
+import type { LevelResult } from './scoring';
 import type { Building } from './world/buildings';
 
 /** Where an explosion comes from. */
@@ -36,4 +37,41 @@ export interface GameEvents {
   actionFired: { kind: string };
   /** A vehicle landed after a jump. */
   landed: { speed: number };
+  /** A vehicle drove past a beacon and lit it. */
+  beaconLit: { lit: number; total: number };
+  /** A vehicle found the hidden relay dish. */
+  dishFound: Record<string, never>;
+  /** The level moved on, for example from playing to bonus time. */
+  phaseChanged: { phase: Phase; previous: Phase };
+  /** A route obstacle no longer blocks the Hauler. */
+  obstacleCleared: { id: string; name: string; left: number };
+  /** The last route obstacle fell. Bonus time starts. */
+  pathClear: { clearSeconds: number; bonusSeconds: number };
+  /** The Hauler touched something solid and blew up. */
+  haulerDestroyed: {
+    /** What it hit, in lower case with an article: "the farmhouse". */
+    hit: string;
+    /** What kind of thing it hit, for the tip on the fail screen. */
+    cause: FailCause;
+    obstaclesCleared: number;
+    obstaclesTotal: number;
+  };
+  /** The Hauler left the map, or the player finished the level early. */
+  levelEnded: { result: LevelResult };
+  /** A tutorial hint should show. */
+  hint: { text: string };
 }
+
+/**
+ * Where a level is in its flow.
+ *
+ * - `ready`: loaded, the Hauler waits at the map edge.
+ * - `playing`: the Hauler rolls and obstacles still stand.
+ * - `bonus`: the path is clear and the Hauler still drives.
+ * - `failed`: the Hauler blew up.
+ * - `ended`: the Hauler left the map, or the player finished early.
+ */
+export type Phase = 'ready' | 'playing' | 'bonus' | 'failed' | 'ended';
+
+/** What the Hauler hit. */
+export type FailCause = Strength | 'vehicle' | 'tnt' | 'explosion' | 'tree' | 'gap';

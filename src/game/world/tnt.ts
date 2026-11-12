@@ -155,6 +155,13 @@ export class TntCrates {
     return exploding;
   }
 
+  /** Returns true when a collider belongs to one of the crates. */
+  owns(colliderHandle: number): boolean {
+    return this.crates.some(
+      (crate) => crate.state !== 'gone' && crate.body.collider(0).handle === colliderHandle,
+    );
+  }
+
   /** Lights the fuse of a crate. A burning fuse only gets shorter. */
   light(crate: Crate, seconds: number): void {
     if (crate.state === 'gone') {

@@ -123,6 +123,11 @@ export class TouchControls implements InputSource {
     }
   }
 
+  /** True when the controls are on the screen. */
+  get shown(): boolean {
+    return !this.root.hidden && !this.root.classList.contains('is-off');
+  }
+
   /** Forces the controls on, for testing on a desktop. */
   forceShow(): void {
     this.root.hidden = false;

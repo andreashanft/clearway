@@ -95,7 +95,7 @@ export class MeshBuilder {
    * Adds a cylinder or, with a top radius of 0, a cone.
    *
    * @param base Centre of the bottom face.
-   * @param axis `y` stands upright, `x` lies along X.
+   * @param axis `y` stands upright, `x` lies along X and `z` lies along Z.
    */
   cylinder(
     radiusBottom: number,
@@ -104,12 +104,19 @@ export class MeshBuilder {
     base: Point,
     color: number,
     segments = 12,
-    axis: 'x' | 'y' = 'y',
+    axis: 'x' | 'y' | 'z' = 'y',
   ): this {
-    const at = (angle: number, radius: number, along: number): Point =>
-      axis === 'y'
-        ? [base[0] + Math.cos(angle) * radius, base[1] + along, base[2] + Math.sin(angle) * radius]
-        : [base[0] + along, base[1] + Math.sin(angle) * radius, base[2] + Math.cos(angle) * radius];
+    const at = (angle: number, radius: number, along: number): Point => {
+      const c = Math.cos(angle) * radius;
+      const s = Math.sin(angle) * radius;
+      if (axis === 'y') {
+        return [base[0] + c, base[1] + along, base[2] + s];
+      }
+      if (axis === 'x') {
+        return [base[0] + along, base[1] + s, base[2] + c];
+      }
+      return [base[0] + s, base[1] + c, base[2] + along];
+    };
     const topCentre = at(0, 0, height);
     const bottomCentre = at(0, 0, 0);
     for (let i = 0; i < segments; i += 1) {

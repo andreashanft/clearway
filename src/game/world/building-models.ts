@@ -1,36 +1,11 @@
 import type * as THREE from 'three/webgpu';
 import type { BuildingData } from '../level';
 import { MeshBuilder, shade } from './mesh-builder';
+import type { SegmentLayout } from './segments';
 
 const GLASS = 0x2f3d55;
 const DOOR = 0x4e3626;
 const FOUNDATION = 0x8c8c86;
-
-/** The longest side of one building segment in metres. Longer buildings get more segments. */
-const SEGMENT_LENGTH = 12.5;
-const MAX_SEGMENTS = 6;
-
-/** How a building is cut into segments along its longer side. */
-export interface SegmentLayout {
-  count: number;
-  /** True when the longer side runs along the local X axis. */
-  alongX: boolean;
-  /** Length of one segment along the longer side. */
-  length: number;
-  /** Size of the building across the longer side. */
-  depth: number;
-}
-
-/** Decides how many segments a building has. A house has two, a long warehouse five. */
-export function segmentLayout(data: BuildingData): SegmentLayout {
-  const [width, , depth] = data.size;
-  const alongX = width >= depth;
-  const long = alongX ? width : depth;
-  const short = alongX ? depth : width;
-  const round = data.kind === 'silo' || data.kind === 'tank' || data.kind === 'chimney';
-  const count = round ? 1 : Math.min(MAX_SEGMENTS, Math.max(1, Math.round(long / SEGMENT_LENGTH)));
-  return { count, alongX, length: long / count, depth: short };
-}
 
 /**
  * Builds the mesh of one building segment.

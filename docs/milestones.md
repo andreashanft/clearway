@@ -88,3 +88,44 @@ To test on a phone, start the development server with `npm run dev -- --host` an
 - **Collapse.** The spread of damage between segments is an addition. It makes "one ram charge drops a house" true although every segment has the full hit points of its strength.
 - **Ram burst.** The burst raises the top speed by 25 % for 0.5 seconds. Together with the 1.8 times damage bonus, a charged ram deals 2.8 times the damage of a plain ram. A larger burst would drop brick on flat ground and make the "ram with downhill speed" solution of the twin silos pointless.
 - **Hit-stop and camera shake** are listed under milestone 7 in the brief. Basic versions are in now, because impacts feel weak without them.
+
+## Milestone 4: Hauler loop
+
+**Works**
+
+- The Hauler enters at the map edge already rolling and drives one straight line at 3 m/s. It follows the terrain and flattens hedges.
+- At level load, the game sweeps the Hauler's footprint along the line and lists the route obstacles. The order and the timing are computed from the level data.
+- A sensor box around the Hauler and slightly ahead of its bumper ends the level when it touches a building, a vehicle, a TNT crate or a tree. Rubble does not count. An explosion close to the Hauler also destroys it.
+- The next-obstacle pointer sits beside the vehicle. It is yellow, amber under 15 seconds and red and pulsing under 5 seconds.
+- Route obstacles have a red outline on the ground. The next one has an amber outline.
+- When the last obstacle falls, the Path clear banner shows the clear time and the bonus time. Bonus time runs until the Hauler leaves the map or the player selects **Finish level**.
+- The 30 beacons light up when the vehicle drives past. The relay dish hides under hay bales behind the stone barn.
+- The result awards bronze, silver or gold by the rules of the design brief, and counts points for every destroyed segment, beacon and the dish.
+- The head-up display shows the counters, the mini-map, the pointer, the Path clear banner, tutorial hints and, on desktops, the vehicle card.
+- The camera leans towards the Hauler in the last 5 seconds before an impact.
+- The steering assist bends the heading towards the next obstacle when the player already aims at it.
+- Hollow Creek can be played from start to result.
+
+**Stubbed**
+
+- The fail panel and the result panel are placeholders with a **Retry** button. Milestone 5 replaces them.
+- There is no pause, no title, no campaign map and no saving yet.
+
+**Test on a phone**
+
+- Wait at the start. The Hauler hits the tool shed after about 35 seconds and the level fails.
+- Clear the six obstacles in order. The stone barn needs a TNT crate.
+- After Path clear, light beacons along the hedges until the Hauler leaves, or tap **Finish level**.
+
+**Checks**
+
+- `npm run report:route` prints when the Hauler reaches each obstacle. For Hollow Creek, every arrival is within 3.1 % of the design brief.
+- `tests/route.test.ts` fails when an arrival of any level is more than 10 % off.
+- With `?debug`, the overlay offers an invincible Hauler, the route line, collider wireframes, a time-scale slider and a level select.
+
+**Deviations from the briefs**
+
+- **Beacons and the relay dish** are listed under milestone 7 in the brief. They are in now, because the medals and the counters need them.
+- **Mini-map.** The code brief suggests a second 3D render. The build draws a 2D schematic instead, which is what the mocks show: navy ground, water and roads as strokes, and dots for the obstacles, the Hauler and the player.
+- **Pointer and outlines.** The pointer is an SVG in the DOM layer, placed by projecting the vehicle onto the screen. That keeps it crisp at every size. The outlines are flat frames on the ground.
+- **Vehicle in the way.** A vehicle that stands on the line destroys the Hauler, also in bonus time. The brief says that the Hauler detonates when it touches anything solid.

@@ -1,0 +1,491 @@
+/* Head-up display. Sizes follow the gameplay mocks: phone landscape first, then the others. */
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  color: var(--cw-ink);
+  --hud-edge: 14px;
+  --hud-top: 12px;
+  --hud-number: 20px;
+  --hud-bar: 44px;
+  --minimap-width: 132px;
+  --minimap-height: 88px;
+}
+
+.hud[hidden] {
+  display: none;
+}
+
+.hud > * {
+  pointer-events: auto;
+}
+
+/* A soft shade behind the top row keeps the counters readable over bright ground. */
+.hud__shade {
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 80px;
+  background: linear-gradient(
+    180deg,
+    rgba(var(--cw-ground-rgb), 0.5),
+    rgba(var(--cw-ground-rgb), 0)
+  );
+  pointer-events: none;
+}
+
+.hud__top-left {
+  position: absolute;
+  left: calc(var(--cw-safe-left) + var(--hud-edge));
+  top: calc(var(--cw-safe-top) + var(--hud-top));
+  display: flex;
+  gap: var(--cw-space-2);
+}
+
+.hud__pause {
+  width: var(--hud-bar);
+  height: var(--hud-bar);
+  min-height: var(--hud-bar);
+}
+
+.hud__counters {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: var(--hud-bar);
+  padding: 0 var(--cw-space-3);
+}
+
+.hud__counter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud__counter > span:first-child {
+  display: flex;
+}
+
+.hud__number {
+  font-family: var(--cw-font-display);
+  font-weight: 900;
+  font-size: var(--hud-number);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.hud__number--signal {
+  color: var(--cw-signal);
+}
+
+/* The dish and the leave time only show in bonus time. */
+.hud__counter--dish,
+.hud__counter--leave {
+  display: none;
+  color: var(--cw-muted);
+}
+
+.hud[data-phase='bonus'] .hud__counter--dish,
+.hud[data-phase='bonus'] .hud__counter--leave {
+  display: flex;
+}
+
+.hud__counter--dish.is-found {
+  color: var(--cw-signal);
+}
+
+.hud__counter--leave {
+  padding-left: 14px;
+  border-left: 1px solid rgba(var(--cw-line-rgb), 0.3);
+}
+
+.hud__minimap {
+  position: absolute;
+  right: calc(var(--cw-safe-right) + var(--hud-edge));
+  top: calc(var(--cw-safe-top) + var(--hud-top));
+  width: var(--minimap-width);
+  height: var(--minimap-height);
+  overflow: hidden;
+}
+
+.hud__minimap[hidden] {
+  display: none;
+}
+
+.hud__minimap-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Next-obstacle pointer: yellow, amber under 15 s, red and pulsing under 5 s. */
+.hud__pointer {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 56px;
+  height: 56px;
+  color: var(--cw-hazard);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--cw-fast) ease-out;
+  will-change: transform;
+}
+
+.hud__pointer.is-on {
+  opacity: 1;
+}
+
+.hud__pointer[data-urgency='warning'] {
+  color: var(--cw-amber);
+}
+
+.hud__pointer[data-urgency='critical'] {
+  color: var(--cw-alarm);
+}
+
+.hud__pointer[data-urgency='critical'] svg {
+  animation: hud-pulse 0.42s ease-in-out infinite alternate;
+}
+
+@keyframes hud-pulse {
+  from {
+    transform: scale(1);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.3);
+    opacity: 0.55;
+  }
+}
+
+/* Vehicle card: desktop only. It shows the vehicle name and the action charge, no key hints. */
+.hud__card {
+  position: absolute;
+  left: 28px;
+  bottom: 28px;
+  display: none;
+  align-items: center;
+  gap: 14px;
+  width: 280px;
+  padding: 12px 14px;
+  border: 1px solid rgba(var(--cw-hazard-rgb), 0.45);
+  background: linear-gradient(180deg, rgba(26, 43, 88, 0.92), rgba(19, 34, 72, 0.92));
+  pointer-events: none;
+}
+
+.hud__card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border: 1px solid var(--cw-line);
+  background: radial-gradient(
+    circle,
+    rgba(var(--cw-hazard-rgb), 0.25),
+    rgba(var(--cw-ground-rgb), 0.6)
+  );
+}
+
+.hud__card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--cw-space-2);
+  min-width: 0;
+}
+
+.hud__card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.hud__card-name {
+  font-family: var(--cw-font-display);
+  font-weight: 900;
+  font-size: 26px;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.hud__card-label {
+  font-family: var(--cw-font-mono);
+  font-size: 11px;
+  color: var(--cw-hazard);
+}
+
+.hud__card-track {
+  height: 6px;
+  background: rgba(var(--cw-hazard-rgb), 0.15);
+}
+
+.hud__card-bar {
+  height: 100%;
+  background: var(--cw-hazard);
+  transform-origin: left center;
+  opacity: 0.55;
+}
+
+.hud__card.is-ready .hud__card-bar {
+  opacity: 1;
+  box-shadow: 0 0 10px rgba(var(--cw-hazard-rgb), 0.5);
+}
+
+/* Path clear: a full-width banner for three seconds. */
+.hud__banner {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 28%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(12px, 3vw, 26px);
+  height: clamp(96px, 37vh, 146px);
+  background: linear-gradient(
+    90deg,
+    rgba(var(--cw-ground-rgb), 0.2),
+    rgba(var(--cw-ground-rgb), 0.94) 20%,
+    rgba(var(--cw-ground-rgb), 0.94) 80%,
+    rgba(var(--cw-ground-rgb), 0.2)
+  );
+  opacity: 0;
+  transform: scaleY(0.6);
+  pointer-events: none;
+  transition:
+    opacity var(--cw-snap) ease-out,
+    transform var(--cw-snap) ease-out;
+}
+
+.hud__banner.is-on {
+  opacity: 1;
+  transform: none;
+}
+
+.hud__banner::before,
+.hud__banner::after {
+  content: '';
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cw-go), transparent);
+  box-shadow: 0 0 12px var(--cw-go);
+}
+
+.hud__banner::before {
+  top: 0;
+}
+
+.hud__banner::after {
+  bottom: 0;
+}
+
+.hud__banner-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(52px, 9vw, 76px);
+  height: clamp(52px, 9vw, 76px);
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: var(--cw-go);
+  color: var(--cw-ground);
+  box-shadow:
+    0 0 0 8px rgba(var(--cw-go-rgb), 0.2),
+    0 0 40px rgba(var(--cw-go-rgb), 0.6);
+}
+
+.hud__banner-check svg {
+  width: 52%;
+  height: 52%;
+}
+
+.hud__banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--cw-space-2);
+}
+
+.hud__banner-title {
+  font-size: clamp(44px, 10vw, 84px);
+  line-height: 0.82;
+  letter-spacing: 0.01em;
+  color: var(--cw-go);
+  text-shadow: 0 0 30px rgba(var(--cw-go-rgb), 0.5);
+}
+
+.hud__banner-tags {
+  display: flex;
+  gap: var(--cw-space-2);
+}
+
+/* Finish level. Next to touch controls it sits under the mini-map, away from the Action button. */
+.hud__finish {
+  position: absolute;
+  right: calc(var(--cw-safe-right) + var(--hud-edge));
+  top: calc(var(--cw-safe-top) + var(--hud-top) + var(--minimap-height) + 10px);
+  min-height: 44px;
+  box-shadow: 0 8px 22px rgba(var(--cw-blue-rgb), 0.4);
+}
+
+.hud__finish[hidden] {
+  display: none;
+}
+
+/* Tutorial hint: a callout, so it keeps a small radius. */
+.hud__hint {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--cw-safe-top) + var(--hud-top) + var(--hud-bar) + 14px);
+  max-width: min(460px, 62vw);
+  padding: 9px 14px;
+  border: 1px solid rgba(var(--cw-hazard-rgb), 0.35);
+  border-radius: var(--cw-radius-callout);
+  background: var(--cw-chip);
+  color: var(--cw-ink);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+  opacity: 0;
+  transform: translate(-50%, -8px);
+  pointer-events: none;
+  transition:
+    opacity var(--cw-snap) ease-out,
+    transform var(--cw-snap) ease-out;
+}
+
+.hud__hint.is-on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* Medal earned: a short banner in the colour of the medal. */
+.hud__toast {
+  position: absolute;
+  left: 50%;
+  top: 30%;
+  padding: 8px 22px;
+  border: 1px solid currentColor;
+  background: rgba(var(--cw-ground-rgb), 0.9);
+  font-family: var(--cw-font-display);
+  font-weight: 900;
+  font-size: 34px;
+  line-height: 1;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--cw-silver);
+  text-shadow: 0 0 22px rgba(var(--cw-silver-rgb), 0.6);
+  opacity: 0;
+  transform: translate(-50%, 0) scale(0.8);
+  pointer-events: none;
+  transition:
+    opacity var(--cw-snap) ease-out,
+    transform var(--cw-snap) ease-out;
+}
+
+.hud__toast[data-medal='gold'] {
+  color: var(--cw-gold);
+  text-shadow: 0 0 24px rgba(var(--cw-gold-rgb), 0.7);
+}
+
+.hud__toast.is-on {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+/* Phone portrait: the top row clears the notch and the mini-map is smaller. */
+@media (orientation: portrait) {
+  .hud {
+    --hud-edge: 16px;
+    --hud-top: 12px;
+    --minimap-width: 96px;
+    --minimap-height: 64px;
+  }
+
+  .hud__shade {
+    height: 110px;
+  }
+
+  .hud__top-left,
+  .hud__minimap {
+    top: calc(max(var(--cw-safe-top), 44px) + var(--hud-top));
+  }
+
+  .hud__finish {
+    top: calc(max(var(--cw-safe-top), 44px) + var(--hud-top) + var(--minimap-height) + 10px);
+  }
+
+  .hud__hint {
+    top: calc(max(var(--cw-safe-top), 44px) + var(--hud-top) + var(--hud-bar) + 14px);
+    max-width: 86vw;
+  }
+
+  /* In bonus time four counters do not fit beside the mini-map, so the row wraps below it. */
+  .hud[data-phase='bonus'] .hud__counters {
+    gap: 10px;
+  }
+
+  .hud[data-phase='bonus'] .hud__minimap {
+    top: calc(max(var(--cw-safe-top), 44px) + var(--hud-top) + var(--hud-bar) + 8px);
+  }
+
+  .hud[data-phase='bonus'] .hud__finish {
+    top: calc(
+      max(var(--cw-safe-top), 44px) + var(--hud-top) + var(--hud-bar) + var(--minimap-height) + 18px
+    );
+  }
+}
+
+/* Tablet */
+@media (min-width: 900px) and (min-height: 600px) {
+  .hud {
+    --hud-edge: 20px;
+    --hud-top: 18px;
+    --minimap-width: 168px;
+    --minimap-height: 112px;
+  }
+}
+
+/* Desktop: larger numbers, a larger mini-map and the vehicle card. */
+@media (min-width: 1200px) and (min-height: 700px) {
+  .hud {
+    --hud-edge: 28px;
+    --hud-top: 24px;
+    --hud-number: 26px;
+    --hud-bar: 56px;
+    --minimap-width: 220px;
+    --minimap-height: 146px;
+  }
+
+  .hud__shade {
+    height: 140px;
+  }
+}
+
+/* The vehicle card and the corner position of Finish level need a screen without touch controls. */
+@media (min-width: 1000px) and (hover: hover) and (pointer: fine) {
+  .hud:not(.has-touch) .hud__card {
+    display: flex;
+  }
+
+  .hud:not(.has-touch) .hud__pause {
+    display: none;
+  }
+
+  .hud:not(.has-touch) .hud__finish {
+    top: auto;
+    right: 28px;
+    bottom: 28px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud__pointer[data-urgency='critical'] svg {
+    animation: none;
+  }
+}

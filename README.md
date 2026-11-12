@@ -108,6 +108,12 @@ The terrain comes from a greyscale heightmap, `levels/ID.height.png`. A tool pai
 npm run build:terrain
 ```
 
+The Hauler drives one straight line per level, from `hauler.start` along `hauler.heading`. The game computes the route obstacles from that line. The following command prints when the Hauler reaches each obstacle, next to the time that the design brief expects:
+
+```bash
+npm run report:route
+```
+
 ## Milestones
 
 [docs/milestones.md](docs/milestones.md) lists, for each milestone, what works, what is stubbed, how to test it on a phone, and where the build deviates from the briefs on purpose.
@@ -117,7 +123,7 @@ npm run build:terrain
 | 1   | Scaffold            | Done    |
 | 2   | Drive               | Done    |
 | 3   | Destroy             | Done    |
-| 4   | Hauler loop         | Planned |
+| 4   | Hauler loop         | Done    |
 | 5   | Screens             | Planned |
 | 6   | Vehicles and levels | Planned |
 | 7   | Polish              | Planned |

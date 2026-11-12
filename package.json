@@ -19,7 +19,8 @@
     "test": "vitest run",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
     "build:icons": "tsx tools/build-icons.ts",
-    "build:terrain": "tsx tools/build-terrain.ts"
+    "build:terrain": "tsx tools/build-terrain.ts",
+    "report:route": "tsx tools/report-route.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",

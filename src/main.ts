@@ -1,10 +1,12 @@
 import './ui/fonts';
 import './ui/tokens.css';
 import './ui/base.css';
+import './ui/components.css';
 
 import { App } from './app';
 import { isDebugRequested } from './debug/overlay';
 import { initPhysics } from './engine/physics';
+import { EndOverlay } from './ui/screens/end-overlay';
 
 /** Returns a required element of the page shell. */
 function requireElement<T extends HTMLElement>(id: string): T {
@@ -32,7 +34,14 @@ async function boot(): Promise<void> {
     const { installDebugTools } = await import('./debug/tools');
     installDebugTools(app);
   }
-  await app.loadLevel(params.get('level') ?? undefined);
+  const levelId = params.get('level') ?? undefined;
+  const startLevel = async (): Promise<void> => {
+    const game = await app.loadLevel(levelId);
+    game.start();
+  };
+  const overlay = new EndOverlay(ui, () => void startLevel());
+  app.onGameLoaded((game) => overlay.attach(game));
+  await startLevel();
 
   requireElement('boot').classList.add('is-done');
 }

@@ -1,4 +1,9 @@
+import * as THREE from 'three/webgpu';
 import type { App } from '../app';
+import type { Game } from '../game/game';
+import { LEVELS } from '../game/levels';
+import { routePoint } from '../game/route';
+import { formatTime } from '../game/scoring';
 import type { Button } from '../engine/input/input';
 import { DebugOverlay } from './overlay';
 
@@ -57,10 +62,93 @@ export function installDebugTools(app: App): void {
     read: () =>
       app.game ? `${app.game.buildings.destroyedCount} / ${app.game.buildings.list.length}` : '',
   });
-  overlay.addSlider('Time scale', { min: 0, max: 2, step: 0.05, value: 1 }, (value) => {
+  overlay.addStat({
+    label: 'Hauler',
+    read: () => {
+      const game = app.game;
+      if (!game) {
+        return '';
+      }
+      const next = game.nextObstacle;
+      const target = next
+        ? `${next.obstacle.def.id} in ${formatTime(game.secondsToImpact)}`
+        : 'clear';
+      return `${game.hauler.distance.toFixed(0)} m, ${target}`;
+    },
+  });
+  overlay.addSlider('Time scale', { min: 0, max: 4, step: 0.05, value: 1 }, (value) => {
     app.stepper.timeScale = value;
   });
-  app.onFrame((frameSeconds) => overlay.update(frameSeconds));
+
+  // Switches that apply to the current level and to every level loaded later.
+  const switches = { invincible: false, route: false, colliders: false };
+  let routeLine: THREE.Object3D | undefined;
+  let colliderLines: THREE.LineSegments | undefined;
+  const apply = (game: Game): void => {
+    game.invincibleHauler = switches.invincible;
+    routeLine = switches.route ? createRouteLine(game) : undefined;
+    if (routeLine) {
+      game.scene.add(routeLine);
+    }
+    colliderLines = undefined;
+  };
+  overlay.addToggle('Invincible Hauler', false, (value) => {
+    switches.invincible = value;
+    if (app.game) {
+      app.game.invincibleHauler = value;
+    }
+  });
+  overlay.addToggle('Route line', false, (value) => {
+    switches.route = value;
+    routeLine?.removeFromParent();
+    routeLine = value && app.game ? createRouteLine(app.game) : undefined;
+    if (routeLine) {
+      app.game?.scene.add(routeLine);
+    }
+  });
+  overlay.addToggle('Colliders', false, (value) => {
+    switches.colliders = value;
+    if (!value) {
+      colliderLines?.removeFromParent();
+      colliderLines = undefined;
+    }
+  });
+  overlay.addSelect(
+    'Level',
+    LEVELS.map((level) => ({ value: level.id, label: `${level.index} ${level.name}` })),
+    new URLSearchParams(window.location.search).get('level') ?? LEVELS[0].id,
+    (id) => {
+      const url = new URL(window.location.href);
+      url.searchParams.set('level', id);
+      window.location.href = url.toString();
+    },
+  );
+  app.onGameLoaded(apply);
+  if (app.game) {
+    apply(app.game);
+  }
+
+  app.onFrame((frameSeconds) => {
+    overlay.update(frameSeconds);
+    const game = app.game;
+    if (switches.colliders && game) {
+      // Draw the wireframes that Rapier reports for every collider.
+      const buffers = game.physics.world.debugRender();
+      if (!colliderLines) {
+        colliderLines = new THREE.LineSegments(
+          new THREE.BufferGeometry(),
+          new THREE.LineBasicMaterial({ color: 0x3df5a0, depthTest: false }),
+        );
+        colliderLines.frustumCulled = false;
+        game.scene.add(colliderLines);
+      }
+      colliderLines.geometry.dispose();
+      colliderLines.geometry = new THREE.BufferGeometry().setAttribute(
+        'position',
+        new THREE.BufferAttribute(buffers.vertices, 3),
+      );
+    }
+  });
 
   window.clearway = {
     app,
@@ -91,4 +179,29 @@ export function installDebugTools(app: App): void {
       };
     },
   };
+}
+
+/** Builds a red strip along the Hauler's line, with a post at each obstacle. */
+function createRouteLine(game: Game): THREE.Object3D {
+  const group = new THREE.Group();
+  group.name = 'debug-route';
+  const material = new THREE.MeshBasicMaterial({ color: 0xff3d5a, toneMapped: false });
+  const { route } = game;
+  const step = 6;
+  const dash = new THREE.BoxGeometry(step * 0.6, 0.15, 0.6);
+  for (let distance = 0; distance < route.length; distance += step) {
+    const [x, z] = routePoint(route, distance);
+    const mesh = new THREE.Mesh(dash, material);
+    mesh.position.set(x, game.heightAt(x, z) + 0.3, z);
+    mesh.rotation.y = -route.heading;
+    group.add(mesh);
+  }
+  const post = new THREE.BoxGeometry(0.5, 14, 0.5);
+  for (const obstacle of game.obstacles) {
+    const [x, z] = routePoint(route, obstacle.def.distance);
+    const mesh = new THREE.Mesh(post, material);
+    mesh.position.set(x, game.heightAt(x, z) + 7, z);
+    group.add(mesh);
+  }
+  return group;
 }

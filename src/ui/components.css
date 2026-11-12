@@ -1,0 +1,204 @@
+/*
+ * Shared components of the design system.
+ * Buttons are square with the lower-right corner cut at 45°. Panels and cards are square.
+ * Tags, tips and hints keep a small radius. Only touch controls, medals and switches are round.
+ */
+
+.cw-button {
+  --cut: var(--cw-cut);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--cw-space-2);
+  min-height: var(--cw-touch-min);
+  padding: 0 18px;
+  border: none;
+  border-radius: 0;
+  clip-path: polygon(
+    0 0,
+    100% 0,
+    100% calc(100% - var(--cut)),
+    calc(100% - var(--cut)) 100%,
+    0 100%
+  );
+  font-family: var(--cw-font-body);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--cw-ink);
+  cursor: pointer;
+  text-decoration: none;
+  touch-action: manipulation;
+  transition:
+    filter var(--cw-fast) ease-out,
+    transform var(--cw-fast) ease-out;
+}
+
+.cw-button:hover {
+  filter: brightness(1.08);
+}
+
+.cw-button:active {
+  transform: translateY(1px);
+  filter: brightness(0.94);
+}
+
+.cw-button:focus-visible {
+  outline: none;
+  /* A clip-path cuts an outline off, so the focus ring is an inset shadow. */
+  box-shadow: inset 0 0 0 3px var(--cw-white);
+}
+
+.cw-button:disabled {
+  cursor: default;
+  filter: saturate(0.3) brightness(0.7);
+}
+
+/* Filled yellow: the one thing to do next. */
+.cw-button--primary {
+  background: var(--cw-hazard);
+  color: var(--cw-ground);
+  font-family: var(--cw-font-display);
+  font-weight: 900;
+  font-size: 24px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Blue gradient: secondary actions. */
+.cw-button--secondary {
+  background: var(--cw-blue-fill);
+  color: var(--cw-white);
+}
+
+/* Red: retry after a failure. */
+.cw-button--danger {
+  background: var(--cw-alarm);
+  color: var(--cw-ground);
+  font-family: var(--cw-font-display);
+  font-weight: 900;
+  font-size: 24px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/*
+ * Outlined glass: everything else. A border does not follow a clip-path, so a diagonal
+ * gradient draws the cut edge.
+ */
+.cw-button--ghost {
+  border: 1px solid rgba(var(--cw-line-rgb), 0.3);
+  background-color: var(--cw-glass-soft);
+  background-image: linear-gradient(
+    315deg,
+    transparent 8.5px,
+    var(--cw-line-strong) 8.5px,
+    var(--cw-line-strong) 9.6px,
+    transparent 9.6px
+  );
+  font-weight: 600;
+}
+
+/* Text only: the least important action on a screen. */
+.cw-button--quiet {
+  background: none;
+  clip-path: none;
+  color: var(--cw-ink-soft);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+/* A square icon button, for example Pause and Back. */
+.cw-button--icon {
+  width: 44px;
+  min-height: 44px;
+  height: 44px;
+  padding: 0;
+  background-color: var(--cw-glass);
+  border-color: var(--cw-line);
+}
+
+.cw-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid rgba(var(--cw-line-rgb), 0.3);
+  border-radius: var(--cw-radius-tag);
+  background: var(--cw-chip);
+  color: var(--cw-ink-soft);
+  font-family: var(--cw-font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.cw-tag--go {
+  border-color: rgba(var(--cw-go-rgb), 0.45);
+  color: var(--cw-go);
+}
+
+.cw-tag--signal {
+  border-color: rgba(var(--cw-signal-rgb), 0.45);
+  color: var(--cw-signal);
+}
+
+.cw-tag--amber {
+  border-color: rgba(var(--cw-amber-rgb), 0.5);
+  color: var(--cw-amber);
+}
+
+.cw-tag--alarm {
+  border-color: rgba(var(--cw-alarm-rgb), 0.5);
+  color: var(--cw-ink);
+  font-weight: 700;
+}
+
+/* Glass: head-up display panels over the 3D scene. */
+.cw-glass {
+  border: 1px solid var(--cw-line);
+  background: var(--cw-glass);
+}
+
+/* Card: menus and lists. */
+.cw-card {
+  border: 1px solid var(--cw-line-soft);
+  background: var(--cw-card);
+}
+
+.cw-display {
+  margin: 0;
+  font-family: var(--cw-font-display);
+  font-weight: 900;
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+.cw-label {
+  font-family: var(--cw-font-mono);
+  font-size: 10px;
+  color: var(--cw-muted);
+  text-transform: uppercase;
+}
+
+/* Menu backdrop: navy ground with a faint 32 px grid and a blue glow. */
+.cw-backdrop {
+  background-color: var(--cw-ground);
+  background-image:
+    radial-gradient(circle at 85% 0%, rgba(var(--cw-blue-rgb), 0.4), transparent 45%),
+    radial-gradient(circle at 0% 100%, rgba(var(--cw-signal-rgb), 0.12), transparent 40%),
+    var(--cw-grid);
+  background-size:
+    auto,
+    auto,
+    32px 32px,
+    32px 32px;
+}
+
+.cw-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

@@ -108,8 +108,10 @@ export interface HintData {
 }
 
 export interface ExpectedArrival {
-  /** Building id or group. */
+  /** Building id or group, or the id of a route gap. */
   obstacle: string;
+  /** True when the obstacle is a route gap and not a building. */
+  gap?: boolean;
   /** When the design brief says the Hauler arrives, in seconds from the level start. */
   seconds: number;
 }

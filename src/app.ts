@@ -5,6 +5,7 @@ import { FixedStepper, FrameStats, STEP_SECONDS } from './engine/loop';
 import { RenderContext } from './engine/renderer';
 import { Game, type GameOptions } from './game/game';
 import { LEVELS, getLevel } from './game/levels';
+import { Hud } from './ui/hud/hud';
 import { TouchControls } from './ui/touch-controls/touch-controls';
 
 /**
@@ -19,17 +20,28 @@ export class App {
   /** Input that the debug tools and the autoplay control. */
   readonly scripted = new ScriptedInput();
   readonly touch: TouchControls;
-  readonly options: GameOptions = { cameraShake: 0.5 };
+  readonly hud: Hud;
+  readonly options: GameOptions = {
+    cameraShake: 0.5,
+    steeringAssist: true,
+    patternMarkings: false,
+  };
   game: Game | undefined;
 
   private lastTime = 0;
   private readonly frameListeners: ((frameSeconds: number) => void)[] = [];
+  private readonly gameListeners: ((game: Game) => void)[] = [];
 
   private constructor(
     readonly render: RenderContext,
     readonly ui: HTMLElement,
     canvas: HTMLCanvasElement,
   ) {
+    this.hud = new Hud(ui, {
+      onPause: () => this.scripted.press('pause'),
+      onFinish: () => this.game?.finish(),
+      onRecenter: () => this.game?.cameraRig.recenter(),
+    });
     this.touch = new TouchControls(ui, canvas);
     this.input.add(this.keyboard);
     this.input.add(new GamepadInput());
@@ -63,7 +75,22 @@ export class App {
     this.game = game;
     game.resize(this.render.aspect);
     this.stepper.reset();
+    this.hud.attach(game);
+    this.hud.setVisible(true);
+    // The crash plays out in slow motion.
+    this.stepper.timeScale = 1;
+    game.events.on('haulerDestroyed', () => {
+      this.stepper.timeScale = 0.25;
+    });
+    for (const listener of this.gameListeners) {
+      listener(game);
+    }
     return game;
+  }
+
+  /** Registers a function that runs whenever a level has been loaded. */
+  onGameLoaded(listener: (game: Game) => void): void {
+    this.gameListeners.push(listener);
   }
 
   /** Registers a function that runs once per frame, after the game is drawn. */
@@ -86,6 +113,7 @@ export class App {
     }
     game.sync(1, seconds);
     this.render.renderer.render(game.scene, game.cameraRig.camera);
+    this.hud.update(game, game.cameraRig.camera, seconds);
   }
 
   private frame(time: number): void {
@@ -99,6 +127,7 @@ export class App {
       game.sync(alpha, Math.min(frameSeconds, 0.1));
       this.render.renderer.render(game.scene, game.cameraRig.camera);
       this.updateTouchControls(game);
+      this.hud.update(game, game.cameraRig.camera, Math.min(frameSeconds, 0.1));
     }
     for (const listener of this.frameListeners) {
       listener(frameSeconds);
@@ -106,6 +135,7 @@ export class App {
   }
 
   private updateTouchControls(game: Game): void {
+    this.hud.setTouchLayout(this.touch.shown);
     const vehicle = game.activeVehicle;
     this.touch.setAction({
       label: vehicle.spec.actionLabel,

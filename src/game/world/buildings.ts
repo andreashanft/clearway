@@ -3,12 +3,13 @@ import type { EventBus } from '../../engine/events';
 import { Layer, RAPIER, collisionGroups, type PhysicsWorld } from '../../engine/physics';
 import type { GameEvents } from '../events';
 import type { BuildingData, LevelData } from '../level';
-import { DEG, clamp, headingVector, toBoxLocal, type OrientedBox, type Vec2 } from '../math';
-import { buildSegmentGeometry, segmentLayout, type SegmentLayout } from './building-models';
+import { clamp, headingVector, toBoxLocal, type OrientedBox, type Vec2 } from '../math';
+import { buildSegmentGeometry } from './building-models';
 import { STRENGTH_HP, applySegmentDamage, blastDamage } from './damage';
 import type { Debris } from './debris';
 import type { Effects } from './effects';
 import { shade } from './mesh-builder';
+import { segmentBoxes, segmentLayout, type SegmentLayout } from './segments';
 
 /** Rubble pieces that stay where a segment fell. They are decoration and have no collider. */
 const RUBBLE_PER_SEGMENT = 7;
@@ -50,7 +51,7 @@ export class Building {
     this.layout = segmentLayout(data);
     this.maxHp = STRENGTH_HP[data.strength];
     this.hp = new Array<number>(this.layout.count).fill(this.maxHp);
-    this.heading = (data.yaw + (this.layout.alongX ? 0 : 90)) * DEG;
+    this.heading = this.layout.heading;
     this.footprint = {
       center: data.pos,
       half: [(this.layout.length * this.layout.count) / 2, this.layout.depth / 2],
@@ -197,7 +198,7 @@ export class Buildings {
     const { data, layout } = building;
     const [forwardX, forwardZ] = headingVector(building.heading);
     const height = data.size[1];
-    const round = data.kind === 'silo' || data.kind === 'chimney';
+    const boxes = segmentBoxes(data, layout);
 
     for (let index = 0; index < layout.count; index += 1) {
       const offset = (index - (layout.count - 1) / 2) * layout.length;
@@ -212,7 +213,7 @@ export class Buildings {
         building.baseY + height / 2,
         data.pos[1] + forwardZ * offset,
       );
-      const shape = round
+      const shape = layout.round
         ? RAPIER.ColliderDesc.cylinder(height / 2, Math.min(data.size[0], data.size[2]) / 2)
         : RAPIER.ColliderDesc.cuboid(layout.length / 2, height / 2, layout.depth / 2);
       const half = -building.heading / 2;
@@ -228,11 +229,7 @@ export class Buildings {
       building.segments.push({
         mesh,
         collider,
-        box: {
-          center: [center.x, center.z],
-          half: [layout.length / 2, layout.depth / 2],
-          heading: building.heading,
-        },
+        box: boxes[index],
         center,
         cracked: false,
       });
