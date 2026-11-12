@@ -54,7 +54,8 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,json}'],
+        // The sound files are precached too, so the installed app has sound offline.
+        globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2,json,mp3}'],
         maximumFileSizeToCacheInBytes: 8 * 1024 * 1024,
       },
     }),

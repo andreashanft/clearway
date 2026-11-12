@@ -3,6 +3,7 @@ import { BoxGeometry, CylinderGeometry, Group, Mesh, Vector3 } from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import type { ControlFrame } from '../../engine/input/controls';
 import type { Physics } from '../../engine/physics';
+import { stickToHeading, wrapAngle } from '../drive';
 import { FINISH } from '../models/finish';
 import { createReadyGlow } from '../models/materials';
 import { ModelBuilder } from '../models/model-builder';
@@ -11,13 +12,35 @@ import { type ActionState, Vehicle, type VehicleSpec } from './vehicle';
 const KMH = 1 / 3.6;
 const RIDE_HEIGHT = 1.25;
 const WHEEL_R = 0.55;
-/** Speed below which Action does nothing: you can't skid from standstill. */
-const MIN_SKID_SPEED = 5;
-/** Yaw rate the skid aims for, rad/s. */
-const SKID_YAW_RATE = 2.4;
+const DEG = Math.PI / 180;
 
-/** Damage multipliers: the armoured tail is the weapon, the cab is not. */
-export const FISHTAIL_DAMAGE = { tailSkidding: 1.8, tail: 0.9, body: 0.4 } as const;
+/** Forward speed a slide needs to start, m/s: you can't skid from standstill. */
+export const SLIDE_START_SPEED = 6;
+/** A slide ends when the truck is slower than this along its course, m/s. */
+export const SLIDE_END_SPEED = 4;
+/** How far the truck turns away from its course in a slide: nearly broadside. */
+export const SLIP_ANGLE = 78 * DEG;
+/** Speed a slide loses each second, m/s². */
+export const SLIDE_DRAG = 2;
+/** How fast steering bends the course of a slide, rad/s. */
+const COURSE_RATE = 1.1;
+/** How fast the truck swings into and out of a slide, rad/s. */
+const SWING_RATE = 5;
+const SWING_GAIN = 9;
+/** Grip of the tyres in a slide; the slide's own drag does the slowing. */
+const SLIDE_FRICTION = 0.05;
+/** Longest the truck takes to straighten up after a slide, seconds. */
+const RECOVER_SECONDS = 0.6;
+/** Share of the truck's speed that counts for a hit in a slide, however it glances. */
+const SWEEP_SHARE = 0.9;
+
+/**
+ * Damage multipliers. A slide turns the whole truck into the weapon, the armoured tail
+ * most of all; a plain ram with the cab does less.
+ */
+export const FISHTAIL_DAMAGE = { tailSliding: 2, bodySliding: 1.5, tail: 0.9, body: 0.6 } as const;
+
+type Phase = 'grip' | 'slide' | 'recover';
 
 export const FISHTAIL_SPEC: VehicleSpec = {
   type: 'fishtail',
@@ -50,8 +73,8 @@ export const FISHTAIL_SPEC: VehicleSpec = {
   coastDecel: 4,
   maxSteer: 0.55,
   steerRate: 5,
-  grip: 6,
-  yawAssist: { maxRate: 2.4, strength: 0.25, pivotInPlace: false },
+  grip: 8,
+  yawAssist: { maxRate: 2.6, strength: 0.35, pivotInPlace: false },
 };
 
 function wheel(): Group {
@@ -68,16 +91,30 @@ function wheel(): Group {
 }
 
 /**
- * The skid dump truck. Hold Action at speed to drop the rear wheels' grip and swing the
- * armoured tail into walls; the tail does the damage. Auto-skid holds the swing for you.
+ * The skid dump truck. Hold Action at speed and it swings broadside and slides on along
+ * its course, smashing what it sweeps through; steering bends the course. Let go and it
+ * straightens up and drives on.
  */
 export class Fishtail extends Vehicle {
   readonly rideHeight = RIDE_HEIGHT;
   readonly actionLabel = 'SKID';
-  /** Settings: keep the tail swinging without steering. */
+  /**
+   * Settings: straighten up along the course when a slide ends. Without it the truck
+   * leaves the slide the way it points, which makes a slide a sharp turn.
+   */
   autoSkid = true;
-  private skidding = false;
-  private skidDirection = 1;
+  private phase: Phase = 'grip';
+  /** World heading the truck travels along while it slides. */
+  private course = 0;
+  /** Which way the nose turns off the course: 1 to the left, −1 to the right. */
+  private side: 1 | -1 = 1;
+  private recoverTime = 0;
+  /** True once a slide has ended with Action still held; Action must be let go first. */
+  private spent = false;
+  private held = false;
+  /** Course change the player asks for in a slide, rad/s. */
+  private courseTurn = 0;
+  private cameraYaw = 0;
   private readonly tailGlow = createReadyGlow();
   private glowTime = 0;
   private trailClock = 0;
@@ -91,65 +128,134 @@ export class Fishtail extends Vehicle {
   }
 
   get isSkidding(): boolean {
-    return this.skidding;
+    return this.phase === 'slide';
   }
 
   override get actionState(): ActionState {
-    return { ready: true, active: this.skidding, charge: 1 };
+    return { ready: true, active: this.phase === 'slide', charge: 1 };
   }
 
   override impactMultiplier(collider: Collider): number {
-    if (collider === this.colliders[1]) {
-      return this.skidding ? FISHTAIL_DAMAGE.tailSkidding : FISHTAIL_DAMAGE.tail;
-    }
-    return FISHTAIL_DAMAGE.body;
+    const tail = collider === this.colliders[1];
+    if (this.phase === 'grip') return tail ? FISHTAIL_DAMAGE.tail : FISHTAIL_DAMAGE.body;
+    return tail ? FISHTAIL_DAMAGE.tailSliding : FISHTAIL_DAMAGE.bodySliding;
   }
 
-  /** Calls `spawn` with each rear wheel's ground point while skidding (ghost trails). */
+  /** A sliding truck sweeps through things, so a glancing hit counts nearly in full. */
+  override impactSpeed(normalSpeed: number): number {
+    if (this.phase === 'grip') return normalSpeed;
+    const v = this.preStepVelocity;
+    return Math.max(normalSpeed, Math.hypot(v.x, v.z) * SWEEP_SHARE);
+  }
+
+  /** Calls `spawn` with each wheel's ground point while sliding (ghost trails). */
   override emitTrails(frameSeconds: number, spawn: (at: Vector3, skid?: boolean) => void): void {
-    if (!this.skidding) {
+    if (this.phase !== 'slide') {
       super.emitTrails(frameSeconds, spawn);
       return;
     }
     this.trailClock -= frameSeconds;
     if (this.trailClock > 0) return;
     this.trailClock = 0.05;
-    for (const x of [1.12, -1.12]) {
-      this.tmp.set(x, -RIDE_HEIGHT + 0.2, -2.45);
+    for (const wheel of FISHTAIL_SPEC.wheels.layout) {
+      this.tmp.set(wheel.x, -RIDE_HEIGHT + 0.2, wheel.z);
       spawn(this.root.localToWorld(this.tmp.clone()), true);
     }
   }
 
+  override place(x: number, groundY: number, z: number, heading: number): void {
+    super.place(x, groundY, z, heading);
+    this.phase = 'grip';
+    this.spent = false;
+  }
+
+  override control(frame: ControlFrame, cameraYaw: number, dt: number): void {
+    this.cameraYaw = cameraYaw;
+    super.control(frame, cameraYaw, dt);
+  }
+
+  override idle(dt: number): void {
+    this.held = false;
+    this.phase = 'grip';
+    super.idle(dt);
+  }
+
   protected handleAction(frame: ControlFrame): void {
-    const wasSkidding = this.skidding;
-    this.skidding = frame.action && Math.abs(this.forwardSpeed) > MIN_SKID_SPEED;
-    if (this.skidding && !wasSkidding) {
-      // Swing the way the player steers, or away from the current turn.
-      this.skidDirection = frame.steer !== 0 ? Math.sign(frame.steer) : this.yawRate > 0 ? -1 : 1;
+    this.held = frame.action;
+    if (!frame.action) this.spent = false;
+    const stick = Math.hypot(frame.stickX, frame.stickY) > 0.01;
+    const wanted = stick ? stickToHeading(frame.stickX, frame.stickY, this.cameraYaw) : null;
+
+    if (this.phase !== 'slide') {
+      const start =
+        frame.action && !this.spent && this.grounded && this.forwardSpeed > SLIDE_START_SPEED;
+      if (!start) return;
+      const v = this.body.linvel();
+      this.course = Math.atan2(v.x, v.z);
+      // Turn the nose the way the player steers, or the way the truck is already turning.
+      const lean = wanted !== null ? wrapAngle(wanted - this.course) : -frame.steer;
+      if (Math.abs(lean) > 0.05) this.side = lean > 0 ? 1 : -1;
+      else if (Math.abs(this.yawRate) > 0.15) this.side = this.yawRate > 0 ? 1 : -1;
+      else this.side = this.side === 1 ? -1 : 1;
+      this.phase = 'slide';
     }
-    if (this.skidding && frame.steer !== 0 && !this.autoSkid)
-      this.skidDirection = Math.sign(frame.steer);
+    // The stick points where the slide should go; classic steering bends it.
+    if (wanted !== null) {
+      this.courseTurn = Math.max(
+        -COURSE_RATE,
+        Math.min(COURSE_RATE, wrapAngle(wanted - this.course) * 4),
+      );
+    } else {
+      this.courseTurn = -frame.steer * COURSE_RATE;
+    }
   }
 
   override step(dt: number): void {
-    // A skid needs the tail to slide, so the arcade grip lets go with the rear tyres.
-    this.gripScale = this.skidding ? 0 : 1;
-    this.yawAssistScale = this.skidding ? 0.3 : 1;
-    const rearGrip = this.skidding ? 0.55 : FISHTAIL_SPEC.wheels.frictionSlip;
-    const rearSide = this.skidding ? 0.25 : FISHTAIL_SPEC.wheels.sideFriction;
-    for (const i of [2, 3]) {
-      this.controller.setWheelFrictionSlip(i, rearGrip);
-      this.controller.setWheelSideFrictionStiffness(i, rearSide);
-    }
-    if (this.skidding && this.grounded) {
-      // Kick the rear out: aim for a strong yaw rate in the skid direction.
-      const steerInput = this.autoSkid ? 1 : Math.min(1, Math.abs(this.drive.steer) + 0.35);
-      const desired = -this.skidDirection * SKID_YAW_RATE * steerInput;
-      const inertia = this.body.principalInertia().y;
-      const impulse = (desired - this.yawRate) * inertia * 0.12;
-      this.body.applyTorqueImpulse({ x: 0, y: impulse * dt * 60, z: 0 }, true);
+    if (this.phase !== 'grip') this.slide(dt);
+    const sliding = this.phase !== 'grip';
+    // A slide needs the tyres to let go, so the arcade grip and the yaw assist do too.
+    this.gripScale = sliding ? 0 : 1;
+    this.yawAssistScale = sliding ? 0 : 1;
+    const { frictionSlip, sideFriction } = FISHTAIL_SPEC.wheels;
+    for (let i = 0; i < FISHTAIL_SPEC.wheels.layout.length; i++) {
+      this.controller.setWheelFrictionSlip(i, sliding ? SLIDE_FRICTION : frictionSlip);
+      this.controller.setWheelSideFrictionStiffness(i, sliding ? SLIDE_FRICTION : sideFriction);
+      if (sliding) {
+        this.controller.setWheelEngineForce(i, 0);
+        this.controller.setWheelBrake(i, 0);
+      }
     }
     super.step(dt);
+  }
+
+  /** Carries the truck along its course and swings it broadside, or straight again. */
+  private slide(dt: number): void {
+    if (!this.grounded) return;
+    const recovering = this.phase === 'recover';
+    this.course = wrapAngle(this.course + this.courseTurn * dt);
+    const cx = Math.sin(this.course);
+    const cz = Math.cos(this.course);
+    const v = this.body.linvel();
+    const along = Math.max(0, v.x * cx + v.z * cz - (recovering ? 0 : SLIDE_DRAG * dt));
+    this.body.setLinvel({ x: cx * along, y: v.y, z: cz * along }, true);
+
+    const target = recovering ? this.course : this.course + this.side * SLIP_ANGLE;
+    const error = wrapAngle(target - this.heading);
+    const wanted = Math.max(-SWING_RATE, Math.min(SWING_RATE, error * SWING_GAIN));
+    const spin = this.body.angvel();
+    const yaw = spin.y + (wanted - spin.y) * Math.min(1, 14 * dt);
+    this.body.setAngvel({ x: spin.x, y: yaw, z: spin.z }, true);
+
+    if (recovering) {
+      this.recoverTime += dt;
+      if (Math.abs(error) < 5 * DEG || this.recoverTime > RECOVER_SECONDS) this.phase = 'grip';
+      return;
+    }
+    if (this.held && along >= SLIDE_END_SPEED) return;
+    this.spent = this.held;
+    this.recoverTime = 0;
+    // Too slow to straighten up, as after hitting a wall: just grip again.
+    this.phase = this.autoSkid && along > SLIDE_END_SPEED / 2 ? 'recover' : 'grip';
   }
 
   protected animate(frameSeconds: number): void {
@@ -160,7 +266,7 @@ export class Fishtail extends Vehicle {
       pivot.rotation.copy(lead.rotation);
     }
     this.glowTime += frameSeconds;
-    this.tailGlow.emissiveIntensity = this.skidding
+    this.tailGlow.emissiveIntensity = this.isSkidding
       ? 2.6
       : 1.1 + Math.sin(this.glowTime * 3.3) * 0.2;
   }

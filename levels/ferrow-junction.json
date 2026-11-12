@@ -263,13 +263,13 @@
   },
   "description": "Clear 5 obstacles and bridge the rail cutting before the Hauler reaches them.",
   "hints": {
-    "start": "Hold Action to skid. The Fishtail’s tail does the damage.",
+    "start": "Hold Action at speed to skid. The Fishtail slides sideways and smashes what it sweeps.",
     "rail-cutting": "The Hauler can’t cross the cutting. Fetch the Railbed from down the line and park it in the glowing slot.",
     "signal-box": "Concrete. Bring the TNT crate from the goods yard with the Bruiser."
   },
   "tips": {
-    "terrace-a": "Hold Action to skid. Only the tail hits hard, so swing it into the houses.",
-    "shop-pub": "Skid downhill for extra speed. Both the shop and the pub must fall.",
+    "terrace-a": "Get up to speed, then hold Action and slide the Fishtail through the houses.",
+    "shop-pub": "Build speed downhill, then skid. Both the shop and the pub must fall.",
     "rail-cutting": "Leave the Fishtail by the rails, enter the Railbed and stop it in the glowing slot.",
     "terrace-b": "Clear terrace B on both sides of the street before the Hauler arrives.",
     "signal-box": "Only TNT drops concrete here. The Bruiser and a crate wait in the goods yard.",

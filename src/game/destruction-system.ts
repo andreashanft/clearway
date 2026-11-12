@@ -317,7 +317,8 @@ export class DestructionSystem {
       if (p) this.hitPoint.set(p.x, p.y, p.z);
     });
 
-    this.applyImpact(vehicle, building, mine, normalSpeed, normal);
+    const speed = vehicle.impactSpeed?.(normalSpeed) ?? normalSpeed;
+    this.applyImpact(vehicle, building, mine, speed, normal);
   }
 
   /** Damages `building` for a hit at `normalSpeed`, made with the vehicle's `mine` collider. */

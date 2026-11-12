@@ -34,11 +34,19 @@ describe('Tumbler chained rolls', () => {
 });
 
 describe('Fishtail', () => {
-  it('hits houses hard with the tail in a skid and barely with the cab', () => {
-    const tail = impactDamage(FISHTAIL_SPEC.mass, 14, FISHTAIL_DAMAGE.tailSkidding);
-    const cab = impactDamage(FISHTAIL_SPEC.mass, 14, FISHTAIL_DAMAGE.body);
-    expect(tail).toBeGreaterThanOrEqual(STRENGTH_HP.house);
-    expect(cab).toBeLessThan(STRENGTH_HP.shed);
+  it('drops a house in a slide but not with a plain ram at the same speed', () => {
+    const ram = impactDamage(FISHTAIL_SPEC.mass, 14, FISHTAIL_DAMAGE.body);
+    const slide = impactDamage(FISHTAIL_SPEC.mass, 14, FISHTAIL_DAMAGE.bodySliding);
+    expect(ram).toBeGreaterThanOrEqual(STRENGTH_HP.shed);
+    expect(ram).toBeLessThan(STRENGTH_HP.house);
+    expect(slide).toBeGreaterThanOrEqual(STRENGTH_HP.house);
+  });
+
+  it('drops brick in a slide at 72 km/h, and the tail hits hardest', () => {
+    const body = impactDamage(FISHTAIL_SPEC.mass, 20, FISHTAIL_DAMAGE.bodySliding);
+    const tail = impactDamage(FISHTAIL_SPEC.mass, 20, FISHTAIL_DAMAGE.tailSliding);
+    expect(body).toBeGreaterThanOrEqual(STRENGTH_HP.brick);
+    expect(tail).toBeGreaterThan(body);
   });
 });
 

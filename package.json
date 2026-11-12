@@ -20,7 +20,8 @@
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
     "icons": "pwa-assets-generator",
-    "terrain": "node scripts/build-terrain.ts"
+    "terrain": "node scripts/build-terrain.ts",
+    "build:audio": "node scripts/build-audio.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",

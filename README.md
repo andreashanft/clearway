@@ -71,7 +71,7 @@ node scripts/level-report.ts ferrow-junction
 
 ```text
 index.html            Page shell: the canvas and the UI layer
-public/               App icons
+public/               App icons and sound files
 src/
   main.ts             Boot: renderer, physics, fixed-step loop
   engine/             Renderer, physics, loop, audio, input, save, events
@@ -97,8 +97,12 @@ The game uses these pinned versions:
 | Lint and format | `eslint` 10.13.0, `typescript-eslint` 8.72.1, `prettier` 3.9.10    |         |
 | Fonts           | `@fontsource` Big Shoulders Display, Space Grotesk, JetBrains Mono | 5.3.0   |
 
-Sound and music are synthesised at run time with the Web Audio API, so the game ships no audio files.
+Sound and music are recordings, played and mixed with the Web Audio API. The files are in `public/audio`. To change a sample, edit the list in `scripts/build-audio.ts` and run the following command, which needs macOS and `lame`:
+
+```bash
+npm run build:audio
+```
 
 ## Licence
 
-Clearway is free software under the GNU General Public License v3.0 or later. See [LICENSE](LICENSE). The fonts use the SIL Open Font License 1.1.
+Clearway is free software under the GNU General Public License v3.0 or later. See [LICENSE](LICENSE). The fonts use the SIL Open Font License 1.1. The sound recordings are in the public domain under the Creative Commons 0 licence; [public/audio/CREDITS.md](public/audio/CREDITS.md) lists their sources.

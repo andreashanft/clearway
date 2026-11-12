@@ -603,8 +603,11 @@ export function settingsScreen(
           toggle('Steering assist', 'Eases your heading toward the route', s.steeringAssist, (on) =>
             change({ steeringAssist: on }),
           ),
-          toggle('Auto-skid (Fishtail)', 'Holds the skid angle for you', s.autoSkid, (on) =>
-            change({ autoSkid: on }),
+          toggle(
+            'Auto-skid (Fishtail)',
+            'Straightens the truck up after a skid',
+            s.autoSkid,
+            (on) => change({ autoSkid: on }),
           ),
           toggle('Easy mode', 'The Hauler drives a quarter slower', s.easyMode, (on) =>
             change({ easyMode: on }),

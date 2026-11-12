@@ -110,6 +110,8 @@ export interface Machine {
   landing?: { readonly collider: Collider; readonly speed: number } | null;
   /** Damage multiplier for a hit made with one of this machine's colliders. */
   impactMultiplier(collider: Collider, normal?: { x: number; y: number; z: number }): number;
+  /** The speed a hit counts with, given the speed along the contact normal. */
+  impactSpeed?(normalSpeed: number): number;
   /** Called after this machine's hit damaged a building. */
   onImpact?(damage: number): void;
   /**
@@ -285,6 +287,14 @@ export abstract class Vehicle implements Machine {
   /** By default every collider hits with the vehicle's damage multiplier. */
   impactMultiplier(_collider: Collider, _normal?: { x: number; y: number; z: number }): number {
     return this.damageMultiplier;
+  }
+
+  /**
+   * The speed a hit counts with, given the speed along the contact normal. A vehicle that
+   * sweeps through things, like the sliding Fishtail, counts more than that.
+   */
+  impactSpeed(normalSpeed: number): number {
+    return normalSpeed;
   }
 
   /** Multiplies impact damage against buildings; 0 means this vehicle can't damage. */

@@ -466,3 +466,63 @@ The timings come from `src/engine/profile.ts`. `?debug` prints them to the conso
 
 - **The first visit still compiles every shader.** Fewer distinct materials would shorten that: most lit surfaces use the physically based material, where a simpler one would look the same.
 - **Rapier ships as a 4.3 MB script** (1.7 MB compressed) with its WebAssembly inlined. The service worker caches it after the first visit.
+
+## After milestone 7: recorded sound and an easier Fishtail
+
+### Sound
+
+The old sound was synthesised: a four-bar loop of raw sawtooth and square waves, noise bursts for hits and a buzz for an engine. A reworked synthesiser with a funk tune still sounded thin and repetitive, and its style did not fit. The game now plays recordings, and the music is dark and industrial.
+
+- **Recordings in place of oscillators.** `public/audio` holds 72 MP3 files, 1.8 MB in total: drums, metal, drones, engines, impacts, collapses and explosions. All of them are in the public domain under the Creative Commons 0 licence. They come from Sonic Pi's sample set and from freesound.org, and `public/audio/CREDITS.md` lists the source of each file.
+- **A script builds the files.** `npm run build:audio` runs `scripts/build-audio.ts`, which downloads each source, trims it, sets its level, makes loops seamless and encodes it. It also writes `src/game/audio/sample-data.ts`, so a misspelt sample name fails the type check. The script needs macOS and `lame`; its output is in the repository, so you only run it to change a sample.
+- **Samples load in the background.** `SampleBank` in `src/engine/samples.ts` downloads and decodes the files after the first tap or key press. The music starts once they have arrived. The service worker caches them, so the installed app has sound offline.
+- **A mix with a hall.** `createMix` in `src/engine/audio.ts` builds the buses, a shared reverb with a 2.6-second tail, a gentle compressor and a limiter. Each group of sounds has a channel strip with its own level, stereo position and reverb send.
+- **Music with more tension than tune.** `Score` in `src/game/audio/music.ts` plays low drones in G minor, a heavy kick, a slam of metal and snare, ticking machinery and a distorted bass. There is no melody: a two-note warning on a low bell sounds now and then.
+- **Music that does not loop.** A phrase lasts four bars. Each phrase picks a new root, new drum patterns, a new ticking pattern and voice, a new fill and one to three sounds from far off. Every second phrase returns to G. The ticking patterns are Euclidean rhythms whose density follows the tension.
+- **Tension in four levels.** While it is calm, the music is drones, one boom per phrase and distant metal. Then a slow pulse joins, then the machinery and the bass, then a driving kick, and with seconds to go, war drums and crashes. Each change waits for the bar line. The tempo runs from 92 to 108 beats per minute.
+- **Real engines.** Each machine idles with its own recording: a tractor for the Bruiser, a lorry for the Fishtail, a tank for the Tumbler and a generator for the Railbed. A second recording of an engine under load fades in with the revs, and both rise in pitch through each gear. The Bruiser's tracks clatter as it moves. The Hauler has its own engine, which grows louder as it comes near.
+- **Real impacts.** A nudge is a crack of wood. A heavy hit is one of four crashes, and a crushing hit adds a concrete thud and ringing metal. A falling building plays one of three collapses with rubble after it; when a whole row falls at once, the later buildings only add rubble. Explosions, the fuse, tyres, the rocket, the radio and the menu tap are recordings too.
+- **A factory buzzer** sounds on the beat while the Hauler is seconds from an impact, played slower so that it is low and not shrill.
+
+I can't listen to the result, so I measured it. An offline render through the real mix, at the default volume settings, gives the figures in this table.
+
+| Sound                     | Peak     | Loudness (RMS) | Share of energy below 80 Hz | Share at 250 Hz to 2 kHz |
+| ------------------------- | -------- | -------------- | --------------------------- | ------------------------ |
+| Music, calm (0.12)        | −10.1 dB | −24.6 dB       | 29%                         | 39%                      |
+| Music, pulse (0.35)       | −4.1 dB  | −21.2 dB       | 26%                         | 26%                      |
+| Music, drive (0.75)       | −1.4 dB  | −17.4 dB       | 29%                         | 27%                      |
+| Music, frenzy (0.95)      | −1.8 dB  | −16.5 dB       | 29%                         | 24%                      |
+| Fishtail engine, idle     | −7.7 dB  | −20.1 dB       | 45%                         | 42%                      |
+| Fishtail engine, flat out | −5.9 dB  | −18.1 dB       | 14%                         | 16%                      |
+| Light hit                 | −6.7 dB  | −31.1 dB       | 2%                          | 52%                      |
+| Crushing hit              | −1.0 dB  | −21.5 dB       | 53%                         | 24%                      |
+| Collapse                  | −2.1 dB  | −17.7 dB       | 33%                         | 31%                      |
+| Explosion                 | −1.0 dB  | −16.8 dB       | 70%                         | 9%                       |
+
+The engine is as loud as the music or louder, as asked. Collapses and explosions are the loudest sounds and reach the limiter. Every loop is seamless: the waveform before and after each loop point matches with a correlation of 0.987 or more.
+
+### Fishtail
+
+Holding Action used to spin the truck: in about a second it lost 80% of its speed and faced backwards, and only the thin tail plate did real damage.
+
+- **A slide you can hold.** Hold Action above 22 km/h and the truck swings 78° off its course in about 0.3 seconds, then slides on along that course. It loses about 12 km/h each second.
+- **A slide you can steer.** The stick or the steering keys bend the course by up to 63° per second.
+- **Let go and drive on.** The truck straightens up along its course in about 0.3 seconds and keeps its speed. A slide ends by itself below 14 km/h, and Action must be let go before the next one.
+- **The whole truck is the weapon.** In a slide the body does 1.5× damage and the tail 2×, and a glancing hit counts with 90% of the truck's speed. A slide at 50 km/h drops a house, and one at 72 km/h drops brick. A plain ram does 0.6×, up from 0.4×.
+- **Steadier driving.** The arcade grip rises from 6 to 8 and the yaw assist from 0.25 to 0.35.
+- **Auto-skid has a new meaning.** With it on, the truck straightens up after a slide. With it off, the truck leaves the slide the way it points, which makes a slide a sharp turn.
+- **The Ferrow Junction hints** describe the slide.
+
+### How to test
+
+1. Open `/?level=ferrow-junction&debug`.
+2. Drive at terrace A, hold Space before you reach it and watch the truck sweep through.
+3. Steer while you hold Space, then let go: the truck straightens and drives on.
+4. Listen from the title screen through a run: the music grows from drones to war drums as the Hauler nears an obstacle.
+5. Run `npm test`: `tests/fishtail-drive.test.ts` drives the truck on flat ground, and `tests/music.test.ts` checks the phrase planner, the patterns and the sample list.
+
+### Not done
+
+- Nobody has listened to the recorded sound yet. The measurements show levels, balance and seamless loops, not taste.
+- The new sound is untested on iOS and on a real device.
+- The Railbed and the Bruiser have no Action sound of their own.
