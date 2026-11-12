@@ -1,10 +1,11 @@
 .debug {
   position: absolute;
   left: calc(var(--cw-safe-left) + 8px);
-  bottom: calc(var(--cw-safe-bottom) + 8px);
+  top: calc(var(--cw-safe-top) + 64px);
   z-index: 50;
   width: 220px;
-  max-height: 70dvh;
+  max-height: 50dvh;
+  opacity: 0.92;
   overflow-y: auto;
   padding: var(--cw-space-2) var(--cw-space-3);
   border: 1px solid var(--cw-line);

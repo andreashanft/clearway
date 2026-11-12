@@ -1,0 +1,213 @@
+/* Round controls are reserved for the in-game touch controls. Sizes follow the gameplay mocks. */
+.touch {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  --touch-edge: 22px;
+  --touch-bottom: 22px;
+  --action-size: 90px;
+  --stick-size: 116px;
+  --knob-size: 50px;
+}
+
+.touch[hidden],
+.touch.is-off {
+  display: none;
+}
+
+.touch > * {
+  pointer-events: auto;
+}
+
+/* The left thumb can land anywhere in this zone. The stick appears under it. */
+.touch__zone {
+  position: absolute;
+  left: 0;
+  top: 22%;
+  bottom: 0;
+  width: 50%;
+  touch-action: none;
+}
+
+.touch__stick {
+  position: absolute;
+  left: calc(var(--cw-safe-left) + 40px + var(--stick-size) / 2);
+  top: calc(100% - var(--cw-safe-bottom) - 26px - var(--stick-size) / 2);
+  width: var(--stick-size);
+  height: var(--stick-size);
+  margin: calc(var(--stick-size) / -2) 0 0 calc(var(--stick-size) / -2);
+  border: 2px solid rgba(var(--cw-line-rgb), 0.45);
+  border-radius: 999px;
+  background: radial-gradient(
+    circle,
+    rgba(var(--cw-blue-rgb), 0.2),
+    rgba(var(--cw-ground-rgb), 0.3)
+  );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  opacity: 0.7;
+  transition: opacity var(--cw-fast) ease-out;
+}
+
+.touch__stick.is-active {
+  opacity: 1;
+}
+
+.touch__knob {
+  width: var(--knob-size);
+  height: var(--knob-size);
+  border-radius: 999px;
+  background: var(--cw-ink);
+  box-shadow: 0 0 16px rgba(var(--cw-line-rgb), 0.7);
+}
+
+.touch__button {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid rgba(var(--cw-line-rgb), 0.35);
+  background: rgba(var(--cw-glass-rgb), 0.82);
+  color: var(--cw-ink);
+  font-family: var(--cw-font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  touch-action: none;
+  transition: transform var(--cw-fast) ease-out;
+}
+
+.touch__button[hidden] {
+  display: none;
+}
+
+.touch__button.is-held {
+  transform: scale(0.93);
+}
+
+.touch__action {
+  right: calc(var(--cw-safe-right) + var(--touch-edge));
+  bottom: calc(var(--cw-safe-bottom) + var(--touch-bottom));
+  width: var(--action-size);
+  height: var(--action-size);
+  border: none;
+  background: var(--cw-hazard);
+  color: var(--cw-ground);
+  box-shadow:
+    0 0 0 6px rgba(var(--cw-hazard-rgb), 0.22),
+    0 0 28px rgba(var(--cw-hazard-rgb), 0.55);
+  font-family: var(--cw-font-display);
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+}
+
+/* Charging: a ring fills up around a dark face that shows the percentage. */
+.touch__action[data-mode='charging'] {
+  background: conic-gradient(
+    var(--cw-hazard) 0 var(--charge, 0%),
+    rgba(var(--cw-hazard-rgb), 0.15) var(--charge, 0%) 100%
+  );
+  box-shadow: none;
+  color: var(--cw-hazard);
+}
+
+.touch__action[data-mode='charging'] > span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(100% - 12px);
+  height: calc(100% - 12px);
+  border-radius: 999px;
+  background: var(--cw-panel);
+}
+
+.touch__action[data-mode='active'] {
+  background: var(--cw-white);
+  box-shadow:
+    0 0 0 8px rgba(var(--cw-hazard-rgb), 0.4),
+    0 0 36px rgba(var(--cw-hazard-rgb), 0.9);
+}
+
+.touch__brake {
+  right: calc(var(--cw-safe-right) + var(--touch-edge) + var(--action-size) + 12px);
+  bottom: calc(var(--cw-safe-bottom) + var(--touch-bottom) + 6px);
+  width: 60px;
+  height: 60px;
+}
+
+.touch__exit {
+  right: calc(var(--cw-safe-right) + var(--touch-edge) + var(--action-size) + 8px);
+  bottom: calc(var(--cw-safe-bottom) + var(--touch-bottom) + 90px);
+  width: 48px;
+  height: 48px;
+}
+
+/* Left-handed: the stick moves to the right and the buttons to the left. */
+.touch.is-lefty .touch__zone {
+  left: auto;
+  right: 0;
+}
+
+.touch.is-lefty .touch__stick {
+  left: calc(100% - var(--cw-safe-right) - 40px - var(--stick-size) / 2);
+}
+
+.touch.is-lefty .touch__action {
+  right: auto;
+  left: calc(var(--cw-safe-left) + var(--touch-edge));
+}
+
+.touch.is-lefty .touch__brake {
+  right: auto;
+  left: calc(var(--cw-safe-left) + var(--touch-edge) + var(--action-size) + 12px);
+}
+
+.touch.is-lefty .touch__exit {
+  right: auto;
+  left: calc(var(--cw-safe-left) + var(--touch-edge) + var(--action-size) + 8px);
+}
+
+/* Portrait phones: larger controls, higher up, with the Exit button above the Action button. */
+@media (orientation: portrait) {
+  .touch {
+    --touch-edge: 24px;
+    --touch-bottom: 44px;
+    --action-size: 92px;
+    --stick-size: 124px;
+    --knob-size: 54px;
+  }
+
+  .touch__zone {
+    top: 45%;
+    width: 55%;
+  }
+
+  .touch__stick {
+    left: calc(var(--cw-safe-left) + 26px + var(--stick-size) / 2);
+    top: calc(100% - var(--cw-safe-bottom) - 44px - var(--stick-size) / 2);
+  }
+
+  .touch__exit {
+    right: calc(var(--cw-safe-right) + 30px);
+    bottom: calc(var(--cw-safe-bottom) + 156px);
+  }
+
+  .touch.is-lefty .touch__exit {
+    left: calc(var(--cw-safe-left) + 30px);
+  }
+}
+
+/* Tablets and desktops with touch: a little more room around the controls. */
+@media (min-width: 1000px) and (min-height: 700px) {
+  .touch {
+    --touch-edge: 40px;
+    --touch-bottom: 40px;
+    --action-size: 104px;
+    --stick-size: 132px;
+    --knob-size: 56px;
+  }
+}

@@ -2,11 +2,9 @@ import './ui/fonts';
 import './ui/tokens.css';
 import './ui/base.css';
 
-import { DebugOverlay, isDebugRequested } from './debug/overlay';
-import { FixedStepper, FrameStats } from './engine/loop';
-import { PhysicsWorld, initPhysics } from './engine/physics';
-import { RenderContext } from './engine/renderer';
-import { createSandbox } from './game/sandbox';
+import { App } from './app';
+import { isDebugRequested } from './debug/overlay';
+import { initPhysics } from './engine/physics';
 
 /** Returns a required element of the page shell. */
 function requireElement<T extends HTMLElement>(id: string): T {
@@ -22,59 +20,19 @@ async function boot(): Promise<void> {
   const ui = requireElement('ui');
   const params = new URLSearchParams(window.location.search);
 
-  const [render] = await Promise.all([
-    RenderContext.create(canvas, { forceWebGL: params.has('webgl') }),
+  const [app] = await Promise.all([
+    App.start(canvas, ui, { forceWebGL: params.has('webgl') }),
     initPhysics(),
     document.fonts.ready,
   ]);
-
-  const physics = new PhysicsWorld();
-  const sandbox = createSandbox(physics);
-  render.onResize((width, height) => sandbox.resize(width / height));
-
-  const stepper = new FixedStepper();
-  const frameStats = new FrameStats();
-
-  let debug: DebugOverlay | undefined;
-  if (isDebugRequested()) {
-    debug = new DebugOverlay(ui);
-    debug.addStat({ label: 'Backend', read: () => render.backend });
-    debug.addStat({ label: 'FPS', read: () => frameStats.fps.toFixed(0) });
-    debug.addStat({ label: 'Frame', read: () => `${frameStats.frameMs.toFixed(1)} ms` });
-    debug.addStat({
-      label: 'Draw calls',
-      read: () => String(render.renderer.info.render.drawCalls),
-    });
-    debug.addStat({
-      label: 'Triangles',
-      read: () => String(render.renderer.info.render.triangles),
-    });
-    debug.addStat({ label: 'Bodies', read: () => String(physics.bodyCount) });
-    debug.addStat({ label: 'Scale', read: () => `${Math.round(render.scale * 100)} %` });
-    debug.addSlider('Time scale', { min: 0, max: 2, step: 0.05, value: 1 }, (value) => {
-      stepper.timeScale = value;
-    });
+  if (params.has('touch')) {
+    app.touch.forceShow();
   }
-
-  // The loop and the audio pause while the page is hidden.
-  document.addEventListener('visibilitychange', () => {
-    stepper.paused = document.hidden;
-  });
-
-  let lastTime = performance.now();
-  await render.renderer.setAnimationLoop((time) => {
-    const frameSeconds = (time - lastTime) / 1000;
-    lastTime = time;
-    frameStats.sample(frameSeconds);
-
-    const alpha = stepper.advance(frameSeconds, (dt) => {
-      sandbox.step(dt);
-      physics.step();
-    });
-    sandbox.sync(alpha);
-    render.renderer.render(sandbox.scene, sandbox.camera);
-    debug?.update(frameSeconds);
-  });
+  if (isDebugRequested()) {
+    const { installDebugTools } = await import('./debug/tools');
+    installDebugTools(app);
+  }
+  await app.loadLevel(params.get('level') ?? undefined);
 
   requireElement('boot').classList.add('is-done');
 }

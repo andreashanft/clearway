@@ -42,12 +42,28 @@ The following command runs the type check, the linter, the format check and the 
 npm run check
 ```
 
+## Controls
+
+| Action                 | Touch                       | Keyboard          | Gamepad                      |
+| ---------------------- | --------------------------- | ----------------- | ---------------------------- |
+| Drive                  | Left thumb: point the stick | W A S D or arrows | Left stick steers, RT and LT |
+| Vehicle action         | Large round button          | Space             | A                            |
+| Brake                  | **BRAKE**                   | Shift             | LT                           |
+| Enter or leave vehicle | **EXIT**                    | E                 | Y                            |
+| Rotate the view by 45° | Two-finger twist            | Q and R           | LB and RB                    |
+| Zoom                   | Pinch                       | Wheel, or Z and X | Right stick                  |
+| Pause                  | Pause button                | Esc               | Start                        |
+
+Touch and keyboard use point-to-drive: you point where the vehicle should go, and it accelerates and turns there. To reverse, point behind the vehicle.
+
 ## URL parameters
 
-| Parameter | Effect                                                                 |
-| --------- | ---------------------------------------------------------------------- |
-| `?debug`  | Shows the debug overlay with frame statistics and a time-scale slider. |
-| `?webgl`  | Forces the WebGL2 backend. Without it, the game prefers WebGPU.        |
+| Parameter   | Effect                                                                |
+| ----------- | --------------------------------------------------------------------- |
+| `?debug`    | Shows the debug overlay and adds the `window.clearway` console tools. |
+| `?webgl`    | Forces the WebGL2 backend. Without it, the game prefers WebGPU.       |
+| `?touch`    | Shows the touch controls on a device without a touch screen.          |
+| `?level=ID` | Starts in the level with this id, for example `?level=hollow-creek`.  |
 
 ## Technology
 
@@ -68,34 +84,43 @@ The user interface is plain DOM and CSS above the canvas. `src/ui/tokens.css` ho
 
 ## Project layout
 
-| Path          | Content                                                  |
-| ------------- | -------------------------------------------------------- |
-| `src/main.ts` | Boot sequence and frame loop.                            |
-| `src/engine/` | Renderer, physics world and fixed-step loop.             |
-| `src/game/`   | Game simulation.                                         |
-| `src/ui/`     | Design tokens, fonts and DOM user interface.             |
-| `src/debug/`  | Debug overlay.                                           |
-| `tests/`      | Unit tests.                                              |
-| `tools/`      | Scripts that generate assets, for example the app icons. |
-| `public/`     | Static files: icons and the favicon.                     |
+| Path          | Content                                                        |
+| ------------- | -------------------------------------------------------------- |
+| `src/main.ts` | Boot sequence.                                                 |
+| `src/app.ts`  | Application shell: renderer, input devices, frame loop.        |
+| `src/engine/` | Renderer, physics world, fixed-step loop and input devices.    |
+| `src/game/`   | Game simulation: level, terrain, vehicles and camera.          |
+| `src/ui/`     | Design tokens, fonts and DOM user interface.                   |
+| `src/debug/`  | Debug overlay and console tools.                               |
+| `levels/`     | One JSON file, one terrain recipe and one heightmap per level. |
+| `tests/`      | Unit tests.                                                    |
+| `tools/`      | Scripts that generate assets: app icons and heightmaps.        |
+| `public/`     | Static files: icons and the favicon.                           |
+| `docs/`       | Milestone notes.                                               |
+
+## Levels
+
+Each level is one file, `levels/ID.json`. All positions are `[x, z]` pairs in metres: X points east and Z points south. `src/game/level.ts` documents every field.
+
+The terrain comes from a greyscale heightmap, `levels/ID.height.png`. A tool paints the heightmap from the recipe in `levels/ID.terrain.json`. After you change a recipe or move a building, repaint the heightmaps:
+
+```bash
+npm run build:terrain
+```
 
 ## Milestones
+
+[docs/milestones.md](docs/milestones.md) lists, for each milestone, what works, what is stubbed, how to test it on a phone, and where the build deviates from the briefs on purpose.
 
 | #   | Milestone           | State   |
 | --- | ------------------- | ------- |
 | 1   | Scaffold            | Done    |
-| 2   | Drive               | Planned |
+| 2   | Drive               | Done    |
 | 3   | Destroy             | Planned |
 | 4   | Hauler loop         | Planned |
 | 5   | Screens             | Planned |
 | 6   | Vehicles and levels | Planned |
 | 7   | Polish              | Planned |
-
-### Milestone 1: scaffold
-
-- **Works:** Vite, TypeScript, Three.js and Rapier run together. The simulation advances in fixed 60 Hz steps and the renderer interpolates between them. The PWA manifest, the service worker and the app icons are in place. The debug overlay shows the backend, the frame rate, the draw calls, the triangle count and the body count.
-- **Stubbed:** The scene is a test scene that drops crates onto a plate. Milestone 2 replaces it.
-- **Test on a phone:** Run `npm run dev -- --host`, open the network address with `?debug` appended, and check that the crates fall and the overlay reports about 60 frames per second.
 
 ## Licence
 
