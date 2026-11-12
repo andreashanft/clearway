@@ -1,0 +1,8 @@
+dist/
+dev-dist/
+coverage/
+node_modules/
+package-lock.json
+LICENSE
+levels/*.png
+public/

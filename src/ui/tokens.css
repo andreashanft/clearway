@@ -1,0 +1,87 @@
+/*
+ * Design tokens from the Clearway design system (v0.2).
+ * Components read every colour, font and size from here. Do not hard-code these values elsewhere.
+ */
+:root {
+  /* Colour */
+  --cw-ground: #0b1430;
+  --cw-panel: #14234a;
+  --cw-ink: #eef3ff;
+  --cw-ink-soft: #c4d0e8;
+  --cw-muted: #8fa3c8;
+  --cw-dim: #5f739c;
+  --cw-hazard: #ffd23f;
+  --cw-hazard-deep: #e0a800;
+  --cw-blue: #3d7bff;
+  --cw-blue-top: #4c8dff;
+  --cw-blue-bottom: #2f63e0;
+  --cw-alarm: #ff3d5a;
+  --cw-signal: #2ee6ff;
+  --cw-go: #3df5a0;
+  --cw-amber: #ff9a2e;
+  --cw-tnt: #ff7a2e;
+  --cw-gold: #ffc83d;
+  --cw-silver: #d5deef;
+  --cw-bronze: #e0915a;
+  --cw-white: #ffffff;
+
+  /* Colour channels, for translucent surfaces and glows */
+  --cw-ground-rgb: 11, 20, 48;
+  --cw-glass-rgb: 14, 28, 64;
+  --cw-chip-rgb: 9, 17, 40;
+  --cw-line-rgb: 125, 170, 255;
+  --cw-ink-rgb: 238, 243, 255;
+  --cw-hazard-rgb: 255, 210, 63;
+  --cw-blue-rgb: 61, 123, 255;
+  --cw-alarm-rgb: 255, 61, 90;
+  --cw-signal-rgb: 46, 230, 255;
+  --cw-go-rgb: 61, 245, 160;
+  --cw-amber-rgb: 255, 154, 46;
+  --cw-gold-rgb: 255, 200, 61;
+  --cw-silver-rgb: 213, 222, 239;
+
+  /* Surfaces */
+  --cw-glass: rgba(var(--cw-glass-rgb), 0.8);
+  --cw-glass-soft: rgba(var(--cw-glass-rgb), 0.6);
+  --cw-chip: rgba(var(--cw-chip-rgb), 0.85);
+  --cw-line: rgba(var(--cw-line-rgb), 0.25);
+  --cw-line-soft: rgba(var(--cw-line-rgb), 0.18);
+  --cw-line-strong: rgba(var(--cw-line-rgb), 0.55);
+  --cw-card: linear-gradient(180deg, #1a2b58, #132248);
+  --cw-card-hot: linear-gradient(180deg, #1f3470, #15275a);
+  --cw-card-dim: linear-gradient(180deg, #16244a, #111d3d);
+  --cw-blue-fill: linear-gradient(180deg, var(--cw-blue-top), var(--cw-blue-bottom));
+  --cw-grid:
+    linear-gradient(rgba(var(--cw-line-rgb), 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(var(--cw-line-rgb), 0.05) 1px, transparent 1px);
+
+  /* Type */
+  --cw-font-display: 'Big Shoulders Display', 'Arial Narrow', sans-serif;
+  --cw-font-body: 'Space Grotesk', system-ui, sans-serif;
+  --cw-font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Space */
+  --cw-space-1: 4px;
+  --cw-space-2: 8px;
+  --cw-space-3: 12px;
+  --cw-space-4: 16px;
+  --cw-space-5: 24px;
+  --cw-space-6: 32px;
+  --cw-space-7: 48px;
+
+  /* Shape */
+  --cw-radius-tag: 6px;
+  --cw-radius-callout: 10px;
+  --cw-cut: 12px;
+  --cw-touch-min: 48px;
+
+  /* Motion */
+  --cw-fast: 120ms;
+  --cw-snap: 220ms;
+
+  /* Safe areas (notch and home indicator) */
+  --cw-safe-top: env(safe-area-inset-top, 0px);
+  --cw-safe-right: env(safe-area-inset-right, 0px);
+  --cw-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --cw-safe-left: env(safe-area-inset-left, 0px);
+}
