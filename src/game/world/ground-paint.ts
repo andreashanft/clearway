@@ -52,7 +52,8 @@ export function paintGround(terrain: TerrainData, layers: readonly GroundLayer[]
   return texture;
 }
 
-function drawLayer(
+/** Draws one ground layer into a canvas whose units are metres in level coordinates. */
+export function drawLayer(
   context: CanvasRenderingContext2D,
   layer: GroundLayer,
   terrain: TerrainData,

@@ -124,7 +124,7 @@ npm run report:route
 | 2   | Drive               | Done    |
 | 3   | Destroy             | Done    |
 | 4   | Hauler loop         | Done    |
-| 5   | Screens             | Planned |
+| 5   | Screens             | Done    |
 | 6   | Vehicles and levels | Planned |
 | 7   | Polish              | Planned |
 

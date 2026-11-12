@@ -12,6 +12,7 @@ import {
   CRITICAL_SECONDS,
   createRoute,
   findObstacles,
+  routePoint,
   secondsUntil,
   urgencyOf,
   type Route,
@@ -70,6 +71,18 @@ const ASSIST_RANGE = 80;
 /** Hints that depend on a place show when the player is this close, in metres. */
 const HINT_RANGE = 46;
 
+/** The replay shows this many seconds before the crash. */
+const REPLAY_SECONDS = 1.3;
+/** Camera distance of the fly-over along the Hauler's line. */
+const FLYOVER_DISTANCE = 84;
+
+/** One recorded step, for the slow-motion replay of a crash. */
+interface ReplayFrame {
+  hauler: THREE.Vector3;
+  pitch: number;
+  vehicles: { position: THREE.Vector3; heading: number }[];
+}
+
 /** A route obstacle together with the buildings that it is made of. */
 export interface ObstacleState {
   def: RouteObstacle;
@@ -96,6 +109,8 @@ export interface GameOptions {
   steeringAssist: boolean;
   /** Draws the outline of the next obstacle dashed, so that it does not rely on colour. */
   patternMarkings: boolean;
+  /** The Fishtail starts its skid by itself next to a wall. */
+  autoSkid: boolean;
 }
 
 /**
@@ -128,6 +143,8 @@ export class Game {
   clearSeconds = 0;
   /** Seconds of bonus time that the clear earned. */
   bonusSeconds = 0;
+  /** False hides the obstacle outlines, for the title backdrop. */
+  showMarkers = true;
   /** Debug switch: the Hauler drives through everything. */
   invincibleHauler = false;
   /** The result, once the level has ended. */
@@ -144,6 +161,11 @@ export class Game {
   private readonly shownHints = new Set<string>();
   private readonly blocking = new Set<Building>();
   private readonly nextBuildings = new Set<Building>();
+  private readonly recording: ReplayFrame[] = [];
+  /** Position in the replay in seconds, while a replay plays. */
+  private replayTime: number | undefined;
+  /** Where the fly-over looks, as a fraction of the route, while the level is not running. */
+  private flyover: number | undefined;
 
   private constructor(
     readonly level: LevelData,
@@ -319,8 +341,35 @@ export class Game {
     if (this.phase !== 'ready') {
       return;
     }
+    this.flyover = undefined;
+    this.cameraRig.setCinematic(undefined);
+    this.cameraRig.snap();
     this.setPhase('playing');
     this.showHint('start');
+  }
+
+  /**
+   * Points the camera at a place on the Hauler's line while the level waits to start.
+   *
+   * @param progress Fraction of the route from 0 to 1, or `undefined` to follow the vehicle.
+   */
+  setFlyover(progress: number | undefined): void {
+    this.flyover = progress;
+    this.cameraRig.setCinematic(progress === undefined ? undefined : FLYOVER_DISTANCE);
+  }
+
+  /** True while the slow-motion replay of the crash plays. */
+  get replaying(): boolean {
+    return this.replayTime !== undefined;
+  }
+
+  /** Plays the last moments before the crash again, in slow motion. */
+  replayCrash(): void {
+    if (this.phase !== 'failed' || this.recording.length === 0) {
+      return;
+    }
+    this.replayTime = 0;
+    this.events.emit('replayChanged', { playing: true });
   }
 
   /** Ends the level early during bonus time. */
@@ -335,6 +384,10 @@ export class Game {
     if (this.phase === 'ready' || this.phase === 'ended') {
       return;
     }
+    if (this.replayTime !== undefined) {
+      this.stepReplay(dt);
+      return;
+    }
     if (this.hitStop > 0) {
       // The world holds still for a few hundredths of a second after a heavy hit.
       this.hitStop -= dt;
@@ -342,6 +395,9 @@ export class Game {
     }
     const input = this.input.poll();
     this.handleCameraButtons(input);
+    if (input.pressed.has('pause') && this.isScoring) {
+      this.events.emit('pauseRequested', {});
+    }
 
     const playing = this.phase !== 'failed';
     const command = playing ? this.driveCommand(input) : NO_COMMAND;
@@ -390,6 +446,7 @@ export class Game {
       const active = this.activeVehicle.position;
       this.pickups.step([[active.x, active.z]]);
       this.updateObstacles();
+      this.record();
       this.checkHauler();
       this.updateHints();
       this.time += dt;
@@ -398,13 +455,16 @@ export class Game {
 
   /** Draws the state between the previous and the current step. */
   sync(alpha: number, frameSeconds: number): void {
-    for (const vehicle of this.vehicles) {
-      vehicle.sync(alpha, frameSeconds);
+    if (this.replayTime === undefined) {
+      for (const vehicle of this.vehicles) {
+        vehicle.sync(alpha, frameSeconds);
+      }
+      this.hauler.sync(alpha, frameSeconds, this.urgency);
     }
-    this.hauler.sync(alpha, frameSeconds, this.urgency);
     this.tnt.sync(alpha, frameSeconds);
     this.debris.sync(alpha);
     this.pickups.sync(frameSeconds);
+    this.markers.object.visible = this.showMarkers;
     this.markers.update(
       frameSeconds,
       this.blocking,
@@ -415,20 +475,24 @@ export class Game {
 
     const active = this.activeVehicle;
     const focus = active.object.position.clone();
-    if (this.phase === 'failed') {
-      // After the crash the camera looks at the wreck.
-      focus.copy(this.hauler.center);
+    if (this.phase === 'ready' && this.flyover !== undefined) {
+      const [x, z] = routePoint(this.route, this.flyover * this.route.length);
+      focus.set(x, this.heightAt(x, z), z);
+    } else if (this.phase === 'failed') {
+      // After the crash the camera looks at the wreck, or at the Hauler in the replay.
+      focus.copy(this.replayTime === undefined ? this.hauler.center : this.hauler.object.position);
     } else if (this.phase === 'playing' && this.secondsToImpact < CRITICAL_SECONDS) {
       // Just before an impact the camera leans towards the Hauler to keep both in frame.
       const lean = this.hauler.front.sub(focus);
       lean.setLength(Math.min(lean.length() * 0.35, 30));
       focus.add(lean);
     }
+    const following = this.phase === 'playing' || this.phase === 'bonus';
     this.cameraRig.update(
       frameSeconds,
       focus,
-      this.phase === 'failed' ? ZERO : active.impactVelocity,
-      Math.abs(active.forwardSpeed) / active.spec.topSpeed,
+      following ? active.impactVelocity : ZERO,
+      following ? Math.abs(active.forwardSpeed) / active.spec.topSpeed : 0,
       this.options.cameraShake,
     );
     this.lighting.follow(this.cameraRig.focusPoint);
@@ -521,6 +585,46 @@ export class Game {
     const command = this.pointToDrive.update(target, magnitude, this.activeVehicle.heading);
     command.brake = input.brake;
     return command;
+  }
+
+  /** Records the poses of this step. The replay shows the last moments before a crash. */
+  private record(): void {
+    const { position, pitch } = this.hauler.pose;
+    this.recording.push({
+      hauler: position.clone(),
+      pitch,
+      vehicles: this.vehicles.map((vehicle) => ({
+        position: vehicle.position.clone(),
+        heading: vehicle.heading,
+      })),
+    });
+    const limit = Math.round(REPLAY_SECONDS * 60);
+    if (this.recording.length > limit) {
+      this.recording.shift();
+    }
+  }
+
+  /** Shows the recorded poses one after the other, then lets the Hauler blow up again. */
+  private stepReplay(dt: number): void {
+    if (this.replayTime === undefined) {
+      return;
+    }
+    this.replayTime += dt;
+    const index = Math.floor(this.replayTime * 60);
+    const frame = this.recording[Math.min(index, this.recording.length - 1)];
+    this.hauler.showAt(frame.hauler, frame.pitch);
+    this.vehicles.forEach((vehicle, i) => {
+      const pose = frame.vehicles[i];
+      vehicle.showAt(pose.position, pose.heading);
+    });
+    if (index >= this.recording.length) {
+      this.replayTime = undefined;
+      this.hauler.destroy();
+      this.effects.explosion(this.hauler.front, 16);
+      this.effects.explosion(frame.hauler, 13);
+      this.cameraRig.addShake(1.2);
+      this.events.emit('replayChanged', { playing: false });
+    }
   }
 
   private setPhase(phase: Phase): void {

@@ -22,10 +22,13 @@ export class App {
   readonly touch: TouchControls;
   readonly hud: Hud;
   readonly options: GameOptions = {
-    cameraShake: 0.5,
+    cameraShake: 0.45,
     steeringAssist: true,
     patternMarkings: false,
+    autoSkid: true,
   };
+  /** False while a screen covers the 3D scene completely. The scene is then not drawn. */
+  renderScene = true;
   game: Game | undefined;
 
   private lastTime = 0;
@@ -76,7 +79,6 @@ export class App {
     game.resize(this.render.aspect);
     this.stepper.reset();
     this.hud.attach(game);
-    this.hud.setVisible(true);
     // The crash plays out in slow motion.
     this.stepper.timeScale = 1;
     game.events.on('haulerDestroyed', () => {
@@ -86,6 +88,12 @@ export class App {
       listener(game);
     }
     return game;
+  }
+
+  /** Shows or hides the head-up display and the touch controls. */
+  setPlayUi(visible: boolean): void {
+    this.hud.setVisible(visible);
+    this.touch.setVisible(visible);
   }
 
   /** Registers a function that runs whenever a level has been loaded. */
@@ -124,8 +132,10 @@ export class App {
     const game = this.game;
     if (game) {
       const alpha = this.stepper.advance(frameSeconds, (dt) => game.step(dt));
-      game.sync(alpha, Math.min(frameSeconds, 0.1));
-      this.render.renderer.render(game.scene, game.cameraRig.camera);
+      if (this.renderScene) {
+        game.sync(alpha, Math.min(frameSeconds, 0.1) * (this.stepper.paused ? 0 : 1));
+        this.render.renderer.render(game.scene, game.cameraRig.camera);
+      }
       this.updateTouchControls(game);
       this.hud.update(game, game.cameraRig.camera, Math.min(frameSeconds, 0.1));
     }

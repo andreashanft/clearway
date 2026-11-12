@@ -41,6 +41,7 @@ export class CameraRig {
   private readonly shake = new THREE.Vector3();
   private shakeEnergy = 0;
   private started = false;
+  private cinematicDistance: number | undefined;
 
   /** Sets the heading of the Hauler's line. Portrait screens align the view with it. */
   setRouteHeading(heading: number): void {
@@ -69,6 +70,19 @@ export class CameraRig {
   recenter(): void {
     this.yawSteps = 0;
     this.zoomIndex = DEFAULT_ZOOM;
+  }
+
+  /**
+   * Fixes the camera distance, for the fly-over and the title backdrop. `undefined` returns to
+   * the zoom presets.
+   */
+  setCinematic(distance: number | undefined): void {
+    this.cinematicDistance = distance;
+  }
+
+  /** Jumps to the target on the next update, without easing. Use it after a cut. */
+  snap(): void {
+    this.started = false;
   }
 
   /** Adds camera shake. `strength` is about 1 for a heavy impact. */
@@ -114,7 +128,7 @@ export class CameraRig {
       ahead.setLength(LOOK_AHEAD_MAX);
     }
     const presetDistance =
-      ZOOM_DISTANCES[this.zoomIndex] *
+      (this.cinematicDistance ?? ZOOM_DISTANCES[this.zoomIndex]) *
       (this.portrait ? PORTRAIT_DISTANCE_FACTOR : 1) *
       (1 + SPEED_PULL_BACK * clamp(speedFraction, 0, 1));
 

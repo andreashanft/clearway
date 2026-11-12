@@ -305,6 +305,12 @@ export class Vehicle {
     this.body.setLinvel({ x, y, z }, true);
   }
 
+  /** Shows the model at a recorded pose, for the replay. It does not move the body. */
+  showAt(position: THREE.Vector3, heading: number): void {
+    this.object.position.copy(position);
+    this.object.rotation.y = -heading;
+  }
+
   /** Moves the vehicle to a position and stops it. */
   teleport(position: Vec2, heading: number): void {
     const y = this.groundAt(position[0], position[1], Infinity) + this.spec.rideHeight;

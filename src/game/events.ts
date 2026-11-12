@@ -60,6 +60,10 @@ export interface GameEvents {
   levelEnded: { result: LevelResult };
   /** A tutorial hint should show. */
   hint: { text: string };
+  /** The player pressed the pause button or key. */
+  pauseRequested: Record<string, never>;
+  /** The slow-motion replay of the crash started or ended. */
+  replayChanged: { playing: boolean };
 }
 
 /**

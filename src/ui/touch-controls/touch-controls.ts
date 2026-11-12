@@ -38,7 +38,10 @@ export class TouchControls implements InputSource {
   private readonly actionButton: HTMLButtonElement;
   private readonly actionLabel: HTMLElement;
   private readonly brakeButton: HTMLButtonElement;
+  private readonly gasButton: HTMLButtonElement;
   private readonly exitButton: HTMLButtonElement;
+  private classic = false;
+  private gasHeld = false;
 
   private readonly touches = new Map<number, Point>();
   private stickPointer: number | undefined;
@@ -71,11 +74,21 @@ export class TouchControls implements InputSource {
     this.actionButton.append(this.actionLabel);
     this.brakeButton = this.createButton('touch__brake', 'Brake');
     this.brakeButton.textContent = 'BRAKE';
+    this.gasButton = this.createButton('touch__gas', 'Accelerate');
+    this.gasButton.textContent = 'GAS';
+    this.gasButton.hidden = true;
     this.exitButton = this.createButton('touch__exit', 'Exit vehicle');
     this.exitButton.textContent = 'EXIT';
     this.exitButton.hidden = true;
 
-    this.root.append(this.zone, this.stick, this.exitButton, this.brakeButton, this.actionButton);
+    this.root.append(
+      this.zone,
+      this.stick,
+      this.exitButton,
+      this.brakeButton,
+      this.gasButton,
+      this.actionButton,
+    );
     parent.append(this.root);
 
     this.bindHold(this.actionButton, (held) => {
@@ -86,6 +99,9 @@ export class TouchControls implements InputSource {
     });
     this.bindHold(this.brakeButton, (held) => {
       this.brakeHeld = held;
+    });
+    this.bindHold(this.gasButton, (held) => {
+      this.gasHeld = held;
     });
     this.bindHold(this.exitButton, (held) => {
       if (held) {
@@ -133,6 +149,16 @@ export class TouchControls implements InputSource {
     this.root.hidden = false;
   }
 
+  /**
+   * Switches to the classic layout: the stick only steers, and separate GAS and BRAKE pedals
+   * drive forwards and backwards.
+   */
+  setClassic(classic: boolean): void {
+    this.classic = classic;
+    this.gasButton.hidden = !classic;
+    this.root.classList.toggle('is-classic', classic);
+  }
+
   /** Mirrors the layout for left-handed players. */
   setLeftHanded(leftHanded: boolean): void {
     this.root.classList.toggle('is-lefty', leftHanded);
@@ -174,10 +200,16 @@ export class TouchControls implements InputSource {
   }
 
   poll(state: InputState): void {
-    state.pointX += this.stickX;
-    state.pointY += this.stickY;
+    if (this.classic) {
+      state.steer += this.stickX;
+      // The brake pedal brakes first and then reverses, like the left trigger of a gamepad.
+      state.throttle += (this.gasHeld ? 1 : 0) - (this.brakeHeld ? 1 : 0);
+    } else {
+      state.pointX += this.stickX;
+      state.pointY += this.stickY;
+      state.brake ||= this.brakeHeld;
+    }
     state.action ||= this.actionHeld;
-    state.brake ||= this.brakeHeld;
     for (const button of this.queued) {
       state.pressed.add(button);
     }
@@ -318,5 +350,6 @@ export class TouchControls implements InputSource {
     this.gesture = undefined;
     this.actionHeld = false;
     this.brakeHeld = false;
+    this.gasHeld = false;
   }
 }

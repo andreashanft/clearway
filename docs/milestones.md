@@ -129,3 +129,41 @@ To test on a phone, start the development server with `npm run dev -- --host` an
 - **Mini-map.** The code brief suggests a second 3D render. The build draws a 2D schematic instead, which is what the mocks show: navy ground, water and roads as strokes, and dots for the obstacles, the Hauler and the player.
 - **Pointer and outlines.** The pointer is an SVG in the DOM layer, placed by projecting the vehicle onto the screen. That keeps it crisp at every size. The outlines are flat frames on the ground.
 - **Vehicle in the way.** A vehicle that stands on the line destroys the Hauler, also in bonus time. The brief says that the Hauler detonates when it touches anything solid.
+
+## Milestone 5: screens
+
+**Works**
+
+- All ten screens of the flow exist as DOM views over the canvas, styled only with the design tokens: title, campaign map, level briefing, gameplay with the head-up display, pause, Hauler destroyed, the Path clear banner, bonus time, results and settings. How to play is an eleventh, small screen behind the button on the title.
+- A small state machine runs the flow: `title → campaign → briefing → playing ⇄ paused`, and `playing → failed`, or `playing → results` once the Hauler has left. Settings returns to where it was opened from. Escape and the Start button go back.
+- The 3D scene keeps running behind the title, the briefing, the pause screen and the fail screen. It is not drawn behind the screens that cover it completely.
+- The briefing flies the camera along the Hauler's line, with a progress bar and **Skip**. It shows the obstacle count, the first hit, the best medal and the vehicles on the map.
+- The fail screen names what the Hauler hit and gives one tip for that kind of crash. The crash plays in slow motion, and **Watch again** replays the last 1.3 seconds before it.
+- The results screen shows the medal, the four progress rows with the 80 % marks for silver, what gold still needs, and the score.
+- Settings: touch layout (point-to-drive or classic), left-handed, steering assist, auto-skid, haptics, mini-map, full camera shake, pattern markings, tension music, subtitles and three volumes.
+- The classic touch layout steers with the stick and has separate GAS and BRAKE pedals. On a keyboard, W and S then drive and A and D steer.
+- Medals, best times, building percentages, beacons, the dish and the settings persist in `localStorage` under `clearway.save.v1`, with a version number and a migration stub.
+- A level unlocks when the level before it has a bronze medal.
+- The layouts reflow for phone landscape (844 × 390, down to 667 × 375), phone portrait (390 × 844), iPad (1180 × 820 and 820 × 1180) and desktop (1440 × 900). They respect the safe areas.
+
+**Stubbed**
+
+- The volumes, the tension music and the subtitles are stored but have no effect until milestone 7 adds audio.
+- Auto-skid has no effect until milestone 6 adds the Fishtail.
+- The campaign map shows one level until milestone 6 adds the other two.
+
+**Test on a phone**
+
+- Walk through title, campaign, briefing and **START**. Pause with the pause button and open Settings from there.
+- Let the Hauler hit the tool shed, read the tip, and tap **Watch again**.
+- Clear the level, check the medal, reload the page and check that the campaign card still shows the medal and the best time.
+- Turn the phone on every screen.
+
+**Deviations from the briefs**
+
+- **Restart** on the pause screen restarts the level at once. The mock links it to the briefing. A restart is a quick retry, so the briefing would only be in the way.
+- **Next level** on the results screen opens the campaign map with the next level marked **NEXT UP**, as the mock links it and the design brief describes.
+- **Blur.** The pause screen blurs the canvas with a CSS filter while the scene stands still. The head-up display uses no `backdrop-filter`.
+- **Replay.** The replay shows the recorded poses of the Hauler and the vehicles. Debris and buildings stay as they are after the crash.
+- **Finish level** sits under the mini-map when touch controls are on the screen, because the Action button occupies the corner that the mock uses. Without touch controls it sits in that corner.
+- **HUD scale.** The design brief lists an adjustable HUD scale under accessibility, but the settings mock has no control for it. The build follows the mock.

@@ -97,6 +97,7 @@ export function betterMedal(a: Medal, b: Medal): Medal {
 
 /** Formats seconds as `m:ss`. */
 export function formatTime(seconds: number): string {
-  const whole = Math.max(0, Math.floor(seconds));
+  // The small offset keeps a time such as 29.9999 s, which is 30 s with rounding noise, at 0:30.
+  const whole = Math.max(0, Math.floor(seconds + 1e-6));
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, '0')}`;
 }

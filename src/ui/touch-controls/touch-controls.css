@@ -139,6 +139,35 @@
   height: 60px;
 }
 
+/* Classic layout: the GAS pedal sits beside the Action button and BRAKE moves above it. */
+.touch__gas {
+  right: calc(var(--cw-safe-right) + var(--touch-edge) + var(--action-size) + 12px);
+  bottom: calc(var(--cw-safe-bottom) + var(--touch-bottom));
+  width: 72px;
+  height: 72px;
+  border-color: rgba(var(--cw-go-rgb), 0.6);
+  color: var(--cw-go);
+  font-size: 12px;
+}
+
+.touch.is-classic .touch__brake {
+  right: calc(var(--cw-safe-right) + var(--touch-edge) + var(--action-size) + 92px);
+}
+
+.touch.is-classic .touch__exit {
+  bottom: calc(var(--cw-safe-bottom) + var(--touch-bottom) + 104px);
+}
+
+.touch.is-lefty .touch__gas {
+  right: auto;
+  left: calc(var(--cw-safe-left) + var(--touch-edge) + var(--action-size) + 12px);
+}
+
+.touch.is-lefty.is-classic .touch__brake {
+  right: auto;
+  left: calc(var(--cw-safe-left) + var(--touch-edge) + var(--action-size) + 92px);
+}
+
 .touch__exit {
   right: calc(var(--cw-safe-right) + var(--touch-edge) + var(--action-size) + 8px);
   bottom: calc(var(--cw-safe-bottom) + var(--touch-bottom) + 90px);
