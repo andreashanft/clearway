@@ -1,9 +1,0 @@
-dist/
-dev-dist/
-coverage/
-node_modules/
-package-lock.json
-LICENSE
-levels/*.props.json
-src/game/audio/sample-data.ts
-public/audio/CREDITS.md
