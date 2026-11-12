@@ -108,7 +108,12 @@ function createApron(heightfield: Heightfield, color: string): THREE.Mesh {
     new THREE.MeshLambertMaterial({ color }),
   );
   mesh.name = 'terrain-apron';
-  mesh.position.set(heightfield.centerX, heightfield.sample(0, 0) - 0.4, heightfield.centerZ);
+  // The apron lies below the lowest point of the terrain, so that it never covers a valley.
+  let lowest = Infinity;
+  for (const height of heightfield.heights) {
+    lowest = Math.min(lowest, height);
+  }
+  mesh.position.set(heightfield.centerX, lowest - 0.4, heightfield.centerZ);
   return mesh;
 }
 

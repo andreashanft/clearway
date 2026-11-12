@@ -147,6 +147,9 @@ export class App {
   private updateTouchControls(game: Game): void {
     this.hud.setTouchLayout(this.touch.shown);
     const vehicle = game.activeVehicle;
+    // On foot the small button reads ENTER next to a vehicle, and hides otherwise.
+    const onFoot = vehicle === game.pilot;
+    this.touch.setExit(onFoot ? (game.enterTarget ? 'ENTER' : undefined) : 'EXIT');
     this.touch.setAction({
       label: vehicle.spec.actionLabel,
       charge: vehicle.actionCharge,

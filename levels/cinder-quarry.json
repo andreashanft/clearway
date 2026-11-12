@@ -1,0 +1,542 @@
+{
+  "id": "cinder-quarry",
+  "index": 3,
+  "name": "Cinder Quarry",
+  "setting": "Quarry",
+  "timeOfDay": "Noon",
+  "lighting": "noon",
+  "terrain": {
+    "heightmap": "cinder-quarry.height.png",
+    "center": [379, 284],
+    "size": 1024,
+    "maxHeight": 26,
+    "waterLevel": 1.8,
+    "baseColor": "#6E6148"
+  },
+  "bounds": {
+    "min": [0, 0],
+    "max": [758.16, 568.62]
+  },
+  "ground": [
+    {
+      "kind": "polygon",
+      "points": [
+        [-210.6, 302.74],
+        [1000.35, 302.74],
+        [1000.35, 737.1],
+        [-210.6, 737.1]
+      ],
+      "color": "#7A6C52"
+    },
+    {
+      "kind": "ellipse",
+      "center": [379.08, 121.09],
+      "radius": [336.96, 131.62],
+      "color": "#7C6D52"
+    },
+    {
+      "kind": "ellipse",
+      "center": [379.08, 121.09],
+      "radius": [294.84, 105.3],
+      "color": "#6A5C46"
+    },
+    {
+      "kind": "ellipse",
+      "center": [379.08, 121.09],
+      "radius": [247.45, 81.61],
+      "color": "#5B4F3C"
+    },
+    {
+      "kind": "ellipse",
+      "center": [379.08, 121.09],
+      "radius": [194.8, 57.91],
+      "color": "#4C4233"
+    },
+    {
+      "kind": "ellipse",
+      "center": [379.08, 121.09],
+      "radius": [131.62, 34.75],
+      "color": "#3F6E80",
+      "tag": "water"
+    },
+    {
+      "kind": "path",
+      "points": [
+        [94.77, 273.78],
+        [106.13, 262.78],
+        [119.0, 253.33],
+        [133.11, 245.23],
+        [148.2, 238.29],
+        [164.03, 232.3],
+        [180.33, 227.05],
+        [196.85, 222.36],
+        [213.33, 218.01],
+        [229.52, 213.81],
+        [245.16, 209.55],
+        [260.0, 205.04],
+        [273.78, 200.07],
+        [287.36, 195.22],
+        [301.67, 191.1],
+        [316.56, 187.57],
+        [331.89, 184.47],
+        [347.51, 181.67],
+        [363.28, 179.01],
+        [379.06, 176.35],
+        [394.68, 173.55],
+        [410.01, 170.45],
+        [424.9, 166.92],
+        [439.21, 162.8],
+        [452.79, 157.95]
+      ],
+      "width": 15.79,
+      "color": "#9A8868"
+    },
+    {
+      "kind": "path",
+      "points": [
+        [-105.3, 336.96],
+        [895.05, 394.88]
+      ],
+      "width": 36.85,
+      "color": "#8C7B60",
+      "tag": "road"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [164.27, 313.79],
+        [209.55, 326.43],
+        [205.33, 343.28],
+        [161.11, 330.64]
+      ],
+      "color": "#A08C68"
+    },
+    {
+      "kind": "path",
+      "points": [
+        [-105.3, 336.96],
+        [895.05, 394.88]
+      ],
+      "width": 0.6,
+      "color": "#A8977A",
+      "dash": [6, 7]
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [20.01, 284.31],
+        [43.17, 284.31],
+        [43.17, 342.22],
+        [20.01, 342.22]
+      ],
+      "color": "#9A8868"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [699.19, 284.31],
+        [722.36, 284.31],
+        [722.36, 347.49],
+        [699.19, 347.49]
+      ],
+      "color": "#9A8868"
+    },
+    {
+      "kind": "ellipse",
+      "center": [452.79, 473.85],
+      "radius": [29.48, 29.48],
+      "color": "#9A9488"
+    },
+    {
+      "kind": "ellipse",
+      "center": [445.42, 466.48],
+      "radius": [13.16, 13.16],
+      "color": "#B3AD9F"
+    },
+    {
+      "kind": "ellipse",
+      "center": [515.97, 484.38],
+      "radius": [23.17, 23.17],
+      "color": "#9A9488"
+    },
+    {
+      "kind": "ellipse",
+      "center": [510.18, 478.59],
+      "radius": [10.53, 10.53],
+      "color": "#B3AD9F"
+    },
+    {
+      "kind": "ellipse",
+      "center": [573.88, 473.85],
+      "radius": [26.32, 26.32],
+      "color": "#9A9488"
+    },
+    {
+      "kind": "ellipse",
+      "center": [567.04, 467.01],
+      "radius": [11.58, 11.58],
+      "color": "#B3AD9F"
+    },
+    {
+      "kind": "ellipse",
+      "center": [679.18, 489.64],
+      "radius": [63.18, 31.59],
+      "color": "#5B8A8E",
+      "tag": "water"
+    }
+  ],
+  "scenery": {
+    "trees": [],
+    "hedges": []
+  },
+  "hauler": {
+    "speed": 5,
+    "start": [0, 337.07],
+    "heading": 4,
+    "length": 760
+  },
+  "routeGaps": [],
+  "player": {
+    "vehicle": "liftoff-1"
+  },
+  "vehicles": [
+    {
+      "id": "liftoff-1",
+      "type": "liftoff",
+      "pos": [94.77, 247.45],
+      "yaw": 60
+    },
+    {
+      "id": "tumbler-1",
+      "type": "tumbler",
+      "pos": [370.13, 360.13],
+      "yaw": 4,
+      "lockedIn": "equipment-hangar"
+    },
+    {
+      "id": "bruiser-1",
+      "type": "bruiser",
+      "pos": [526.5, 452.79],
+      "yaw": -60
+    }
+  ],
+  "buildings": [
+    {
+      "id": "site-cabin-1",
+      "name": "site cabins",
+      "kind": "shed",
+      "strength": "shed",
+      "pos": [122.15, 345.38],
+      "size": [21.06, 5, 12.64],
+      "yaw": 4,
+      "group": "site-cabins",
+      "colors": {
+        "wall": "#C9CED6",
+        "roof": "#6E7E92"
+      }
+    },
+    {
+      "id": "site-cabin-2",
+      "name": "site cabins",
+      "kind": "shed",
+      "strength": "shed",
+      "pos": [149.53, 346.96],
+      "size": [21.06, 5, 12.64],
+      "yaw": 4,
+      "group": "site-cabins",
+      "colors": {
+        "wall": "#C9CED6",
+        "roof": "#6E7E92"
+      }
+    },
+    {
+      "id": "site-cabin-3",
+      "name": "site cabins",
+      "kind": "shed",
+      "strength": "shed",
+      "pos": [176.9, 348.54],
+      "size": [21.06, 5, 12.64],
+      "yaw": 4,
+      "group": "site-cabins",
+      "colors": {
+        "wall": "#C9CED6",
+        "roof": "#6E7E92"
+      }
+    },
+    {
+      "id": "conveyor-gantry",
+      "name": "conveyor gantry",
+      "kind": "gantry",
+      "strength": "brick",
+      "pos": [232.71, 336.96],
+      "size": [168.48, 8, 9.48],
+      "yaw": 75.9,
+      "colors": {
+        "wall": "#8C8C86",
+        "roof": "#D9A100"
+      },
+      "segments": 6
+    },
+    {
+      "id": "equipment-hangar",
+      "name": "equipment hangar",
+      "kind": "barn",
+      "strength": "brick",
+      "pos": [370.13, 360.13],
+      "size": [63.18, 9, 44.23],
+      "yaw": 4,
+      "colors": {
+        "wall": "#8494A8",
+        "roof": "#5D6470"
+      }
+    },
+    {
+      "id": "crusher-a",
+      "name": "crusher blocks",
+      "kind": "block",
+      "strength": "concrete",
+      "pos": [464.37, 371.71],
+      "size": [32.64, 12, 32.64],
+      "yaw": 4,
+      "colors": {
+        "wall": "#9A9890",
+        "roof": "#5D5B57"
+      },
+      "group": "crusher-ab"
+    },
+    {
+      "id": "crusher-b",
+      "name": "crusher blocks",
+      "kind": "block",
+      "strength": "concrete",
+      "pos": [508.6, 374.87],
+      "size": [32.64, 12, 32.64],
+      "yaw": 4,
+      "colors": {
+        "wall": "#9A9890",
+        "roof": "#5D5B57"
+      },
+      "group": "crusher-ab"
+    },
+    {
+      "id": "crusher-c",
+      "name": "crusher C",
+      "kind": "block",
+      "strength": "concrete",
+      "pos": [577.04, 380.13],
+      "size": [37.91, 13, 31.59],
+      "yaw": 4,
+      "colors": {
+        "wall": "#9A9890",
+        "roof": "#5D5B57"
+      },
+      "group": "crusher-c"
+    },
+    {
+      "id": "chimney",
+      "name": "crusher C",
+      "kind": "chimney",
+      "strength": "concrete",
+      "pos": [610.74, 372.76],
+      "size": [16.85, 26, 16.85],
+      "yaw": 0,
+      "colors": {
+        "wall": "#8C8C86",
+        "roof": "#B4553E"
+      },
+      "group": "crusher-c"
+    },
+    {
+      "id": "workers-hut-1",
+      "name": "workers' huts",
+      "kind": "shed",
+      "strength": "shed",
+      "pos": [679.18, 388.56],
+      "size": [15.79, 4.5, 12.64],
+      "yaw": 4,
+      "group": "workers-huts",
+      "colors": {
+        "wall": "#C9A46B",
+        "roof": "#8A6A47"
+      }
+    },
+    {
+      "id": "workers-hut-2",
+      "name": "workers' huts",
+      "kind": "shed",
+      "strength": "shed",
+      "pos": [700.25, 391.72],
+      "size": [15.79, 4.5, 12.64],
+      "yaw": 4,
+      "group": "workers-huts",
+      "colors": {
+        "wall": "#C9A46B",
+        "roof": "#8A6A47"
+      }
+    },
+    {
+      "id": "workers-hut-3",
+      "name": "workers' huts",
+      "kind": "shed",
+      "strength": "shed",
+      "pos": [721.3, 388.56],
+      "size": [15.79, 4.5, 12.64],
+      "yaw": 4,
+      "group": "workers-huts",
+      "colors": {
+        "wall": "#C9A46B",
+        "roof": "#8A6A47"
+      }
+    },
+    {
+      "id": "workers-hut-4",
+      "name": "workers' huts",
+      "kind": "shed",
+      "strength": "shed",
+      "pos": [742.37, 391.72],
+      "size": [15.79, 4.5, 12.64],
+      "yaw": 4,
+      "group": "workers-huts",
+      "colors": {
+        "wall": "#C9A46B",
+        "roof": "#8A6A47"
+      }
+    },
+    {
+      "id": "site-office",
+      "name": "site office",
+      "kind": "block",
+      "strength": "house",
+      "pos": [136.89, 436.99],
+      "size": [47.38, 8, 23.17],
+      "yaw": 2,
+      "colors": {
+        "wall": "#C9CED6",
+        "roof": "#5D6470"
+      }
+    },
+    {
+      "id": "workshop",
+      "name": "workshop",
+      "kind": "barn",
+      "strength": "brick",
+      "pos": [294.84, 473.85],
+      "size": [63.18, 10, 31.59],
+      "yaw": 2,
+      "colors": {
+        "wall": "#8F5B3A",
+        "roof": "#4A4F57"
+      }
+    },
+    {
+      "id": "gatehouse",
+      "name": "gatehouse",
+      "kind": "shed",
+      "strength": "shed",
+      "pos": [63.18, 400.14],
+      "size": [31.59, 5, 13.69],
+      "yaw": 0,
+      "colors": {
+        "wall": "#C9A46B",
+        "roof": "#8A6A47"
+      }
+    },
+    {
+      "id": "cement-silo",
+      "name": "cement silo",
+      "kind": "silo",
+      "strength": "brick",
+      "pos": [652.86, 315.9],
+      "size": [27.38, 18, 27.38],
+      "yaw": 0,
+      "colors": {
+        "wall": "#D9D6CC",
+        "roof": "#BFBCB2"
+      }
+    }
+  ],
+  "tnt": [
+    {
+      "pos": [558.09, 431.73]
+    },
+    {
+      "pos": [574.94, 438.05]
+    }
+  ],
+  "beacons": {
+    "trails": [
+      {
+        "from": [157.95, 157.95],
+        "to": [294.84, 94.77],
+        "count": 6
+      },
+      {
+        "from": [315.9, 431.73],
+        "to": [421.2, 442.26],
+        "count": 5
+      },
+      {
+        "from": [631.8, 221.13],
+        "to": [737.1, 200.07],
+        "count": 5
+      },
+      {
+        "from": [105.3, 415.94],
+        "to": [726.57, 422.25],
+        "count": 12
+      },
+      {
+        "from": [105.3, 276.41],
+        "to": [684.45, 276.41],
+        "count": 12
+      },
+      {
+        "from": [31.59, 294.84],
+        "to": [31.59, 336.96],
+        "count": 3
+      },
+      {
+        "from": [263.25, 173.74],
+        "to": [494.91, 173.74],
+        "count": 7
+      }
+    ]
+  },
+  "relayDish": {
+    "pos": [584.41, 61.07]
+  },
+  "hints": [],
+  "medals": {
+    "silverBuildings": 0.8,
+    "silverBeacons": 0.8
+  },
+  "expected": {
+    "lineSeconds": 152,
+    "arrivals": [
+      {
+        "obstacle": "site-cabins",
+        "seconds": 22
+      },
+      {
+        "obstacle": "conveyor-gantry",
+        "seconds": 48
+      },
+      {
+        "obstacle": "equipment-hangar",
+        "seconds": 68
+      },
+      {
+        "obstacle": "crusher-ab",
+        "seconds": 89
+      },
+      {
+        "obstacle": "crusher-c",
+        "seconds": 109
+      },
+      {
+        "obstacle": "workers-huts",
+        "seconds": 130
+      }
+    ]
+  }
+}

@@ -1,0 +1,165 @@
+{
+  "comment": "Recipe for tools/build-terrain.ts. It paints levels/cinder-quarry.height.png.",
+  "operations": [
+    {
+      "op": "base",
+      "height": 6.0
+    },
+    {
+      "op": "noise",
+      "amplitude": 0.35,
+      "wavelength": 90,
+      "seed": 3
+    },
+    {
+      "op": "plateau",
+      "polygon": [
+        [-315.9, -315.9],
+        [1105.65, -315.9],
+        [1105.65, 288.52],
+        [247.45, 288.52],
+        [226.39, 298.0],
+        [-315.9, 298.0]
+      ],
+      "height": 16.0,
+      "falloff": 11
+    },
+    {
+      "op": "basin",
+      "center": [379.08, 121.09],
+      "radius": [336.96, 131.62],
+      "floor": 13,
+      "falloff": 7
+    },
+    {
+      "op": "basin",
+      "center": [379.08, 121.09],
+      "radius": [294.84, 105.3],
+      "floor": 10,
+      "falloff": 7
+    },
+    {
+      "op": "basin",
+      "center": [379.08, 121.09],
+      "radius": [247.45, 81.61],
+      "floor": 7,
+      "falloff": 7
+    },
+    {
+      "op": "basin",
+      "center": [379.08, 121.09],
+      "radius": [194.8, 57.91],
+      "floor": 4,
+      "falloff": 7
+    },
+    {
+      "op": "basin",
+      "center": [379.08, 121.09],
+      "radius": [131.62, 34.75],
+      "floor": 0.6,
+      "falloff": 7
+    },
+    {
+      "op": "plateau",
+      "polygon": [
+        [575.99, 52.65],
+        [592.84, 52.65],
+        [592.84, 69.5],
+        [575.99, 69.5]
+      ],
+      "height": 14.5,
+      "falloff": 2.5
+    },
+    {
+      "op": "ramp",
+      "from": [157.95, 268.51],
+      "to": [157.95, 300.1],
+      "width": 131.62,
+      "fromHeight": 16.0,
+      "toHeight": 22.0,
+      "falloff": 5
+    },
+    {
+      "op": "ramp",
+      "from": [368.55, 257.98],
+      "to": [368.55, 290.63],
+      "width": 152.69,
+      "fromHeight": 16.0,
+      "toHeight": 22.5,
+      "falloff": 5
+    },
+    {
+      "op": "ramp",
+      "from": [167.43, 322.22],
+      "to": [206.39, 333.8],
+      "width": 17.9,
+      "fromHeight": 6.0,
+      "toHeight": 12.5,
+      "falloff": 4
+    },
+    {
+      "op": "ramp",
+      "from": [584.41, -17.9],
+      "to": [584.41, 13.69],
+      "width": 47.38,
+      "fromHeight": 16.0,
+      "toHeight": 22.0,
+      "falloff": 5
+    },
+    {
+      "op": "ramp",
+      "from": [31.59, 273.78],
+      "to": [31.59, 336.96],
+      "width": 23.17,
+      "fromHeight": 16.0,
+      "toHeight": 6.0,
+      "falloff": 6
+    },
+    {
+      "op": "ramp",
+      "from": [710.77, 273.78],
+      "to": [710.77, 342.22],
+      "width": 23.17,
+      "fromHeight": 16.0,
+      "toHeight": 6.0,
+      "falloff": 6
+    },
+    {
+      "op": "mound",
+      "center": [452.79, 473.85],
+      "radius": 31.59,
+      "height": 7
+    },
+    {
+      "op": "mound",
+      "center": [515.97, 484.38],
+      "radius": 25.27,
+      "height": 5.5
+    },
+    {
+      "op": "mound",
+      "center": [573.88, 473.85],
+      "radius": 28.43,
+      "height": 6.5
+    },
+    {
+      "op": "basin",
+      "center": [679.18, 489.64],
+      "radius": [57.91, 27.38],
+      "floor": 0.9,
+      "falloff": 8
+    },
+    {
+      "op": "corridor",
+      "from": [-40, 334.27],
+      "heading": 4,
+      "length": 860,
+      "width": 16,
+      "falloff": 12
+    },
+    {
+      "op": "pads",
+      "margin": 2.5
+    }
+  ]
+}

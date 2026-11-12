@@ -65,6 +65,52 @@ export function buildSegmentGeometry(
       }
       break;
     }
+    case 'terrace': {
+      // One house of a terraced row: the ridge runs along the row, and every other house is a
+      // shade darker, so that the row reads as separate houses.
+      const roofHeight = Math.min(depth * 0.36, height * 0.42);
+      const wallHeight = height - roofHeight;
+      const tone = index % 2 === 0 ? 0 : -0.07;
+      builder.box([length, wallHeight, depth], [0, wallHeight / 2, 0], shade(wall, tone));
+      builder.gable(length, depth + 1.0, roofHeight, [0, wallHeight, 0], shade(roof, tone));
+      builder.box([length + 0.05, 0.3, depth + 0.4], [0, wallHeight - 0.1, 0], shade(roof, -0.12));
+      for (const side of [-1, 1]) {
+        builder.box([2.2, 3.8, 0.3], [-length * 0.24, 2.3, (side * depth) / 2], DOOR);
+        builder.box([2.6, 2.2, 0.3], [length * 0.22, wallHeight * 0.36, (side * depth) / 2], GLASS);
+        builder.box([2.2, 1.8, 0.3], [-length * 0.24, wallHeight * 0.8, (side * depth) / 2], GLASS);
+        builder.box([2.2, 1.8, 0.3], [length * 0.22, wallHeight * 0.8, (side * depth) / 2], GLASS);
+      }
+      builder.box(
+        [1.3, roofHeight + 1.2, 1.3],
+        [length * 0.36, wallHeight + roofHeight * 0.5, 0],
+        shade(wall, -0.32),
+      );
+      break;
+    }
+    case 'gantry': {
+      // A conveyor on steel legs: an enclosed belt housing high above the ground.
+      const deck = height * 0.42;
+      builder.box([length, deck, depth * 0.62], [0, height - deck / 2, 0], wall);
+      builder.box([length + 0.1, 0.5, depth * 0.7], [0, height + 0.15, 0], roof);
+      for (const x of [-length * 0.3, length * 0.3]) {
+        for (const side of [-1, 1]) {
+          builder.box(
+            [1.1, height - deck, 1.1],
+            [x, (height - deck) / 2, side * depth * 0.36],
+            shade(wall, -0.2),
+          );
+        }
+        builder.box([1.3, 0.6, depth * 0.9], [x, (height - deck) * 0.5, 0], shade(wall, -0.2));
+      }
+      for (const side of [-1, 1]) {
+        builder.box(
+          [length, 0.5, 0.25],
+          [0, height - deck * 0.5, side * depth * 0.32],
+          shade(wall, -0.14),
+        );
+      }
+      break;
+    }
     case 'barn': {
       const roofHeight = Math.min(depth * 0.3, height * 0.4);
       const wallHeight = height - roofHeight;

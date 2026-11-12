@@ -3,7 +3,7 @@ import type { Vec2 } from './math';
 /** How strong a building is. Each strength has hit points in `world/damage.ts`. */
 export type Strength = 'shed' | 'house' | 'brick' | 'concrete';
 
-export type VehicleType = 'bruiser' | 'fishtail' | 'liftoff' | 'tumbler' | 'railbed';
+export type VehicleType = 'bruiser' | 'fishtail' | 'liftoff' | 'tumbler' | 'railbed' | 'pilot';
 
 export type Lighting = 'morning' | 'dusk' | 'noon';
 
@@ -60,7 +60,17 @@ export interface BuildingData {
   id: string;
   /** Name in lower case, as the fail screen shows it: "Hit the farmhouse". */
   name: string;
-  kind: 'house' | 'barn' | 'shed' | 'silo' | 'tank' | 'greenhouse' | 'block' | 'chimney';
+  kind:
+    | 'house'
+    | 'terrace'
+    | 'barn'
+    | 'shed'
+    | 'silo'
+    | 'tank'
+    | 'greenhouse'
+    | 'block'
+    | 'gantry'
+    | 'chimney';
   strength: Strength;
   pos: Vec2;
   /** Width along the local X axis, height, and depth along the local Z axis, in metres. */
@@ -72,6 +82,8 @@ export interface BuildingData {
   group?: string;
   /** The building explodes when it is destroyed. */
   explodes?: boolean;
+  /** Number of segments. Without it, the length of the building decides. A terrace has one per house. */
+  segments?: number;
 }
 
 export interface VehicleSpawn {
@@ -82,6 +94,32 @@ export interface VehicleSpawn {
   yaw: number;
   /** The vehicle starts inside this building and is free once the building is destroyed. */
   lockedIn?: string;
+  /** For the Railbed: the two ends of the straight track that it runs on. */
+  rail?: [Vec2, Vec2];
+}
+
+/** A stretch of the Hauler's line without ground, for example across a rail cutting. */
+export interface RouteGapData {
+  id: string;
+  /** Name in lower case, as the fail screen shows it: "Hit the rail cutting". */
+  name: string;
+  /** Where the Railbed must stand to bridge the gap. */
+  slot: Vec2;
+  /** Route distances at which the gap starts and ends. */
+  from: number;
+  to: number;
+}
+
+/** A fixed deck that vehicles can drive on, for example a road bridge over a rail cutting. */
+export interface DeckData {
+  center: Vec2;
+  /** Size along the heading, and across it, in metres. */
+  size: Vec2;
+  /** Heading in degrees. */
+  yaw: number;
+  /** Height of the driving surface in metres. */
+  top: number;
+  color?: string;
 }
 
 export interface HaulerData {
@@ -136,7 +174,9 @@ export interface LevelData {
     hedges: Vec2[][];
   };
   hauler: HaulerData;
-  routeGaps: unknown[];
+  routeGaps: RouteGapData[];
+  /** Road bridges and other fixed decks. */
+  decks?: DeckData[];
   player: { vehicle: string };
   vehicles: VehicleSpawn[];
   buildings: BuildingData[];

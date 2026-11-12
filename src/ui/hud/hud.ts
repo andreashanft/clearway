@@ -56,6 +56,7 @@ export class Hud {
   private cardVehicle = '';
   private unsubscribe: (() => void)[] = [];
   private readonly projected = new THREE.Vector3();
+  private readonly gapTarget = new THREE.Vector3();
   private lastMinimapTap = 0;
 
   constructor(parent: HTMLElement, handlers: HudHandlers) {
@@ -296,6 +297,15 @@ export class Hud {
     // Aim at the part of the obstacle that the Hauler reaches first.
     let target: THREE.Vector3 | undefined;
     let nearest = Infinity;
+    const gap = next.obstacle.gap;
+    if (gap) {
+      // A gap in the route: point at the slot that the Railbed must fill.
+      target = this.gapTarget.set(
+        gap.slot[0],
+        game.heightAt(gap.slot[0], gap.slot[1]),
+        gap.slot[1],
+      );
+    }
     for (const segment of next.obstacle.segments) {
       if (segment.building.hp[segment.index] > 0 && segment.enter < nearest) {
         nearest = segment.enter;

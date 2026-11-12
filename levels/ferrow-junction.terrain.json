@@ -1,0 +1,16 @@
+{
+  "comment": "Recipe for tools/build-terrain.ts. It paints levels/ferrow-junction.height.png.",
+  "operations": [
+    { "op": "base", "height": 8.0 },
+    {
+      "op": "channel",
+      "points": [
+        [275.06, -200],
+        [275.06, 700]
+      ],
+      "width": 12.4,
+      "floor": 5.0,
+      "falloff": 1.6
+    }
+  ]
+}

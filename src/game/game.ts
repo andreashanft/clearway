@@ -5,9 +5,18 @@ import { PhysicsWorld } from '../engine/physics';
 import { CameraRig } from './camera';
 import type { ExplosionSource, FailCause, GameEvents, Phase } from './events';
 import { Hauler } from './hauler';
-import type { LevelData } from './level';
+import type { LevelData, RouteGapData } from './level';
 import { heightmapUrl } from './levels';
-import { DEG, clamp, lerp, toBoxLocal, wrapAngle, type Vec2 } from './math';
+import {
+  DEG,
+  boxesOverlap,
+  clamp,
+  lerp,
+  toBoxLocal,
+  wrapAngle,
+  type OrientedBox,
+  type Vec2,
+} from './math';
 import {
   CRITICAL_SECONDS,
   createRoute,
@@ -29,8 +38,9 @@ import {
 } from './scoring';
 import { NO_COMMAND, PointToDrive, type DriveCommand } from './vehicles/drive-control';
 import { createVehicleModel } from './vehicles/models';
+import { RailbedController } from './vehicles/railbed';
 import { VEHICLE_SPECS } from './vehicles/specs';
-import { Vehicle, type GroundQuery } from './vehicles/vehicle';
+import { SKID_DAMAGE_FACTOR, SKID_SLIP_ANGLE, Vehicle, type GroundQuery } from './vehicles/vehicle';
 import { Buildings, distanceToBox, type Building, type SegmentRef } from './world/buildings';
 import {
   MIN_IMPACT_SPEED,
@@ -42,6 +52,7 @@ import {
   impactDamage,
 } from './world/damage';
 import { Debris } from './world/debris';
+import { createDecks, deckHeightAt, type Deck } from './world/decks';
 import { Effects } from './world/effects';
 import { createLighting, type LevelLighting } from './world/lighting';
 import { ObstacleMarkers } from './world/markers';
@@ -56,6 +67,7 @@ const CLASSIC_DEAD_ZONE = 0.08;
 const SMASH_THROUGH_SPEED = 0.82;
 /** A vehicle that a wall stops bounces back with this fraction of its speed. */
 const RECOIL_SPEED = 0.2;
+const ROLL_RECOIL_SPEED = 0.6;
 /** Seconds for which the world freezes on a hit, to give the hit weight. */
 const HIT_STOP_BREAK = 0.07;
 const HIT_STOP_BLOCK = 0.035;
@@ -70,6 +82,15 @@ const ASSIST_ANGLE = 16 * DEG;
 const ASSIST_RANGE = 80;
 /** Hints that depend on a place show when the player is this close, in metres. */
 const HINT_RANGE = 46;
+
+/** The pilot can climb into a vehicle within this distance of its hull, in metres. */
+const ENTER_RANGE = 6.5;
+/** With auto-skid, the Fishtail looks for a wall within this distance, in metres. */
+const AUTO_SKID_RANGE = 26;
+/** A skidding tail hits the same building segment at most once in this many seconds. */
+const SKID_HIT_SECONDS = 0.4;
+/** A landing counts as a stomp when the contact normal is this upright. */
+const STOMP_NORMAL = 0.7;
 
 /** The replay shows this many seconds before the crash. */
 const REPLAY_SECONDS = 1.3;
@@ -89,9 +110,23 @@ export interface ObstacleState {
   cleared: boolean;
   /** The segments of the obstacle that stand in the Hauler's strip. */
   segments: { building: Building; index: number; enter: number }[];
+  /** Set when the obstacle is a gap in the route and not a building. */
+  gap?: RouteGapData;
 }
 
 const ZERO = new THREE.Vector3();
+
+/** Returns a ground query that reads the terrain on the centre line of a straight track. */
+function trackHeight(rail: [Vec2, Vec2], heightAt: (x: number, z: number) => number): GroundQuery {
+  const [start, end] = rail;
+  const dx = end[0] - start[0];
+  const dz = end[1] - start[1];
+  const lengthSquared = dx * dx + dz * dz;
+  return (x, z) => {
+    const t = ((x - start[0]) * dx + (z - start[1]) * dz) / lengthSquared;
+    return heightAt(start[0] + dx * t, start[1] + dz * t);
+  };
+}
 
 interface PendingExplosion {
   position: THREE.Vector3;
@@ -128,8 +163,11 @@ export class Game {
   readonly buildings: Buildings;
   readonly tnt: TntCrates;
   readonly vehicles: Vehicle[] = [];
-  /** The vehicle that the player drives. */
+  /** The vehicle that the player drives, or the pilot while on foot. */
   activeVehicle: Vehicle;
+  /** The pilot on foot. Disabled while the player sits in a vehicle. */
+  readonly pilot: Vehicle;
+  readonly railbeds: RailbedController[] = [];
   /** Simulated time since the Hauler started rolling, in seconds. */
   time = 0;
   phase: Phase = 'ready';
@@ -161,6 +199,9 @@ export class Game {
   private readonly shownHints = new Set<string>();
   private readonly blocking = new Set<Building>();
   private readonly nextBuildings = new Set<Building>();
+  private readonly decks: Deck[];
+  /** When each building segment last took a skid hit, by `building:segment`. */
+  private readonly skidHits = new Map<string, number>();
   private readonly recording: ReplayFrame[] = [];
   /** Position in the replay in seconds, while a replay plays. */
   private replayTime: number | undefined;
@@ -207,7 +248,11 @@ export class Game {
       }
     });
 
-    const groundAt: GroundQuery = heightAt;
+    const fixedDecks = createDecks(level.decks ?? [], this.physics);
+    this.decks = fixedDecks.decks;
+    this.scene.add(fixedDecks.object);
+
+    const groundAt: GroundQuery = (x, z, fromY) => this.groundAt(x, z, fromY);
     for (const spawn of level.vehicles) {
       const spec = VEHICLE_SPECS[spawn.type];
       const vehicle = new Vehicle(
@@ -215,32 +260,90 @@ export class Game {
         spec,
         createVehicleModel(spec),
         this.physics,
-        groundAt,
+        // The Railbed stands on the track bed: it takes its height from the middle of the track,
+        // and neither the banks of the cutting nor its own deck may lift it.
+        spawn.rail ? trackHeight(spawn.rail, heightAt) : groundAt,
         spawn.pos,
         spawn.yaw * DEG,
       );
       this.vehicles.push(vehicle);
       this.vehicleByCollider.set(vehicle.collider.handle, vehicle);
       this.scene.add(vehicle.object);
+
+      if (spawn.lockedIn) {
+        // The vehicle waits inside a building. It is free once the part of the building that
+        // stands around it has fallen.
+        const cover = this.buildings.get(spawn.lockedIn);
+        vehicle.locked = true;
+        vehicle.setEnabled(false);
+        this.events.on('segmentDestroyed', ({ building }) => {
+          if (building !== cover || !vehicle.locked) {
+            return;
+          }
+          const around = building.segments.findIndex(
+            (segment) => distanceToBox(spawn.pos, segment.box) === 0,
+          );
+          if (around < 0 || building.hp[around] <= 0) {
+            vehicle.locked = false;
+            vehicle.setEnabled(true);
+            vehicle.teleport(spawn.pos, spawn.yaw * DEG);
+          }
+        });
+      }
+      const gap = level.routeGaps[this.railbeds.length];
+      if (spawn.rail && gap) {
+        const controller = new RailbedController(
+          vehicle,
+          spawn.rail,
+          gap,
+          heightAt(gap.slot[0], gap.slot[1]),
+        );
+        this.railbeds.push(controller);
+        this.scene.add(controller.object);
+      }
     }
     const active = this.vehicles.find((vehicle) => vehicle.id === level.player.vehicle);
     if (!active) {
       throw new Error(`Level "${level.id}" has no vehicle "${level.player.vehicle}" to start in.`);
     }
     this.activeVehicle = active;
+    this.pilot = new Vehicle(
+      'pilot',
+      VEHICLE_SPECS.pilot,
+      createVehicleModel(VEHICLE_SPECS.pilot),
+      this.physics,
+      groundAt,
+      [active.position.x, active.position.z],
+      0,
+    );
+    this.pilot.setEnabled(false);
+    this.vehicles.push(this.pilot);
+    this.vehicleByCollider.set(this.pilot.collider.handle, this.pilot);
+    this.scene.add(this.pilot.object);
     this.cameraRig.setRouteHeading(level.hauler.heading * DEG);
 
     this.route = createRoute(level.hauler);
-    this.hauler = new Hauler(this.route, heightAt, this.physics);
+    this.hauler = new Hauler(this.route, (x, z) => this.groundAt(x, z, Infinity), this.physics);
     this.scene.add(this.hauler.object);
-    this.obstacles = findObstacles(this.route, level.buildings).map((def) => ({
-      def,
-      cleared: false,
-      segments: def.segments.flatMap((segment) => {
-        const building = this.buildings.get(segment.buildingId);
-        return building ? [{ building, index: segment.segmentIndex, enter: segment.enter }] : [];
+    const buildingObstacles: ObstacleState[] = findObstacles(this.route, level.buildings).map(
+      (def) => ({
+        def,
+        cleared: false,
+        segments: def.segments.flatMap((segment) => {
+          const building = this.buildings.get(segment.buildingId);
+          return building ? [{ building, index: segment.segmentIndex, enter: segment.enter }] : [];
+        }),
       }),
+    );
+    const gapObstacles: ObstacleState[] = level.routeGaps.map((gap) => ({
+      def: { id: gap.id, name: gap.name, distance: gap.from, segments: [] },
+      cleared: false,
+      segments: [],
+      gap,
     }));
+    this.obstacles = [...buildingObstacles, ...gapObstacles].sort(
+      (a, b) => a.def.distance - b.def.distance,
+    );
     this.markers = new ObstacleMarkers(
       this.buildings.list.filter((building) =>
         this.obstacles.some((obstacle) =>
@@ -276,6 +379,51 @@ export class Game {
     return this.terrain.heightfield.heightAt(x, z);
   }
 
+  /**
+   * Height of the drivable ground: the terrain, or a bridge or Railbed deck above it.
+   *
+   * @param fromY Height of the asking vehicle. Decks well above it do not count.
+   */
+  groundAt(x: number, z: number, fromY: number): number {
+    let height = this.terrain.heightfield.heightAt(x, z);
+    for (const deck of this.decks) {
+      height = Math.max(height, deckHeightAt(deck, x, z, fromY) ?? -Infinity);
+    }
+    for (const railbed of this.railbeds) {
+      height = Math.max(height, deckHeightAt(railbed.deck, x, z, fromY) ?? -Infinity);
+    }
+    return height;
+  }
+
+  /** The vehicle that the pilot can climb into right now, if any. */
+  get enterTarget(): Vehicle | undefined {
+    if (this.activeVehicle !== this.pilot) {
+      return undefined;
+    }
+    const { x, z } = this.pilot.position;
+    let best: Vehicle | undefined;
+    let bestDistance = ENTER_RANGE;
+    for (const vehicle of this.vehicles) {
+      if (!vehicle.enabled || vehicle.locked || !vehicle.spec.isVehicle) {
+        continue;
+      }
+      const distance = distanceToBox([x, z], vehicle.footprint);
+      if (distance < bestDistance) {
+        best = vehicle;
+        bestDistance = distance;
+      }
+    }
+    return best;
+  }
+
+  /** True when the bridge over a route gap is in place, or the Hauler has already crossed it. */
+  private isGapClosed(gap: RouteGapData): boolean {
+    return (
+      this.hauler.distance > gap.to ||
+      this.railbeds.some((railbed) => railbed.gap === gap && railbed.bridged)
+    );
+  }
+
   /** True while destroyed segments, beacons and the dish count for the medal. */
   get isScoring(): boolean {
     return this.phase === 'playing' || this.phase === 'bonus';
@@ -287,6 +435,9 @@ export class Game {
     for (const obstacle of this.obstacles) {
       if (obstacle.cleared) {
         continue;
+      }
+      if (obstacle.gap && (!best || obstacle.gap.from < best.distance)) {
+        best = { obstacle, distance: obstacle.gap.from };
       }
       for (const segment of obstacle.segments) {
         const stands = segment.building.hp[segment.index] > 0;
@@ -400,6 +551,9 @@ export class Game {
     }
 
     const playing = this.phase !== 'failed';
+    if (playing && input.pressed.has('enterExit')) {
+      this.enterOrExit();
+    }
     const command = playing ? this.driveCommand(input) : NO_COMMAND;
     for (const vehicle of this.vehicles) {
       const driven = playing && vehicle === this.activeVehicle;
@@ -407,6 +561,7 @@ export class Game {
       vehicle.step(dt, driven ? command : NO_COMMAND, {
         held: driven && input.action,
         pressed: driven && input.pressed.has('action'),
+        wallSide: driven && vehicle.spec.actionKind === 'skid' ? this.wallSide(vehicle) : 0,
       });
       if (vehicle.actionActive && !wasActive) {
         this.events.emit('actionFired', { kind: vehicle.spec.actionKind });
@@ -415,7 +570,9 @@ export class Game {
     this.guideCrates();
     this.hauler.step(dt);
 
-    const footprints = this.vehicles.map((vehicle) => vehicle.footprint);
+    const footprints = this.vehicles
+      .filter((vehicle) => vehicle.enabled && vehicle.spec.isVehicle)
+      .map((vehicle) => vehicle.footprint);
     for (const crate of this.tnt.step(dt, footprints)) {
       const position = crate.position.clone();
       this.tnt.remove(crate);
@@ -432,11 +589,21 @@ export class Game {
 
     this.physics.step();
 
+    for (const railbed of this.railbeds) {
+      const driven = railbed.vehicle === this.activeVehicle && Math.abs(command.throttle) > 0.1;
+      railbed.constrain(playing && driven);
+    }
     for (const vehicle of this.vehicles) {
+      if (!vehicle.enabled) {
+        continue;
+      }
+      this.resolveSkid(vehicle);
       this.resolveImpact(vehicle);
       this.keepInBounds(vehicle);
       vehicle.capture();
-      crushHedges(this.scenery, vehicle.footprint, (position) => this.effects.leaves(position));
+      if (vehicle.spec.isVehicle) {
+        crushHedges(this.scenery, vehicle.footprint, (position) => this.effects.leaves(position));
+      }
     }
     this.tnt.capture();
     this.debris.step(dt);
@@ -460,6 +627,9 @@ export class Game {
         vehicle.sync(alpha, frameSeconds);
       }
       this.hauler.sync(alpha, frameSeconds, this.urgency);
+    }
+    for (const railbed of this.railbeds) {
+      railbed.sync(frameSeconds);
     }
     this.tnt.sync(alpha, frameSeconds);
     this.debris.sync(alpha);
@@ -580,8 +750,35 @@ export class Game {
       this.pointToDrive.reset();
       return { throttle: input.throttle, steer: input.steer, brake: input.brake };
     }
+    if (this.activeVehicle === this.pilot) {
+      // On foot the pilot simply walks where the stick points.
+      const magnitude = Math.hypot(input.pointX, input.pointY);
+      const pointed = this.cameraRig.screenToHeading(input.pointX, input.pointY);
+      const error = wrapAngle(pointed - this.pilot.heading);
+      return {
+        throttle: magnitude > 0.12 ? magnitude * Math.max(0.2, Math.cos(error)) : 0,
+        steer: magnitude > 0.12 ? clamp(error / 0.5, -1, 1) : 0,
+        brake: false,
+      };
+    }
     const magnitude = Math.hypot(input.pointX, input.pointY);
-    const target = this.assistHeading(this.cameraRig.screenToHeading(input.pointX, input.pointY));
+    const railbed = this.railbeds.find((candidate) => candidate.vehicle === this.activeVehicle);
+    if (railbed) {
+      // The Railbed only knows forwards and backwards along its track.
+      this.pointToDrive.reset();
+      const pointed = this.cameraRig.screenToHeading(input.pointX, input.pointY);
+      return {
+        throttle: magnitude > 0.12 ? railbed.throttleFor(pointed, magnitude) : 0,
+        steer: 0,
+        brake: input.brake,
+      };
+    }
+    let target = this.assistHeading(this.cameraRig.screenToHeading(input.pointX, input.pointY));
+    const skidding = this.activeVehicle.skidding;
+    if (skidding) {
+      // In a skid the truck turns across its direction of travel, so that the tail swings out.
+      target += this.activeVehicle.skidDirection * SKID_SLIP_ANGLE;
+    }
     const command = this.pointToDrive.update(target, magnitude, this.activeVehicle.heading);
     command.brake = input.brake;
     return command;
@@ -638,6 +835,19 @@ export class Game {
     this.blocking.clear();
     this.nextBuildings.clear();
     for (const obstacle of this.obstacles) {
+      if (obstacle.gap) {
+        // A gap is open again when the Railbed leaves its slot before the Hauler has crossed.
+        const closed = this.isGapClosed(obstacle.gap);
+        if (closed && !obstacle.cleared) {
+          this.events.emit('obstacleCleared', {
+            id: obstacle.def.id,
+            name: obstacle.def.name,
+            left: this.obstaclesLeft - 1,
+          });
+        }
+        obstacle.cleared = closed;
+        continue;
+      }
       if (obstacle.cleared) {
         continue;
       }
@@ -680,6 +890,13 @@ export class Game {
   /** Blows the Hauler up when it touches something solid, and ends the level when it leaves. */
   private checkHauler(): void {
     if (!this.invincibleHauler) {
+      for (const gap of this.level.routeGaps) {
+        const reached = this.hauler.distance >= gap.from && this.hauler.distance <= gap.to;
+        if (reached && !this.isGapClosed(gap)) {
+          this.failLevel(`the ${gap.name}`, 'gap');
+          return;
+        }
+      }
       const collider = this.hauler.findCollision();
       if (collider) {
         const { hit, cause } = this.describe(collider);
@@ -790,17 +1007,148 @@ export class Game {
     }
   }
 
+  /** Leaves the current vehicle on foot, or climbs into the vehicle next to the pilot. */
+  private enterOrExit(): void {
+    const { pilot } = this;
+    if (this.activeVehicle === pilot) {
+      const target = this.enterTarget;
+      if (target) {
+        pilot.setEnabled(false);
+        this.activeVehicle = target;
+        this.pointToDrive.reset();
+        this.events.emit('vehicleChanged', { type: target.spec.type });
+      }
+      return;
+    }
+    // The pilot steps out beside the driver's door, on the left of the vehicle.
+    const vehicle = this.activeVehicle;
+    const reach = vehicle.spec.width / 2 + 1.8;
+    const leftX = Math.sin(vehicle.heading);
+    const leftZ = -Math.cos(vehicle.heading);
+    const x = vehicle.position.x + leftX * reach;
+    const z = vehicle.position.z + leftZ * reach;
+    pilot.setEnabled(true);
+    pilot.teleport(
+      [x, z],
+      vehicle.heading,
+      this.groundAt(x, z, vehicle.position.y) + pilot.spec.rideHeight,
+    );
+    this.activeVehicle = pilot;
+    this.pointToDrive.reset();
+    this.events.emit('vehicleChanged', { type: 'pilot' });
+  }
+
+  /**
+   * For auto-skid: tells on which side of a vehicle the nearest building stands.
+   * Returns -1 for the left, 1 for the right and 0 when no building is near.
+   */
+  private wallSide(vehicle: Vehicle): number {
+    if (!this.options.autoSkid) {
+      return 0;
+    }
+    const box = vehicle.footprint;
+    let side = 0;
+    let nearest = AUTO_SKID_RANGE;
+    for (const building of this.buildings.list) {
+      building.segments.forEach((segment, index) => {
+        if (building.hp[index] <= 0) {
+          return;
+        }
+        const distance = distanceToBox(box.center, segment.box);
+        if (distance < nearest) {
+          nearest = distance;
+          side = Math.sign(toBoxLocal(segment.box.center, box)[1]);
+        }
+      });
+    }
+    return side;
+  }
+
+  /**
+   * The skid attack of the Fishtail: while the truck skids, its armoured tail damages every
+   * building segment that it sweeps along. The damage follows the speed of the truck, so a fast
+   * pass along a terrace drops one house after the other.
+   */
+  private resolveSkid(vehicle: Vehicle): void {
+    if (!vehicle.skidding) {
+      return;
+    }
+    const velocity = vehicle.impactVelocity;
+    const speed = Math.hypot(velocity.x, velocity.z);
+    if (speed < MIN_IMPACT_SPEED) {
+      return;
+    }
+    // The tail is the rear third of the truck, with a little reach beyond the hull.
+    const { length, width } = vehicle.spec;
+    const tail: OrientedBox = {
+      center: [
+        vehicle.position.x - Math.cos(vehicle.heading) * (length / 3),
+        vehicle.position.z - Math.sin(vehicle.heading) * (length / 3),
+      ],
+      half: [length / 6 + 1.2, width / 2 + 1.5],
+      heading: vehicle.heading,
+    };
+    const damage = impactDamage({
+      mass: vehicle.spec.mass,
+      speed,
+      vehicleFactor: vehicle.spec.damage,
+      ramArmed: false,
+      actionFactor: SKID_DAMAGE_FACTOR,
+    });
+    let fallen = 0;
+    let touched: SegmentRef | undefined;
+    for (const building of this.buildings.list) {
+      if (!boxesOverlap(tail, building.footprint)) {
+        continue;
+      }
+      building.segments.forEach((segment, index) => {
+        const key = `${building.data.id}:${index}`;
+        const ready = (this.skidHits.get(key) ?? -Infinity) < this.time - SKID_HIT_SECONDS;
+        if (building.hp[index] <= 0 || !ready || !boxesOverlap(tail, segment.box)) {
+          return;
+        }
+        this.skidHits.set(key, this.time);
+        touched = { building, index };
+        if (canDamage(vehicle.spec.type, building.data.strength)) {
+          fallen += this.buildings.damage({ building, index }, damage, velocity);
+        }
+      });
+    }
+    if (!touched) {
+      return;
+    }
+    const strength = clamp(speed / 22, 0.3, 1);
+    const blocked = !canDamage(vehicle.spec.type, touched.building.data.strength);
+    const position = new THREE.Vector3(tail.center[0], vehicle.position.y, tail.center[1]);
+    if (blocked) {
+      this.effects.sparks(position, 8);
+    }
+    if (vehicle === this.activeVehicle) {
+      this.cameraRig.addShake(strength * (fallen > 0 ? 0.8 : 0.4));
+      if (fallen > 0) {
+        this.hitStop = HIT_STOP_BLOCK;
+      }
+    }
+    this.events.emit('impact', {
+      position,
+      strength,
+      material: touched.building.data.strength,
+      blocked,
+      broke: fallen > 0,
+    });
+  }
+
   /**
    * Finds out whether a vehicle crashed into a building during the physics step, and deals the
    * damage. A crash shows as a sudden loss of speed while the vehicle touches a building.
    */
   private resolveImpact(vehicle: Vehicle): void {
-    if (vehicle.impactCooldown > 0) {
+    if (vehicle.impactCooldown > 0 || vehicle.spec.damage === 0 || vehicle.skidding) {
       return;
     }
     const before = vehicle.impactVelocity;
     const after = vehicle.body.linvel();
-    const lost = Math.hypot(before.x - after.x, before.z - after.z);
+    const lost = Math.hypot(before.x - after.x, before.y - after.y, before.z - after.z);
     if (lost < MIN_IMPACT_SPEED) {
       return;
     }
@@ -809,6 +1157,7 @@ export class Game {
     // The solver can spread a stop over two steps, so the lost speed understates a crash. The
     // speed at which the vehicle approached along the contact normal is the better measure.
     let approach = 0;
+    let upright = 0;
     world.contactPairsWith(vehicle.collider, (other) => {
       const ref = this.buildings.lookup(other.handle);
       if (!ref) {
@@ -819,7 +1168,11 @@ export class Game {
           return;
         }
         const normal = manifold.normal();
-        approach = Math.max(approach, Math.abs(before.x * normal.x + before.z * normal.z));
+        const speed = Math.abs(before.x * normal.x + before.y * normal.y + before.z * normal.z);
+        if (speed > approach) {
+          approach = speed;
+          upright = Math.abs(normal.y);
+        }
         if (!hits.includes(ref)) {
           hits.push(ref);
         }
@@ -828,19 +1181,34 @@ export class Game {
     if (hits.length === 0) {
       return;
     }
+    // A stomp is a landing from above: only the armoured belly of the Liftoff makes it count.
+    const stomp = upright > STOMP_NORMAL && before.y < -3;
+    const speed = stomp ? approach : Math.max(Math.min(lost, approach * 1.2), approach);
+    if (speed < MIN_IMPACT_SPEED) {
+      return;
+    }
     vehicle.impactCooldown = 0.18;
 
+    let actionFactor = 1;
+    if (stomp) {
+      actionFactor = vehicle.spec.stompDamage / vehicle.spec.damage;
+    } else if (vehicle.skidding) {
+      actionFactor = SKID_DAMAGE_FACTOR;
+    } else if (vehicle.rolling) {
+      actionFactor = vehicle.registerRollHit();
+    }
     const material = hits[0].building.data.strength;
-    const speed = Math.max(lost, approach);
     const damage = impactDamage({
       mass: vehicle.spec.mass,
       speed,
       vehicleFactor: vehicle.spec.damage,
       ramArmed: vehicle.ramArmed,
+      actionFactor,
     });
     let fallen = 0;
     let blocked = true;
     for (const ref of hits) {
+      // An explosion-proof wall still gives way to a stomp or a roll of the right machine.
       if (canDamage(vehicle.spec.type, ref.building.data.strength)) {
         blocked = false;
         fallen += this.buildings.damage(ref, damage, before);
@@ -850,14 +1218,18 @@ export class Game {
 
     if (fallen > 0) {
       vehicle.setVelocity(before.x * SMASH_THROUGH_SPEED, after.y, before.z * SMASH_THROUGH_SPEED);
-    } else {
-      vehicle.setVelocity(-before.x * RECOIL_SPEED, after.y, -before.z * RECOIL_SPEED);
+    } else if (!stomp) {
+      // A rolling Tumbler bounces off hard and pounds the wall again within the same roll.
+      const recoil = vehicle.rolling ? ROLL_RECOIL_SPEED : RECOIL_SPEED;
+      vehicle.setVelocity(-before.x * recoil, after.y, -before.z * recoil);
     }
 
     const strength = clamp(speed / 20, 0.25, 1);
     const position = vehicle.position.clone();
-    position.x += Math.cos(vehicle.heading) * vehicle.spec.length * 0.5;
-    position.z += Math.sin(vehicle.heading) * vehicle.spec.length * 0.5;
+    if (!stomp) {
+      position.x += Math.cos(vehicle.heading) * vehicle.spec.length * 0.5;
+      position.z += Math.sin(vehicle.heading) * vehicle.spec.length * 0.5;
+    }
     if (blocked) {
       this.effects.sparks(position, 10);
     } else if (fallen === 0) {

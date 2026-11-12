@@ -167,3 +167,39 @@ To test on a phone, start the development server with `npm run dev -- --host` an
 - **Replay.** The replay shows the recorded poses of the Hauler and the vehicles. Debris and buildings stay as they are after the crash.
 - **Finish level** sits under the mini-map when touch controls are on the screen, because the Action button occupies the corner that the mock uses. Without touch controls it sits in that corner.
 - **HUD scale.** The design brief lists an adjustable HUD scale under accessibility, but the settings mock has no control for it. The build follows the mock.
+
+## Milestone 6: vehicles and levels
+
+**Works**
+
+- **Pilot on foot.** **EXIT** (or E, or Y) puts the pilot beside the driver's door. The pilot walks, deals no damage and can enter any free vehicle within 6.5 m with the same button, which then reads **ENTER**. The Hauler also blows up when it hits the pilot.
+- **Fishtail.** Hold the Action button above 25 km/h to skid: the engine cuts out, the truck slides on with its momentum and turns across its line. The armoured tail damages every building segment that it sweeps along, by the speed of the truck. One fast pass along a terrace drops house after house. With auto-skid on, the tail swings towards the nearest wall by itself. A front ram is weak.
+- **Liftoff.** The boost lasts 1 second, raises the top speed by 45 % and recharges in 3 seconds. It also pushes in the air. A landing on a roof deals seven times the damage of a ram at the same speed.
+- **Tumbler.** The roll lasts 1.5 seconds at 90 km/h. A roll that does not break a wall bounces off and pounds it again. Rolls that hit within 2 seconds of each other add 25 % damage each, up to three times. It is the only vehicle that breaks concrete. It waits inside the equipment hangar and is free once the part of the hangar around it has fallen.
+- **Railbed.** It only drives forwards and backwards on its track. Near the glowing slot it rolls into place by itself. In the slot, its deck closes the route gap and the outline turns solid green.
+- **Route gaps.** A gap counts as a route obstacle. The Hauler is destroyed at the edge of an open gap. It drives across the Railbed deck when the gap is closed.
+- **Road bridges** carry vehicles over the rail cutting.
+- **Level 2, Ferrow Junction:** a town at dusk with 16 terraced rows, a station, a chapel, a pub, goods sheds and a warehouse, split by a rail cutting. Start vehicle: Fishtail. Also on the map: Railbed, Bruiser and one TNT crate.
+- **Level 3, Cinder Quarry:** a quarry at noon with a rim above the plant floor, a pit with benches and a lake, kicker ramps along the rim, stockpiles and a settling pond. Start vehicle: Liftoff. Also on the map: the locked Tumbler, a Bruiser and two TNT crates.
+- Vehicles cannot climb banks steeper than about 41°, so the quarry rim is a real edge. They can still drop off it.
+- A terrace is one building with one segment per house.
+
+**Checks**
+
+- `npm run report:route`: every arrival of Ferrow Junction is within 7.6 % of the design brief, and every arrival of Cinder Quarry within 3.7 %.
+- All three levels were driven to their result in the browser with the debug tools: the skid pass along Station Road, the Railbed into its slot and the Hauler across it, the Liftoff jump onto the site cabins and onto the hangar roof, and the Tumbler against the crusher blocks.
+
+**Test on a phone**
+
+- Level 2: hold **SKID** while you pass the Station Road terraces. Tap **EXIT**, walk to the Railbed at the south end of the cutting, tap **ENTER** and drive it north into the slot.
+- Level 3: drive south over the rim and land on the site cabins. Boost over the rim onto the hangar roof, then walk to the Tumbler and roll into the crushers.
+
+**Deviations from the briefs**
+
+- **Pilot speed.** The pilot walks at 24 km/h instead of 12 km/h. The world is about twice life-size, and the walks between vehicles would otherwise eat a third of a level.
+- **Skid damage.** The code brief makes the tail collider the damage dealer. The build tests a tail zone against the building footprints instead, and takes the speed of the whole truck. A contact-based test only sees the small speed at which the tail meets the wall, which made the skid feel weak.
+- **Tumbler.** The brief describes a kinematic character controller that turns into a rolling capsule. The build keeps one arcade body and changes speed, turn rate and damage for the roll. The model tucks its limbs in and spins.
+- **Railbed deck.** The deck is as wide as the rail cutting, 15.5 m, so that it carries the Hauler, which crosses the cutting at an angle. The mock draws a narrower wagon.
+- **Rail cutting.** The cutting is 12 m wide and 3 m deep, narrower than on the level map, so that one wagon can bridge it.
+- **Town density.** The level map shows about 85 terraced houses. The build keeps them, grouped into 16 rows. A row counts as one building for the medals.
+- **Hangar and gantry heights** are 9 m and 8 m, so that a boosted jump from the rim lands on the hangar roof.

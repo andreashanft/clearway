@@ -179,9 +179,10 @@ export class Hauler {
         return false;
       },
       undefined,
+      // Bridges are not in the list: the Hauler drives over the Railbed, it does not hit it.
       collisionGroups(
         0xffff,
-        Layer.building | Layer.vehicle | Layer.crate | Layer.pilot | Layer.prop | Layer.bridge,
+        Layer.building | Layer.vehicle | Layer.crate | Layer.pilot | Layer.prop,
       ),
       undefined,
       this.body,

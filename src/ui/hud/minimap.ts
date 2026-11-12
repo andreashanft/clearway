@@ -67,6 +67,16 @@ export class Minimap {
       if (obstacle.cleared) {
         continue;
       }
+      if (obstacle.gap) {
+        dot(
+          obstacle.gap.slot[0],
+          obstacle.gap.slot[1],
+          unit,
+          obstacle === next ? MAP.amber : MAP.alarm,
+          false,
+        );
+        continue;
+      }
       const seen = new Set<unknown>();
       for (const segment of obstacle.segments) {
         if (segment.building.hp[segment.index] <= 0 || seen.has(segment.building)) {
@@ -78,7 +88,7 @@ export class Minimap {
       }
     }
     for (const vehicle of game.vehicles) {
-      if (vehicle !== game.activeVehicle) {
+      if (vehicle !== game.activeVehicle && vehicle.enabled && vehicle.spec.isVehicle) {
         dot(vehicle.position.x, vehicle.position.z, unit * 0.7, MAP.hazard, false);
       }
     }

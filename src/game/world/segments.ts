@@ -3,7 +3,7 @@ import { DEG, headingVector, type OrientedBox } from '../math';
 
 /** The longest side of one building segment in metres. Longer buildings get more segments. */
 const SEGMENT_LENGTH = 12.5;
-const MAX_SEGMENTS = 6;
+const MAX_SEGMENTS = 8;
 
 /** How a building is cut into segments along its longer side. */
 export interface SegmentLayout {
@@ -28,7 +28,8 @@ export function segmentLayout(data: BuildingData): SegmentLayout {
   const short = alongX ? depth : width;
   const round = data.kind === 'silo' || data.kind === 'chimney';
   const single = round || data.kind === 'tank';
-  const count = single ? 1 : Math.min(MAX_SEGMENTS, Math.max(1, Math.round(long / SEGMENT_LENGTH)));
+  const byLength = Math.max(1, Math.round(long / SEGMENT_LENGTH));
+  const count = single ? 1 : Math.min(MAX_SEGMENTS, data.segments ?? byLength);
   return {
     count,
     alongX,

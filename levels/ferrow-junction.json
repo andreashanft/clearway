@@ -1,0 +1,640 @@
+{
+  "id": "ferrow-junction",
+  "index": 2,
+  "name": "Ferrow Junction",
+  "setting": "Town",
+  "timeOfDay": "Dusk",
+  "lighting": "dusk",
+  "terrain": {
+    "heightmap": "ferrow-junction.height.png",
+    "center": [291, 218],
+    "size": 640,
+    "maxHeight": 24,
+    "baseColor": "#6A7166"
+  },
+  "bounds": { "min": [0, 0], "max": [582.48, 436.86] },
+  "ground": [
+    {
+      "kind": "polygon",
+      "points": [
+        [16.18, 84.95],
+        [123.78, 84.95],
+        [123.78, 102.74],
+        [16.18, 102.74]
+      ],
+      "color": "#7FA062"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [143.19, 84.95],
+        [255.64, 84.95],
+        [255.64, 102.74],
+        [143.19, 102.74]
+      ],
+      "color": "#7FA062"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [295.29, 84.95],
+        [416.64, 84.95],
+        [416.64, 102.74],
+        [295.29, 102.74]
+      ],
+      "color": "#7FA062"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [16.18, 139.96],
+        [123.78, 139.96],
+        [123.78, 157.76],
+        [16.18, 157.76]
+      ],
+      "color": "#7FA062"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [143.19, 139.96],
+        [255.64, 139.96],
+        [255.64, 157.76],
+        [143.19, 157.76]
+      ],
+      "color": "#7FA062"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [295.29, 139.96],
+        [416.64, 139.96],
+        [416.64, 157.76],
+        [295.29, 157.76]
+      ],
+      "color": "#7FA062"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [16.18, 222.48],
+        [123.78, 222.48],
+        [123.78, 240.27],
+        [16.18, 240.27]
+      ],
+      "color": "#7FA062"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [143.19, 222.48],
+        [255.64, 222.48],
+        [255.64, 240.27],
+        [143.19, 240.27]
+      ],
+      "color": "#7FA062"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [295.29, 222.48],
+        [416.64, 222.48],
+        [416.64, 240.27],
+        [295.29, 240.27]
+      ],
+      "color": "#7FA062"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [16.18, 277.49],
+        [123.78, 277.49],
+        [123.78, 295.29],
+        [16.18, 295.29]
+      ],
+      "color": "#7FA062"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [143.19, 277.49],
+        [255.64, 277.49],
+        [255.64, 295.29],
+        [143.19, 295.29]
+      ],
+      "color": "#7FA062"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [295.29, 277.49],
+        [416.64, 277.49],
+        [416.64, 295.29],
+        [295.29, 295.29]
+      ],
+      "color": "#7FA062"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [435.24, 79.28],
+        [574.39, 79.28],
+        [574.39, 97.08],
+        [435.24, 97.08]
+      ],
+      "color": "#7FA062"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [431.2, 128.63],
+        [582.48, 128.63],
+        [582.48, 252.41],
+        [431.2, 252.41]
+      ],
+      "color": "#8A8272"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [48.54, 169.89],
+        [117.31, 169.89],
+        [117.31, 214.39],
+        [48.54, 214.39]
+      ],
+      "color": "#7FA062"
+    },
+    {
+      "kind": "polygon",
+      "points": [
+        [307.42, 283.15],
+        [412.59, 283.15],
+        [412.59, 404.5],
+        [307.42, 404.5]
+      ],
+      "color": "#7FA062"
+    },
+    {
+      "kind": "path",
+      "points": [
+        [275.06, -80.9],
+        [275.06, 525.85]
+      ],
+      "width": 13.5,
+      "color": "#2A2C2E",
+      "tag": "rail"
+    },
+    {
+      "kind": "path",
+      "points": [
+        [275.06, -80.9],
+        [275.06, 525.85]
+      ],
+      "width": 6.4,
+      "color": "#5D6470",
+      "dash": [0.5, 2.2]
+    },
+    {
+      "kind": "path",
+      "points": [
+        [272.23, -80.9],
+        [272.23, 525.85]
+      ],
+      "width": 0.6,
+      "color": "#8E95A0"
+    },
+    {
+      "kind": "path",
+      "points": [
+        [277.89, -80.9],
+        [277.89, 525.85]
+      ],
+      "width": 0.6,
+      "color": "#8E95A0"
+    },
+    {
+      "kind": "path",
+      "points": [
+        [-80.9, 121.35],
+        [687.65, 121.35]
+      ],
+      "width": 10.52,
+      "color": "#43484F",
+      "tag": "road"
+    },
+    {
+      "kind": "path",
+      "points": [
+        [-80.9, 121.35],
+        [687.65, 121.35]
+      ],
+      "width": 0.4,
+      "color": "#8E95A0",
+      "dash": [4, 5]
+    },
+    {
+      "kind": "path",
+      "points": [
+        [-80.9, 258.88],
+        [687.65, 258.88]
+      ],
+      "width": 10.52,
+      "color": "#43484F",
+      "tag": "road"
+    },
+    {
+      "kind": "path",
+      "points": [
+        [-80.9, 258.88],
+        [687.65, 258.88]
+      ],
+      "width": 0.4,
+      "color": "#8E95A0",
+      "dash": [4, 5]
+    },
+    {
+      "kind": "path",
+      "points": [
+        [133.49, -80.9],
+        [133.49, 525.85]
+      ],
+      "width": 10.52,
+      "color": "#43484F",
+      "tag": "road"
+    },
+    {
+      "kind": "path",
+      "points": [
+        [133.49, -80.9],
+        [133.49, 525.85]
+      ],
+      "width": 0.4,
+      "color": "#8E95A0",
+      "dash": [4, 5]
+    },
+    {
+      "kind": "path",
+      "points": [
+        [424.73, -80.9],
+        [424.73, 525.85]
+      ],
+      "width": 10.52,
+      "color": "#43484F",
+      "tag": "road"
+    },
+    {
+      "kind": "path",
+      "points": [
+        [424.73, -80.9],
+        [424.73, 525.85]
+      ],
+      "width": 0.4,
+      "color": "#8E95A0",
+      "dash": [4, 5]
+    }
+  ],
+  "scenery": {
+    "trees": [
+      [56.63, 177.98, 5],
+      [109.22, 177.98, 4.5],
+      [54.61, 208.32, 5.5],
+      [111.24, 207.1, 4.5],
+      [315.51, 295.29, 5],
+      [347.87, 307.42, 6],
+      [380.23, 299.33, 5],
+      [404.5, 323.6, 5.5],
+      [319.56, 347.87, 6],
+      [364.05, 364.05, 5],
+      [400.46, 388.32, 5.5],
+      [331.69, 392.37, 5],
+      [28.32, 93.84, 4],
+      [210.34, 93.84, 4],
+      [364.05, 93.84, 4],
+      [525.85, 88.18, 4.5],
+      [64.72, 148.86, 4],
+      [226.52, 148.86, 4],
+      [384.28, 148.86, 4],
+      [48.54, 286.39, 4],
+      [190.12, 286.39, 4],
+      [97.08, 231.37, 4],
+      [169.89, 231.37, 4]
+    ],
+    "hedges": []
+  },
+  "hauler": { "speed": 4, "start": [0, 353.01], "heading": -24.5, "length": 640 },
+  "routeGaps": [
+    {
+      "id": "rail-cutting",
+      "name": "rail cutting",
+      "slot": [275.06, 227.66],
+      "from": 292.5,
+      "to": 338.5
+    }
+  ],
+  "decks": [
+    { "center": [275.06, 121.35], "size": [19, 12.14], "yaw": 0, "top": 8.0, "color": "#55524D" },
+    { "center": [275.06, 258.88], "size": [19, 12.14], "yaw": 0, "top": 8.0, "color": "#55524D" }
+  ],
+  "player": { "vehicle": "fishtail-1" },
+  "vehicles": [
+    { "id": "fishtail-1", "type": "fishtail", "pos": [24.27, 258.88], "yaw": 0 },
+    {
+      "id": "railbed-1",
+      "type": "railbed",
+      "pos": [275.06, 375.38],
+      "yaw": -90,
+      "rail": [
+        [275.06, 434.84],
+        [275.06, 2.02]
+      ]
+    },
+    { "id": "bruiser-1", "type": "bruiser", "pos": [457.09, 238.66], "yaw": 180 }
+  ],
+  "buildings": [
+    {
+      "id": "mill-terrace-west",
+      "name": "terrace",
+      "kind": "terrace",
+      "strength": "house",
+      "pos": [66.74, 109.22],
+      "size": [101.12, 8.5, 12.14],
+      "yaw": 0,
+      "segments": 6,
+      "colors": { "wall": "#B9A489", "roof": "#7A4B3A" }
+    },
+    {
+      "id": "mill-terrace-mid",
+      "name": "terrace",
+      "kind": "terrace",
+      "strength": "house",
+      "pos": [210.74, 109.22],
+      "size": [67.15, 8.5, 12.14],
+      "yaw": 0,
+      "segments": 4,
+      "colors": { "wall": "#C9B79C", "roof": "#6B4334" }
+    },
+    {
+      "id": "mill-terrace-east",
+      "name": "terrace",
+      "kind": "terrace",
+      "strength": "house",
+      "pos": [354.34, 109.22],
+      "size": [118.11, 8.5, 12.14],
+      "yaw": 0,
+      "segments": 7,
+      "colors": { "wall": "#A99479", "roof": "#8A5540" }
+    },
+    {
+      "id": "mill-terrace-yard",
+      "name": "terrace",
+      "kind": "terrace",
+      "strength": "house",
+      "pos": [460.32, 109.22],
+      "size": [50.16, 8.5, 12.14],
+      "yaw": 0,
+      "segments": 3,
+      "colors": { "wall": "#B9A489", "roof": "#7A4B3A" }
+    },
+    {
+      "id": "mill-street-terrace",
+      "name": "Mill Street terrace",
+      "kind": "terrace",
+      "strength": "house",
+      "pos": [528.28, 109.22],
+      "size": [84.14, 8.5, 12.14],
+      "yaw": 0,
+      "segments": 5,
+      "colors": { "wall": "#C9B79C", "roof": "#6B4334" }
+    },
+    {
+      "id": "mill-south-west",
+      "name": "terrace",
+      "kind": "terrace",
+      "strength": "house",
+      "pos": [66.74, 133.49],
+      "size": [101.12, 8.5, 12.14],
+      "yaw": 0,
+      "segments": 6,
+      "colors": { "wall": "#A99479", "roof": "#8A5540" }
+    },
+    {
+      "id": "mill-south-mid",
+      "name": "terrace",
+      "kind": "terrace",
+      "strength": "house",
+      "pos": [193.76, 133.49],
+      "size": [101.12, 8.5, 12.14],
+      "yaw": 0,
+      "segments": 6,
+      "colors": { "wall": "#B9A489", "roof": "#7A4B3A" }
+    },
+    {
+      "id": "mill-south-east",
+      "name": "terrace",
+      "kind": "terrace",
+      "strength": "house",
+      "pos": [354.34, 133.49],
+      "size": [118.11, 8.5, 12.14],
+      "yaw": 0,
+      "segments": 7,
+      "colors": { "wall": "#C9B79C", "roof": "#6B4334" }
+    },
+    {
+      "id": "station-north-west",
+      "name": "terrace",
+      "kind": "terrace",
+      "strength": "house",
+      "pos": [66.74, 246.75],
+      "size": [101.12, 8.5, 12.14],
+      "yaw": 0,
+      "segments": 6,
+      "colors": { "wall": "#C9B79C", "roof": "#6B4334" }
+    },
+    {
+      "id": "station-north-mid",
+      "name": "terrace",
+      "kind": "terrace",
+      "strength": "house",
+      "pos": [168.27, 246.75],
+      "size": [50.16, 8.5, 12.14],
+      "yaw": 0,
+      "segments": 3,
+      "colors": { "wall": "#A99479", "roof": "#8A5540" }
+    },
+    {
+      "id": "station-terrace-north",
+      "name": "Station Road terraces",
+      "kind": "terrace",
+      "strength": "house",
+      "pos": [219.24, 246.75],
+      "size": [50.16, 8.5, 12.14],
+      "yaw": 0,
+      "segments": 3,
+      "colors": { "wall": "#B9A489", "roof": "#7A4B3A" },
+      "group": "station-road-terraces"
+    },
+    {
+      "id": "station-north-east",
+      "name": "terrace",
+      "kind": "terrace",
+      "strength": "house",
+      "pos": [379.83, 246.75],
+      "size": [67.15, 8.5, 12.14],
+      "yaw": 0,
+      "segments": 4,
+      "colors": { "wall": "#C9B79C", "roof": "#6B4334" }
+    },
+    {
+      "id": "station-south-west",
+      "name": "terrace",
+      "kind": "terrace",
+      "strength": "house",
+      "pos": [66.74, 271.02],
+      "size": [101.12, 8.5, 12.14],
+      "yaw": 0,
+      "segments": 6,
+      "colors": { "wall": "#B9A489", "roof": "#7A4B3A" }
+    },
+    {
+      "id": "station-terrace-south",
+      "name": "Station Road terraces",
+      "kind": "terrace",
+      "strength": "house",
+      "pos": [185.26, 271.02],
+      "size": [84.14, 8.5, 12.14],
+      "yaw": 0,
+      "segments": 5,
+      "colors": { "wall": "#A99479", "roof": "#8A5540" },
+      "group": "station-road-terraces"
+    },
+    {
+      "id": "station-corner-house",
+      "name": "corner house",
+      "kind": "terrace",
+      "strength": "house",
+      "pos": [236.23, 271.02],
+      "size": [16.18, 8.5, 12.14],
+      "yaw": 0,
+      "segments": 1,
+      "colors": { "wall": "#C9B79C", "roof": "#6B4334" }
+    },
+    {
+      "id": "station-south-east",
+      "name": "terrace",
+      "kind": "terrace",
+      "strength": "house",
+      "pos": [354.34, 271.02],
+      "size": [118.11, 8.5, 12.14],
+      "yaw": 0,
+      "segments": 7,
+      "colors": { "wall": "#A99479", "roof": "#8A5540" }
+    },
+    {
+      "id": "station",
+      "name": "station",
+      "kind": "barn",
+      "strength": "house",
+      "pos": [321.58, 244.32],
+      "size": [50.16, 9, 14.56],
+      "yaw": 0,
+      "colors": { "wall": "#C9B79C", "roof": "#4E5A66" }
+    },
+    {
+      "id": "chapel",
+      "name": "chapel",
+      "kind": "house",
+      "strength": "brick",
+      "pos": [155.33, 105.98],
+      "size": [22.65, 12, 15.37],
+      "yaw": 0,
+      "colors": { "wall": "#D9D2C4", "roof": "#5D5B57" }
+    },
+    {
+      "id": "pavilion",
+      "name": "park pavilion",
+      "kind": "barn",
+      "strength": "house",
+      "pos": [80.9, 190.12],
+      "size": [36.41, 8, 18.61],
+      "yaw": 0,
+      "colors": { "wall": "#A9B5A4", "roof": "#6E7E92" }
+    },
+    {
+      "id": "goods-shed-a",
+      "name": "goods shed",
+      "kind": "barn",
+      "strength": "brick",
+      "pos": [529.89, 192.54],
+      "size": [56.63, 10, 24.27],
+      "yaw": -4,
+      "colors": { "wall": "#9C6B52", "roof": "#5D5B57" }
+    },
+    {
+      "id": "goods-shed-b",
+      "name": "goods shed",
+      "kind": "barn",
+      "strength": "brick",
+      "pos": [509.67, 226.52],
+      "size": [60.68, 10, 22.65],
+      "yaw": 0,
+      "colors": { "wall": "#9C6B52", "roof": "#5D5B57" }
+    },
+    {
+      "id": "signal-box",
+      "name": "signal box",
+      "kind": "block",
+      "strength": "concrete",
+      "pos": [302.57, 210.34],
+      "size": [11.33, 10, 9.71],
+      "yaw": 0,
+      "colors": { "wall": "#9A9890", "roof": "#5D5B57" }
+    },
+    {
+      "id": "pub",
+      "name": "pub",
+      "kind": "house",
+      "strength": "brick",
+      "pos": [406.93, 169.89],
+      "size": [20.23, 11, 22.65],
+      "yaw": 0,
+      "colors": { "wall": "#B4553E", "roof": "#3F3A36" }
+    },
+    {
+      "id": "goods-warehouse",
+      "name": "goods warehouse",
+      "kind": "barn",
+      "strength": "brick",
+      "pos": [477.31, 143.19],
+      "size": [64.72, 11, 25.08],
+      "yaw": -4,
+      "colors": { "wall": "#8F5B3A", "roof": "#4A4F57" }
+    }
+  ],
+  "tnt": [{ "pos": [509.67, 246.75] }],
+  "beacons": {
+    "trails": [
+      { "from": [24.27, 121.35], "to": [250.79, 121.35], "count": 8 },
+      { "from": [299.33, 121.35], "to": [412.59, 121.35], "count": 5 },
+      { "from": [436.86, 121.35], "to": [574.39, 121.35], "count": 5 },
+      { "from": [133.49, 24.27], "to": [133.49, 105.17], "count": 4 },
+      { "from": [133.49, 137.53], "to": [133.49, 242.7], "count": 5 },
+      { "from": [424.73, 137.53], "to": [424.73, 242.7], "count": 5 },
+      { "from": [315.51, 311.47], "to": [404.5, 384.28], "count": 4 },
+      { "from": [54.61, 177.98], "to": [113.26, 210.34], "count": 4 }
+    ]
+  },
+  "relayDish": { "pos": [321.58, 244.32], "hiddenBy": "station" },
+  "hints": [],
+  "medals": { "silverBuildings": 0.8, "silverBeacons": 0.8 },
+  "expected": {
+    "lineSeconds": 160,
+    "arrivals": [
+      { "obstacle": "station-road-terraces", "seconds": 43 },
+      { "obstacle": "rail-cutting", "seconds": 76, "gap": true },
+      { "obstacle": "signal-box", "seconds": 82 },
+      { "obstacle": "pub", "seconds": 106 },
+      { "obstacle": "goods-warehouse", "seconds": 118 },
+      { "obstacle": "mill-street-terrace", "seconds": 131 }
+    ]
+  }
+}

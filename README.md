@@ -98,6 +98,14 @@ The user interface is plain DOM and CSS above the canvas. `src/ui/tokens.css` ho
 | `public/`     | Static files: icons and the favicon.                           |
 | `docs/`       | Milestone notes.                                               |
 
+## Campaign
+
+| #   | Level           | Setting       | Hauler             | Start vehicle | New idea                         |
+| --- | --------------- | ------------- | ------------------ | ------------- | -------------------------------- |
+| 1   | Hollow Creek    | Farm, morning | 3 m/s, 540 m, 3:00 | Bruiser       | Ram, push TNT, leave the vehicle |
+| 2   | Ferrow Junction | Town, dusk    | 4 m/s, 640 m, 2:40 | Fishtail      | Skid attacks, bridge a gap       |
+| 3   | Cinder Quarry   | Quarry, noon  | 5 m/s, 760 m, 2:32 | Liftoff       | Ramp jumps, free the Tumbler     |
+
 ## Levels
 
 Each level is one file, `levels/ID.json`. All positions are `[x, z]` pairs in metres: X points east and Z points south. `src/game/level.ts` documents every field.
@@ -125,7 +133,7 @@ npm run report:route
 | 3   | Destroy             | Done    |
 | 4   | Hauler loop         | Done    |
 | 5   | Screens             | Done    |
-| 6   | Vehicles and levels | Planned |
+| 6   | Vehicles and levels | Done    |
 | 7   | Polish              | Planned |
 
 ## Licence

@@ -689,6 +689,10 @@
     { "trigger": "cleared:tool-shed", "text": "Hit RAM just before impact for a harder hit." },
     { "trigger": "near:tnt", "text": "Push the TNT crate against the stone barn, then back off." },
     {
+      "trigger": "cleared:hay-barn",
+      "text": "EXIT leaves the vehicle. On foot you can enter any vehicle."
+    },
+    {
       "trigger": "cleared:farmhouse",
       "text": "EXIT leaves the vehicle. Walk to another and enter it."
     }
