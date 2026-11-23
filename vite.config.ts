@@ -17,7 +17,7 @@ export default defineConfig({
       manifest: {
         name: 'Clearway',
         short_name: 'Clearway',
-        description: 'Clear the route before the Hauler arrives.',
+        description: 'Clear a path through the city before the antimatter carrier arrives.',
         display: 'fullscreen',
         orientation: 'any',
         background_color: '#0B1430',

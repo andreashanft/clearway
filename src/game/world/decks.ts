@@ -8,7 +8,7 @@ import { MeshBuilder, shade } from './mesh-builder';
 const STEP_UP = 1.4;
 const DECK_THICKNESS = 1.2;
 
-/** A surface above the terrain that vehicles drive on: a road bridge, or the deck of the Railbed. */
+/** A surface above the terrain that vehicles drive on, for example a road bridge. */
 export interface Deck {
   box: OrientedBox;
   /** Height of the driving surface in metres. */

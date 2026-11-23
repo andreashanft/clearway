@@ -6,13 +6,10 @@ const SAVE_VERSION = 1;
 
 /** Everything that the Settings screen can change. */
 export interface Settings {
-  /** Touch layout: point the stick where to go, or steer with separate pedals. */
-  touchLayout: 'point' | 'classic';
   leftHanded: boolean;
-  steeringAssist: boolean;
-  /** The Fishtail starts its skid by itself next to a wall. */
-  autoSkid: boolean;
   haptics: boolean;
+  /** The camera stays behind the vehicle. When off, it keeps the high fixed view. */
+  chaseCamera: boolean;
   minimap: boolean;
   /** Full camera shake. When off, the shake is reduced. */
   fullCameraShake: boolean;
@@ -28,11 +25,9 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Readonly<Settings> = {
-  touchLayout: 'point',
   leftHanded: false,
-  steeringAssist: true,
-  autoSkid: true,
   haptics: true,
+  chaseCamera: true,
   minimap: true,
   fullCameraShake: false,
   patternMarkings: false,
@@ -88,6 +83,21 @@ function migrate(data: SaveData): SaveData {
   return data;
 }
 
+/**
+ * Reads stored settings. A missing setting takes its default, and a setting that the game no
+ * longer has is dropped.
+ */
+function parseSettings(stored: Partial<Settings> | undefined): Settings {
+  const settings: Record<string, unknown> = { ...DEFAULT_SETTINGS };
+  for (const key of Object.keys(DEFAULT_SETTINGS)) {
+    const value = (stored as Record<string, unknown> | undefined)?.[key];
+    if (typeof value === typeof settings[key]) {
+      settings[key] = value;
+    }
+  }
+  return settings as unknown as Settings;
+}
+
 /** Reads raw save data defensively. Missing or damaged parts fall back to defaults. */
 function parse(raw: string | null): SaveData {
   if (!raw) {
@@ -101,7 +111,7 @@ function parse(raw: string | null): SaveData {
     const data = migrate({
       version: stored.version,
       levels: stored.levels && typeof stored.levels === 'object' ? stored.levels : {},
-      settings: { ...DEFAULT_SETTINGS, ...(stored.settings ?? {}) },
+      settings: parseSettings(stored.settings),
     });
     data.version = SAVE_VERSION;
     return data;
@@ -131,23 +141,6 @@ export class Save {
   /** Returns the record of a level, or `undefined` when the level was never cleared. */
   record(levelId: string): LevelRecord | undefined {
     return this.data.levels[levelId];
-  }
-
-  /** Returns true when a level counts as cleared: it has at least a bronze medal. */
-  isCleared(levelId: string): boolean {
-    const medal = this.data.levels[levelId]?.medal ?? 'none';
-    return medal !== 'none';
-  }
-
-  /**
-   * Returns true when a level can be played. The first level is always open, and each further
-   * level opens when the level before it has a bronze medal.
-   *
-   * @param levelIds Ids of every level in campaign order.
-   */
-  isUnlocked(levelId: string, levelIds: readonly string[]): boolean {
-    const index = levelIds.indexOf(levelId);
-    return index <= 0 || this.isCleared(levelIds[index - 1]);
   }
 
   /** Stores the result of a run. Each value only ever improves. */
@@ -217,10 +210,4 @@ function defaultStorage(): SaveStorage | undefined {
   } catch {
     return undefined;
   }
-}
-
-/** Number of medal steps across a set of levels: bronze counts 1, silver 2 and gold 3. */
-export function medalSteps(save: Save, levelIds: readonly string[]): number {
-  const steps: Record<Medal, number> = { none: 0, bronze: 1, silver: 2, gold: 3 };
-  return levelIds.reduce((sum, id) => sum + steps[save.record(id)?.medal ?? 'none'], 0);
 }

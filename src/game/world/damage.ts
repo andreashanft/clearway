@@ -1,4 +1,4 @@
-import type { Strength, VehicleType } from '../level';
+import type { Strength } from '../level';
 
 /** Hit points of one building segment, by strength. */
 export const STRENGTH_HP: Record<Strength, number> = {
@@ -10,15 +10,12 @@ export const STRENGTH_HP: Record<Strength, number> = {
 
 /**
  * Joules of impact energy that remove one hit point.
- * The value is tuned so that the Bruiser deals 200 damage when it rams at its top speed.
+ * With this value the bulldozer deals about 490 damage when it rams at its top speed.
  */
 const JOULES_PER_HP = 4350;
 
 /** Impacts slower than this deal no damage, so scraping along a wall does nothing. */
 export const MIN_IMPACT_SPEED = 4;
-
-/** A ram charge multiplies the damage of the next hit. */
-export const RAM_DAMAGE_FACTOR = 1.8;
 
 /** A destroyed segment weakens each neighbour by this fraction of the neighbour's hit points. */
 export const COLLAPSE_FRACTION = 0.5;
@@ -41,10 +38,6 @@ export interface ImpactInput {
   speed: number;
   /** Damage multiplier of the vehicle type. */
   vehicleFactor: number;
-  /** True when a ram charge is armed. */
-  ramArmed: boolean;
-  /** Extra factor of the vehicle's action, for example chained Tumbler rolls. */
-  actionFactor?: number;
 }
 
 /**
@@ -56,13 +49,12 @@ export function impactDamage(input: Readonly<ImpactInput>): number {
     return 0;
   }
   const energy = 0.5 * input.mass * input.speed * input.speed;
-  const ram = input.ramArmed ? RAM_DAMAGE_FACTOR : 1;
-  return (energy / JOULES_PER_HP) * input.vehicleFactor * ram * (input.actionFactor ?? 1);
+  return (energy / JOULES_PER_HP) * input.vehicleFactor;
 }
 
-/** Returns true when a vehicle type can damage a strength. Only the Tumbler cracks concrete. */
-export function canDamage(vehicle: VehicleType, strength: Strength): boolean {
-  return strength !== 'concrete' || vehicle === 'tumbler';
+/** Returns true when a vehicle can damage a strength. Concrete only gives way to explosions. */
+export function canDamage(strength: Strength): boolean {
+  return strength !== 'concrete';
 }
 
 /** Damage of an explosion at a distance from its centre. */

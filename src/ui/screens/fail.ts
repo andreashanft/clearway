@@ -9,18 +9,17 @@ export interface FailHandlers {
 
 /** One tip per kind of crash. A tip names a way out, in one sentence. */
 const TIPS: Record<FailCause, string> = {
-  shed: 'A plain ram at speed drops a shed.',
-  house: 'Hit RAM just before impact: one charge drops a house.',
-  brick: 'Brick needs speed: ram downhill, and hit RAM first.',
-  concrete: 'Concrete only falls to TNT or the Tumbler.',
-  vehicle: "Keep your vehicles off the Hauler's line.",
+  shed: 'A ram at speed drops a shed.',
+  house: 'A house needs a heavy vehicle or a fast one.',
+  brick: 'Brick needs several rams at full speed.',
+  concrete: 'Concrete only falls to an explosion.',
+  vehicle: "Keep your vehicle off the Hauler's line.",
   tnt: "Keep TNT crates off the Hauler's line.",
   explosion: 'Set TNT off before the Hauler is near.',
   tree: 'Trees stop the Hauler too.',
-  gap: 'Park the Railbed in the gap before the Hauler arrives.',
 };
 
-/** Hauler destroyed: what it hit, one tip, Retry, Watch again and Quit to map. */
+/** Hauler destroyed: what it hit, one tip, Retry, Watch again and Quit. */
 export class FailScreen {
   readonly root: HTMLElement;
   private readonly hit: HTMLElement;
@@ -71,7 +70,7 @@ export class FailScreen {
               className: 'fail__row',
               children: [
                 button('Watch again', 'ghost', handlers.onWatchAgain),
-                button('Quit to map', 'ghost', handlers.onQuit),
+                button('Quit to title', 'ghost', handlers.onQuit),
               ],
             }),
           ],

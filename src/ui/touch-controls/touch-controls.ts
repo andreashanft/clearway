@@ -1,10 +1,8 @@
 import './touch-controls.css';
 import type { Button, InputSource, InputState } from '../../engine/input/input';
 
-/** How far the knob travels from the centre of the stick, in CSS pixels. */
-const STICK_RADIUS = 46;
-/** A second finger turns a stick touch into a camera gesture below this stick deflection. */
-const GESTURE_TAKEOVER_DEFLECTION = 0.35;
+/** How far the knob travels from the centre of the steering control, in CSS pixels. */
+const STEER_RADIUS = 56;
 /** A pinch zooms one step when the finger distance changes by this factor. */
 const PINCH_STEP = 1.22;
 /** A twist rotates the view one step when the fingers turn by this angle, in radians. */
@@ -15,44 +13,30 @@ interface Point {
   y: number;
 }
 
-/** State of the Action button, as the head-up display shows it. */
-export interface ActionButtonState {
-  label: string;
-  /** Charge from 0 to 1. */
-  charge: number;
-  /** True while the action runs. */
-  active: boolean;
-  /** False when the vehicle has no action. */
-  available: boolean;
-}
-
 /**
- * On-screen controls for touch: a floating stick for the left thumb, and round Action, Brake
- * and Exit buttons for the right thumb. A pinch zooms and a two-finger twist rotates the view.
+ * On-screen car controls for touch.
+ *
+ * The steering control floats under the left thumb: slide the thumb left or right to steer. The
+ * right thumb has the GAS pedal and the BRAKE pedal. The brake pedal brakes first and then
+ * reverses. Two other fingers zoom with a pinch and rotate the fixed view with a twist.
  */
 export class TouchControls implements InputSource {
   private readonly root: HTMLElement;
   private readonly zone: HTMLElement;
-  private readonly stick: HTMLElement;
+  private readonly steer: HTMLElement;
   private readonly knob: HTMLElement;
-  private readonly actionButton: HTMLButtonElement;
-  private readonly actionLabel: HTMLElement;
   private readonly brakeButton: HTMLButtonElement;
   private readonly gasButton: HTMLButtonElement;
-  private readonly exitButton: HTMLButtonElement;
-  private classic = false;
-  private gasHeld = false;
 
+  /** Fingers on the scene that do not steer. Two of them make a camera gesture. */
   private readonly touches = new Map<number, Point>();
-  private stickPointer: number | undefined;
-  private stickOrigin: Point = { x: 0, y: 0 };
-  private stickX = 0;
-  private stickY = 0;
+  private steerPointer: number | undefined;
+  private steerOrigin = 0;
+  private steerValue = 0;
   private gesture: { ids: [number, number]; distance: number; angle: number } | undefined;
-  private actionHeld = false;
   private brakeHeld = false;
+  private gasHeld = false;
   private readonly queued = new Set<Button>();
-  private lastAction = '';
 
   constructor(parent: HTMLElement, canvas: HTMLElement) {
     this.root = document.createElement('div');
@@ -62,51 +46,26 @@ export class TouchControls implements InputSource {
     this.zone = document.createElement('div');
     this.zone.className = 'touch__zone';
 
-    this.stick = document.createElement('div');
-    this.stick.className = 'touch__stick';
-    this.stick.setAttribute('aria-hidden', 'true');
+    this.steer = document.createElement('div');
+    this.steer.className = 'touch__steer';
+    this.steer.setAttribute('aria-hidden', 'true');
     this.knob = document.createElement('div');
     this.knob.className = 'touch__knob';
-    this.stick.append(this.knob);
+    this.steer.append(this.knob);
 
-    this.actionButton = this.createButton('touch__action', 'Action');
-    this.actionLabel = document.createElement('span');
-    this.actionButton.append(this.actionLabel);
-    this.brakeButton = this.createButton('touch__brake', 'Brake');
+    this.brakeButton = this.createButton('touch__brake', 'Brake and reverse');
     this.brakeButton.textContent = 'BRAKE';
     this.gasButton = this.createButton('touch__gas', 'Accelerate');
     this.gasButton.textContent = 'GAS';
-    this.gasButton.hidden = true;
-    this.exitButton = this.createButton('touch__exit', 'Exit vehicle');
-    this.exitButton.textContent = 'EXIT';
-    this.exitButton.hidden = true;
 
-    this.root.append(
-      this.zone,
-      this.stick,
-      this.exitButton,
-      this.brakeButton,
-      this.gasButton,
-      this.actionButton,
-    );
+    this.root.append(this.zone, this.steer, this.brakeButton, this.gasButton);
     parent.append(this.root);
 
-    this.bindHold(this.actionButton, (held) => {
-      this.actionHeld = held;
-      if (held) {
-        this.queued.add('action');
-      }
-    });
     this.bindHold(this.brakeButton, (held) => {
       this.brakeHeld = held;
     });
     this.bindHold(this.gasButton, (held) => {
       this.gasHeld = held;
-    });
-    this.bindHold(this.exitButton, (held) => {
-      if (held) {
-        this.queued.add('enterExit');
-      }
     });
 
     for (const element of [this.zone, canvas]) {
@@ -149,67 +108,14 @@ export class TouchControls implements InputSource {
     this.root.hidden = false;
   }
 
-  /**
-   * Switches to the classic layout: the stick only steers, and separate GAS and BRAKE pedals
-   * drive forwards and backwards.
-   */
-  setClassic(classic: boolean): void {
-    this.classic = classic;
-    this.gasButton.hidden = !classic;
-    this.root.classList.toggle('is-classic', classic);
-  }
-
   /** Mirrors the layout for left-handed players. */
   setLeftHanded(leftHanded: boolean): void {
     this.root.classList.toggle('is-lefty', leftHanded);
   }
 
-  /** Updates the label and the charge display of the Action button. */
-  setAction(state: Readonly<ActionButtonState>): void {
-    const percent = Math.round(state.charge * 100);
-    const mode = !state.available
-      ? 'none'
-      : state.active
-        ? 'active'
-        : state.charge >= 1
-          ? 'ready'
-          : 'charging';
-    const text = mode === 'charging' ? `${percent}%` : state.label;
-    const signature = `${mode}:${text}`;
-    if (signature === this.lastAction) {
-      return;
-    }
-    this.lastAction = signature;
-    this.actionButton.dataset.mode = mode;
-    this.actionButton.style.setProperty('--charge', `${percent}%`);
-    this.actionButton.setAttribute('aria-label', state.label || 'Action');
-    this.actionLabel.textContent = text;
-    this.actionButton.hidden = mode === 'none';
-  }
-
-  /** Shows the Exit button with a label such as EXIT or ENTER. */
-  setExit(label: string | undefined): void {
-    this.exitButton.hidden = label === undefined;
-    if (label !== undefined && this.exitButton.textContent !== label) {
-      this.exitButton.textContent = label;
-      this.exitButton.setAttribute(
-        'aria-label',
-        label === 'EXIT' ? 'Exit vehicle' : 'Enter vehicle',
-      );
-    }
-  }
-
   poll(state: InputState): void {
-    if (this.classic) {
-      state.steer += this.stickX;
-      // The brake pedal brakes first and then reverses, like the left trigger of a gamepad.
-      state.throttle += (this.gasHeld ? 1 : 0) - (this.brakeHeld ? 1 : 0);
-    } else {
-      state.pointX += this.stickX;
-      state.pointY += this.stickY;
-      state.brake ||= this.brakeHeld;
-    }
-    state.action ||= this.actionHeld;
+    state.steer += this.steerValue;
+    state.throttle += (this.gasHeld ? 1 : 0) - (this.brakeHeld ? 1 : 0);
     for (const button of this.queued) {
       state.pressed.add(button);
     }
@@ -245,40 +151,35 @@ export class TouchControls implements InputSource {
       return;
     }
     element.setPointerCapture(event.pointerId);
-    this.touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
-    if (this.touches.size === 1 && element === this.zone) {
-      this.stickPointer = event.pointerId;
-      this.stickOrigin = { x: event.clientX, y: event.clientY };
-      this.stick.classList.add('is-active');
-      this.stick.style.left = `${event.clientX}px`;
-      this.stick.style.top = `${event.clientY}px`;
-      this.moveStick(event.clientX, event.clientY);
+    // The first finger in the zone steers, and it keeps steering whatever other fingers do.
+    if (element === this.zone && this.steerPointer === undefined) {
+      this.steerPointer = event.pointerId;
+      this.steerOrigin = event.clientX;
+      this.steer.classList.add('is-active');
+      this.steer.style.left = `${event.clientX}px`;
+      this.steer.style.top = `${event.clientY}px`;
+      this.moveSteering(event.clientX);
       return;
     }
+    this.touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
     if (this.touches.size === 2 && !this.gesture) {
-      const deflection = Math.hypot(this.stickX, this.stickY);
-      if (this.stickPointer !== undefined && deflection >= GESTURE_TAKEOVER_DEFLECTION) {
-        return;
-      }
-      this.releaseStick();
       const ids = [...this.touches.keys()] as [number, number];
       this.gesture = { ids, ...this.measure(ids) };
     }
   }
 
   private onPointerMove(event: PointerEvent): void {
+    if (event.pointerId === this.steerPointer) {
+      this.moveSteering(event.clientX);
+      return;
+    }
     const touch = this.touches.get(event.pointerId);
     if (!touch) {
       return;
     }
     touch.x = event.clientX;
     touch.y = event.clientY;
-
-    if (event.pointerId === this.stickPointer) {
-      this.moveStick(event.clientX, event.clientY);
-      return;
-    }
     if (this.gesture?.ids.includes(event.pointerId)) {
       const { distance, angle } = this.measure(this.gesture.ids);
       const ratio = distance / this.gesture.distance;
@@ -300,8 +201,8 @@ export class TouchControls implements InputSource {
 
   private onPointerEnd(event: PointerEvent): void {
     this.touches.delete(event.pointerId);
-    if (event.pointerId === this.stickPointer) {
-      this.releaseStick();
+    if (event.pointerId === this.steerPointer) {
+      this.releaseSteering();
     }
     if (this.gesture?.ids.includes(event.pointerId)) {
       this.gesture = undefined;
@@ -320,35 +221,26 @@ export class TouchControls implements InputSource {
     };
   }
 
-  private moveStick(x: number, y: number): void {
-    let dx = x - this.stickOrigin.x;
-    let dy = y - this.stickOrigin.y;
-    const length = Math.hypot(dx, dy);
-    if (length > STICK_RADIUS) {
-      dx = (dx / length) * STICK_RADIUS;
-      dy = (dy / length) * STICK_RADIUS;
-    }
-    this.stickX = dx / STICK_RADIUS;
-    // Screen Y points down, stick Y points up.
-    this.stickY = -dy / STICK_RADIUS;
-    this.knob.style.transform = `translate(${dx}px, ${dy}px)`;
+  /** Steers by how far the thumb is to the left or the right of where it landed. */
+  private moveSteering(x: number): void {
+    const dx = Math.min(STEER_RADIUS, Math.max(-STEER_RADIUS, x - this.steerOrigin));
+    this.steerValue = dx / STEER_RADIUS;
+    this.knob.style.transform = `translateX(${dx}px)`;
   }
 
-  private releaseStick(): void {
-    this.stickPointer = undefined;
-    this.stickX = 0;
-    this.stickY = 0;
-    this.stick.classList.remove('is-active');
-    this.stick.style.left = '';
-    this.stick.style.top = '';
+  private releaseSteering(): void {
+    this.steerPointer = undefined;
+    this.steerValue = 0;
+    this.steer.classList.remove('is-active');
+    this.steer.style.left = '';
+    this.steer.style.top = '';
     this.knob.style.transform = '';
   }
 
   private releaseAll(): void {
-    this.releaseStick();
+    this.releaseSteering();
     this.touches.clear();
     this.gesture = undefined;
-    this.actionHeld = false;
     this.brakeHeld = false;
     this.gasHeld = false;
   }

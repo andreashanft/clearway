@@ -42,7 +42,12 @@ export function createScenery(
 ): Scenery {
   const object = new THREE.Group();
   object.name = 'scenery';
-  const random = seededRandom(level.index * 977);
+  // The same area always grows the same trees.
+  let seed = 977;
+  for (const character of level.id) {
+    seed = (seed * 31 + character.charCodeAt(0)) % 2147483647;
+  }
+  const random = seededRandom(seed);
 
   addTrees(object, level.scenery.trees, heightfield, physics, random);
   const { pieces, mesh } = addHedges(object, level.scenery.hedges, heightfield, random);

@@ -3,8 +3,8 @@
   left: calc(var(--cw-safe-left) + 8px);
   top: calc(var(--cw-safe-top) + 64px);
   z-index: 50;
-  width: 220px;
-  max-height: 50dvh;
+  width: 250px;
+  max-height: 72dvh;
   opacity: 0.92;
   overflow-y: auto;
   padding: var(--cw-space-2) var(--cw-space-3);
@@ -70,4 +70,15 @@
   color: var(--cw-ink);
   font: inherit;
   padding: 2px 6px;
+}
+
+.debug__panel {
+  margin-top: var(--cw-space-2);
+  border-top: 1px solid var(--cw-line);
+}
+
+.debug__panel > summary {
+  padding-top: var(--cw-space-1);
+  color: var(--cw-ink);
+  cursor: pointer;
 }

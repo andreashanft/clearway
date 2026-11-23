@@ -6,7 +6,8 @@ import { KeyboardInput } from './engine/input/keyboard';
 import { FixedStepper, FrameStats, STEP_SECONDS } from './engine/loop';
 import { RenderContext } from './engine/renderer';
 import { Game, type GameOptions } from './game/game';
-import { LEVELS, getLevel } from './game/levels';
+import type { LevelData, VehicleType } from './game/level';
+import { createYard } from './game/yard';
 import { Hud } from './ui/hud/hud';
 import { TouchControls } from './ui/touch-controls/touch-controls';
 
@@ -24,7 +25,7 @@ export class App {
   readonly frameStats = new FrameStats();
   readonly input = new Input();
   readonly keyboard = new KeyboardInput();
-  /** Input that the debug tools and the autoplay control. */
+  /** Input that the debug tools control. */
   readonly scripted = new ScriptedInput();
   readonly touch: TouchControls;
   readonly hud: Hud;
@@ -34,10 +35,13 @@ export class App {
   playing = false;
   readonly options: GameOptions = {
     cameraShake: 0.45,
-    steeringAssist: true,
     patternMarkings: false,
-    autoSkid: true,
+    chaseCamera: true,
   };
+  /** The area that the game loads. Until the map exists, this is the test yard. */
+  readonly level: LevelData = createYard();
+  /** The vehicle that the player drives. It stays the same when the area loads again. */
+  vehicleType: VehicleType = 'buggy';
   /** False while a screen covers the 3D scene completely. The scene is then not drawn. */
   renderScene = true;
   game: Game | undefined;
@@ -96,9 +100,9 @@ export class App {
     return app;
   }
 
-  /** Loads a level and makes it the current game. */
-  async loadLevel(id: string = LEVELS[0].id): Promise<Game> {
-    const game = await Game.create(getLevel(id), this.input, this.options);
+  /** Loads the area and makes it the current game. */
+  async loadLevel(): Promise<Game> {
+    const game = await Game.create(this.level, this.input, this.options, this.vehicleType);
     this.game?.dispose();
     this.game = game;
     game.resize(this.render.aspect);
@@ -114,6 +118,12 @@ export class App {
       listener(game);
     }
     return game;
+  }
+
+  /** Puts the player into another vehicle, now and after every reload. */
+  setVehicle(type: VehicleType): void {
+    this.vehicleType = type;
+    this.game?.setVehicle(type);
   }
 
   /**
@@ -180,7 +190,7 @@ export class App {
         game.sync(alpha, Math.min(frameSeconds, 0.1) * (this.stepper.paused ? 0 : 1));
         this.render.renderer.render(game.scene, game.cameraRig.camera);
       }
-      this.updateTouchControls(game);
+      this.hud.setTouchLayout(this.touch.shown);
       this.hud.update(game, game.cameraRig.camera, Math.min(frameSeconds, 0.1));
     }
     this.sound.update(Math.min(frameSeconds, 0.1), this.playing && !this.stepper.paused);
@@ -219,19 +229,5 @@ export class App {
       this.fastSeconds = 0;
       this.sinceRecovery = 0;
     }
-  }
-
-  private updateTouchControls(game: Game): void {
-    this.hud.setTouchLayout(this.touch.shown);
-    const vehicle = game.activeVehicle;
-    // On foot the small button reads ENTER next to a vehicle, and hides otherwise.
-    const onFoot = vehicle === game.pilot;
-    this.touch.setExit(onFoot ? (game.enterTarget ? 'ENTER' : undefined) : 'EXIT');
-    this.touch.setAction({
-      label: vehicle.spec.actionLabel,
-      charge: vehicle.actionCharge,
-      active: vehicle.actionActive,
-      available: vehicle.spec.actionKind !== 'none',
-    });
   }
 }

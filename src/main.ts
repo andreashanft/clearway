@@ -36,7 +36,8 @@ async function boot(): Promise<void> {
     installDebugTools(app);
   }
   const flow = new Flow(app, new Save(), ui);
-  await flow.boot(params.get('level') ?? undefined);
+  // `?yard` skips the title screen and starts in the test yard.
+  await flow.boot(params.has('yard'));
 
   requireElement('boot').classList.add('is-done');
 }

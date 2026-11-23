@@ -1,10 +1,112 @@
 # Milestones
 
-This file records each milestone of the Clearway prototype: what works, what is stubbed, how to test it on a phone, and where the build deviates from the briefs on purpose.
+This file records each milestone of Clearway: what works, what is stubbed, how to test it, and where the build deviates from the plan on purpose.
+
+Clearway changed direction on 2026-11-23. The first part of this file covers the new direction: a run through a real city with three vehicles. The second part keeps the notes of the first prototype, which the new direction replaces step by step.
 
 To test on a phone, start the development server with `npm run dev -- --host` and open the network address on the phone. Both devices must be in the same network.
 
-## Milestone 1: scaffold
+## City direction
+
+### Milestone 1: driving
+
+The driving failed in both earlier builds: the vehicles felt too slow and heavy, and the steering was imprecise. This milestone rebuilds the driving in a test yard, before any other part of the new game.
+
+**Works**
+
+- The vehicles use car controls on every device: accelerate, brake and then reverse, steer relative to the vehicle, and a handbrake.
+- Touch has a steering control under the left thumb and **GAS** and **BRAKE** pedals under the right thumb.
+- Three vehicle bodies exist: the bulldozer, the flail car and the buggy. They have no weapons yet.
+- A new handling model drives them. At low speed a vehicle follows its turning circle. At high speed its sideways grip limits the turn, so the turn widens and the vehicle stays stable. The bulldozer turns on the spot.
+- The steering wheel follows a key press at a limited speed, and an analogue input steers finely near the centre.
+- The camera has a chase view behind the vehicle, which is the default, and the high fixed view of the first prototype. **C**, the **Y** button, the yard bar and the settings switch between them.
+- The test yard has a main straight with a line every 10 m, a stop box, two slalom lanes with cones, three turning circles, a street grid and buildings to ram.
+- The yard bar switches the vehicle and the camera view, resets the yard and counts the cones that fell.
+- With `?debug`, the **Handling** and **Chase camera** panels change the tuning while the game runs.
+- `clearway.measure()` drives each vehicle through a scripted test and reports the values below.
+- The HUD card shows the speed in km/h.
+
+**Measured handling**
+
+The scripted test gives these values with the built-in tuning:
+
+| Value                            | Bulldozer | Flail car | Buggy    |
+| -------------------------------- | --------- | --------- | -------- |
+| Top speed                        | 62 km/h   | 100 km/h  | 140 km/h |
+| Time to 95 % of the top speed    | 1.03 s    | 1.33 s    | 1.33 s   |
+| Stopping distance from top speed | 3.6 m     | 8.2 m     | 13.4 m   |
+| Turning circle radius, slow      | 2.0 m     | 8.0 m     | 6.5 m    |
+| Turning circle radius, top speed | 11.4 m    | 24.2 m    | 34.4 m   |
+| Turn of 180° from top speed      | 2.2 s     | 2.9 s     | 2.9 s    |
+| Wide slalom, average speed       | 56 km/h   | 71 km/h   | 86 km/h  |
+| Wide slalom, cones knocked over  | 0         | 0         | 0        |
+
+For comparison, the fastest vehicle of the first prototype reached 110 km/h and was 6.6 m long. The buggy reaches 140 km/h and is 4.2 m long, so it covers about twice as many of its own lengths per second.
+
+**Stubbed**
+
+- **Play** on the title screen opens the test yard, because the city map does not exist yet.
+- The Action button has no function until milestone 3 adds the weapons. The touch controls hide it.
+- Buildings break with the damage model of the first prototype. Milestone 2 replaces it.
+- The How to play screen describes the test yard.
+- The chase view does not avoid buildings between the camera and the vehicle. Milestone 4 needs that for city streets.
+- The ground is one painted texture. Up close, in the chase view, its lines look soft.
+- A thumb that lands within 56 px of the screen edge cannot reach full steering lock towards that edge.
+- A switch to a wider vehicle next to a wall starts the new vehicle inside the wall. The physics pushes it out.
+
+**Removed**
+
+- The three hand-made levels, their heightmaps and the tools that built them.
+- The six old vehicles, the pilot on foot and the mechanics that only they used: point-to-drive, ram charge, skid, boost, roll, stomp, the Railbed and route gaps.
+- The campaign map, the briefing and the level thumbnails.
+- The settings for the touch layout, the steering assist and the auto-skid.
+
+**Test it**
+
+1. Open the game and select **Play**, or open the address with `?yard` appended.
+2. Drive each vehicle on the main straight, through both slaloms, around the turning circles and through the street grid.
+3. Switch between the chase view and the fixed view.
+4. On a phone, steer with the left thumb and use the pedals with the right thumb.
+5. Optional: open the address with `?yard&debug` appended, change the handling values, and copy the values that feel right.
+
+**Checks**
+
+- `npm run check` passes with 95 unit tests. The new tests cover the engine, the brakes, the turning model and the steering curve.
+- The scripted measurement matches the tuning values.
+- A scripted run confirms the screen flow: title, play, pause, restart, vehicle switch and quit to title.
+- The yard, the touch layout and the title screen were checked at 844 × 390, 390 × 844 and 1180 × 820.
+- Nobody has played this milestone by hand yet. The feel of the driving is not confirmed.
+
+**Review fixes**
+
+An independent review of the change found these defects, and the build fixes them:
+
+- A second finger on the screen cancelled the steering, or kept it from starting. The steering thumb now steers whatever other fingers do, and only two other fingers make a camera gesture.
+- A button of the yard bar kept the keyboard focus after a click, so the next press of Space or Enter clicked it again.
+- The vehicle keys of the yard bar reacted to browser shortcuts with Ctrl or Cmd, and failed with Shift held or on a keyboard layout that needs Shift for digits.
+- The field of view did not follow a change of the screen orientation while the game was paused.
+- The rotation keys of the fixed view collected steps unseen in the chase view.
+- The handling measurement ran on the title screen without a warning, and it did not stand the cones up again between vehicles.
+- A tuning slider kept the keyboard focus, so the driving keys stopped working.
+- A switch of the vehicle on a bridge put the new vehicle on the ground below.
+- The HUD and the result used different medal rules for an area that sets none.
+- The body of a vehicle rolled the wrong way on ground that slopes sideways. This defect is older than this milestone.
+
+The review also listed code that the removals left without a use. The build removes it: the Action button of the touch controls, the campaign unlock rules of the save data, two maths helpers, two icons and a few styles.
+
+**Deviations**
+
+- The plan named a look-ahead for the camera. The build adds a full chase view instead. Car controls steer relative to the vehicle, and under a fixed camera left and right swap when the vehicle drives towards the viewer. The fixed view stays as a second option, so that both can be compared.
+- The vehicles are about half as large as in the first prototype, close to real size. The city of milestone 4 has real street widths, and the old vehicles would not fit into them.
+- The plan kept the campaign map and the briefing until milestone 6. The build removes them now, because they only presented the removed levels. Milestone 6 adds the location picker and the vehicle selection as new screens in the same style.
+- The Hauler, the route, the medals, the beacons, the relay dish, TNT, and the fail and results screens stay in the code, as planned. No area uses them until milestone 5 turns the Hauler into the carrier.
+- `CLAUDE.md` is now excluded from the format check, because its author formats it by hand.
+
+## First prototype
+
+The notes below describe the first prototype with its Blast Corps theme. They are kept as a record. The city direction has removed the levels and the vehicles that they describe.
+
+### Milestone 1: scaffold
 
 **Works**
 
@@ -22,7 +124,7 @@ To test on a phone, start the development server with `npm run dev -- --host` an
 
 - Open the address with `?debug` appended. The overlay reports about 60 frames per second.
 
-## Milestone 2: drive
+### Milestone 2: drive
 
 **Works**
 
@@ -52,7 +154,7 @@ To test on a phone, start the development server with `npm run dev -- --host` an
 - **Heightmap resolution.** A heightmap pixel covers 2.5 m instead of about 4 m, so that ramps and the creek banks have clean edges.
 - **Ground texture.** The level file describes the ground as vector shapes, and the game paints them into a texture at load time. This is the look of the scene artboard, draped over the 3D terrain.
 
-## Milestone 3: destroy
+### Milestone 3: destroy
 
 **Works**
 
@@ -89,7 +191,7 @@ To test on a phone, start the development server with `npm run dev -- --host` an
 - **Ram burst.** The burst raises the top speed by 25 % for 0.5 seconds. Together with the 1.8 times damage bonus, a charged ram deals 2.8 times the damage of a plain ram. A larger burst would drop brick on flat ground and make the "ram with downhill speed" solution of the twin silos pointless.
 - **Hit-stop and camera shake** are listed under milestone 7 in the brief. Basic versions are in now, because impacts feel weak without them.
 
-## Milestone 4: Hauler loop
+### Milestone 4: Hauler loop
 
 **Works**
 
@@ -130,7 +232,7 @@ To test on a phone, start the development server with `npm run dev -- --host` an
 - **Pointer and outlines.** The pointer is an SVG in the DOM layer, placed by projecting the vehicle onto the screen. That keeps it crisp at every size. The outlines are flat frames on the ground.
 - **Vehicle in the way.** A vehicle that stands on the line destroys the Hauler, also in bonus time. The brief says that the Hauler detonates when it touches anything solid.
 
-## Milestone 5: screens
+### Milestone 5: screens
 
 **Works**
 
@@ -168,7 +270,7 @@ To test on a phone, start the development server with `npm run dev -- --host` an
 - **Finish level** sits under the mini-map when touch controls are on the screen, because the Action button occupies the corner that the mock uses. Without touch controls it sits in that corner.
 - **HUD scale.** The design brief lists an adjustable HUD scale under accessibility, but the settings mock has no control for it. The build follows the mock.
 
-## Milestone 6: vehicles and levels
+### Milestone 6: vehicles and levels
 
 **Works**
 
@@ -204,7 +306,7 @@ To test on a phone, start the development server with `npm run dev -- --host` an
 - **Town density.** The level map shows about 85 terraced houses. The build keeps them, grouped into 16 rows. A row counts as one building for the medals.
 - **Hangar and gantry heights** are 9 m and 8 m, so that a boosted jump from the rim lands on the hangar roof.
 
-## Milestone 7: polish
+### Milestone 7: polish
 
 **Works**
 
@@ -252,7 +354,7 @@ A second reviewer read the game code after the milestone was built and reported 
 
 The build was checked in a desktop Chromium browser at 844 × 390, 390 × 844, 1180 × 820 and 1440 × 900, on WebGPU and with `?webgl` on WebGL2. It was not run on a physical iPhone, Android phone or iPad. Before a release, play every level on real devices and check the frame rate with `?debug`.
 
-## Acceptance checklist
+### Acceptance checklist of the first prototype
 
 | Criterion of the code brief                                                                | State                                                                                       |
 | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |

@@ -3,7 +3,7 @@ import type { Button, InputSource, InputState } from './input';
 /** Keys that fire once when they go down. */
 const PRESS_KEYS: Record<string, Button> = {
   Space: 'action',
-  KeyE: 'enterExit',
+  KeyC: 'camera',
   KeyQ: 'rotateLeft',
   KeyR: 'rotateRight',
   KeyZ: 'zoomIn',
@@ -17,16 +17,11 @@ const CAPTURED_KEYS = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'Ar
 /**
  * Keyboard and mouse wheel.
  *
- * W A S D or the arrow keys drive, Space is the action, Shift brakes, E enters or leaves a
- * vehicle, Q and R rotate the camera, Z, X and the wheel zoom, and Escape pauses.
+ * W or the up arrow accelerates. S or the down arrow brakes and then reverses. A and D or the
+ * left and right arrows steer. Space is the action and Shift is the handbrake. C switches the
+ * camera view, Q and R rotate the fixed view, Z, X and the wheel zoom, and Escape pauses.
  */
 export class KeyboardInput implements InputSource {
-  /**
-   * In the classic layout, W and S are throttle and A and D steer.
-   * Otherwise the keys point in screen directions, like the touch stick.
-   */
-  classic = false;
-
   private readonly down = new Set<string>();
   private readonly queued = new Set<Button>();
   private wheel = 0;
@@ -61,15 +56,8 @@ export class KeyboardInput implements InputSource {
   }
 
   poll(state: InputState): void {
-    const right = this.axis('KeyD', 'ArrowRight') - this.axis('KeyA', 'ArrowLeft');
-    const up = this.axis('KeyW', 'ArrowUp') - this.axis('KeyS', 'ArrowDown');
-    if (this.classic) {
-      state.steer += right;
-      state.throttle += up;
-    } else {
-      state.pointX += right;
-      state.pointY += up;
-    }
+    state.steer += this.axis('KeyD', 'ArrowRight') - this.axis('KeyA', 'ArrowLeft');
+    state.throttle += this.axis('KeyW', 'ArrowUp') - this.axis('KeyS', 'ArrowDown');
     state.action ||= this.down.has('Space');
     state.brake ||= this.down.has('ShiftLeft') || this.down.has('ShiftRight');
 

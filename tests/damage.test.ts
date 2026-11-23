@@ -11,10 +11,10 @@ import {
   impactDamage,
 } from '../src/game/world/damage';
 
-const bruiser = VEHICLE_SPECS.bruiser;
+const { dozer, buggy } = VEHICLE_SPECS;
 
-function ram(speed: number, ramArmed = false): number {
-  return impactDamage({ mass: bruiser.mass, speed, vehicleFactor: bruiser.damage, ramArmed });
+function ram(speed: number, spec = dozer): number {
+  return impactDamage({ mass: spec.mass, speed, vehicleFactor: spec.damage });
 }
 
 describe('impactDamage', () => {
@@ -26,32 +26,28 @@ describe('impactDamage', () => {
     expect(ram(12) / ram(6)).toBeCloseTo(4);
   });
 
-  it('lets the Bruiser drop a shed with one ram at top speed', () => {
-    expect(ram(bruiser.topSpeed)).toBeGreaterThanOrEqual(STRENGTH_HP.shed);
+  it('lets the bulldozer drop a house segment with one ram at top speed', () => {
+    expect(ram(dozer.topSpeed)).toBeGreaterThanOrEqual(STRENGTH_HP.house);
   });
 
-  it('needs two plain rams for a house segment', () => {
-    const damage = ram(bruiser.topSpeed);
+  it('needs two rams of the bulldozer for a brick segment', () => {
+    const damage = ram(dozer.topSpeed);
+    expect(damage).toBeLessThan(STRENGTH_HP.brick);
+    expect(damage * 2).toBeGreaterThanOrEqual(STRENGTH_HP.brick);
+  });
+
+  it('lets the light buggy drop a shed, but not a house, with one ram at top speed', () => {
+    const damage = ram(buggy.topSpeed, buggy);
+    expect(damage).toBeGreaterThanOrEqual(STRENGTH_HP.shed);
     expect(damage).toBeLessThan(STRENGTH_HP.house);
-    expect(damage * 2).toBeGreaterThanOrEqual(STRENGTH_HP.house);
-  });
-
-  it('drops a house segment with one ram charge', () => {
-    expect(ram(bruiser.topSpeed * 1.25, true)).toBeGreaterThanOrEqual(STRENGTH_HP.house);
-  });
-
-  it('needs downhill speed on top of a ram charge for brick', () => {
-    expect(ram(bruiser.topSpeed * 1.25, true)).toBeLessThan(STRENGTH_HP.brick);
-    expect(ram(bruiser.topSpeed * 1.25 * 1.2, true)).toBeGreaterThanOrEqual(STRENGTH_HP.brick);
   });
 });
 
 describe('canDamage', () => {
-  it('protects concrete from every vehicle except the Tumbler', () => {
-    expect(canDamage('bruiser', 'concrete')).toBe(false);
-    expect(canDamage('fishtail', 'concrete')).toBe(false);
-    expect(canDamage('tumbler', 'concrete')).toBe(true);
-    expect(canDamage('bruiser', 'brick')).toBe(true);
+  it('protects concrete from every vehicle', () => {
+    expect(canDamage('concrete')).toBe(false);
+    expect(canDamage('brick')).toBe(true);
+    expect(canDamage('shed')).toBe(true);
   });
 });
 

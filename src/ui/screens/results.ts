@@ -106,10 +106,7 @@ export class ResultsScreen {
    * @param hasNext True when a further level follows this one.
    */
   show(level: LevelData, result: LevelResult, outcome: RecordOutcome, hasNext: boolean): void {
-    setText(
-      this.levelTag,
-      `LEVEL ${String(level.index).padStart(2, '0')} · ${level.name}`.toUpperCase(),
-    );
+    setText(this.levelTag, level.name.toUpperCase());
     this.root.dataset.medal = result.medal;
     setText(this.medalName, result.medal === 'none' ? 'No medal' : result.medal);
     setText(

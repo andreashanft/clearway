@@ -66,7 +66,7 @@ export class TntCrates {
     this.object.name = 'tnt';
     const geometry = createCrateGeometry();
     const segment = new THREE.BoxGeometry(0.85, 0.12, 0.34);
-    for (const spawn of level.tnt) {
+    for (const spawn of level.tnt ?? []) {
       const material = new THREE.MeshLambertMaterial({ vertexColors: true, emissive: 0xff5a2e });
       material.emissiveIntensity = 0;
       const mesh = new THREE.Mesh(geometry, material);

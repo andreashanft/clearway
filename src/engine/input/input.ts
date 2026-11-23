@@ -1,29 +1,16 @@
 /** A button whose press matters once, at the moment it goes down. */
 export type Button =
-  | 'action'
-  | 'enterExit'
-  | 'rotateLeft'
-  | 'rotateRight'
-  | 'zoomIn'
-  | 'zoomOut'
-  | 'recenter'
-  | 'pause';
+  'action' | 'camera' | 'rotateLeft' | 'rotateRight' | 'zoomIn' | 'zoomOut' | 'recenter' | 'pause';
 
 /** The player's input for one simulation step, merged from every device. */
 export interface InputState {
-  /**
-   * Point-to-drive stick in screen space: X points right and Y points up.
-   * Its length is at most 1.
-   */
-  pointX: number;
-  pointY: number;
-  /** Classic steering wheel from -1 (left) to 1 (right). */
+  /** Steering wheel from -1 (left) to 1 (right). */
   steer: number;
-  /** Classic throttle from -1 (reverse) to 1 (ahead). */
+  /** Pedals from -1 (brake, then reverse) to 1 (full throttle). */
   throttle: number;
   /** True while the Action button is down. */
   action: boolean;
-  /** True while the Brake button is down. */
+  /** True while the handbrake is on. */
   brake: boolean;
   /** Buttons that went down since the previous step. */
   pressed: Set<Button>;
@@ -31,8 +18,6 @@ export interface InputState {
 
 export function emptyInput(): InputState {
   return {
-    pointX: 0,
-    pointY: 0,
     steer: 0,
     throttle: 0,
     action: false,
@@ -61,11 +46,6 @@ export class Input {
     for (const source of this.sources) {
       source.poll(state);
     }
-    const length = Math.hypot(state.pointX, state.pointY);
-    if (length > 1) {
-      state.pointX /= length;
-      state.pointY /= length;
-    }
     state.steer = Math.min(1, Math.max(-1, state.steer));
     state.throttle = Math.min(1, Math.max(-1, state.throttle));
     return state;
@@ -73,12 +53,10 @@ export class Input {
 }
 
 /**
- * An input source that code controls. The debug tools and the autoplay use it to drive the game
- * without a device.
+ * An input source that code controls. The debug tools use it to drive the game without a
+ * device.
  */
 export class ScriptedInput implements InputSource {
-  pointX = 0;
-  pointY = 0;
   steer = 0;
   throttle = 0;
   action = false;
@@ -90,8 +68,6 @@ export class ScriptedInput implements InputSource {
   }
 
   poll(state: InputState): void {
-    state.pointX += this.pointX;
-    state.pointY += this.pointY;
     state.steer += this.steer;
     state.throttle += this.throttle;
     state.action ||= this.action;

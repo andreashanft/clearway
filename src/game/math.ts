@@ -35,12 +35,6 @@ export function damp(rate: number, dt: number): number {
   return 1 - Math.exp(-rate * dt);
 }
 
-/** Smooth step from 0 at `edge0` to 1 at `edge1`. */
-export function smoothstep(edge0: number, edge1: number, value: number): number {
-  const t = clamp((value - edge0) / (edge1 - edge0), 0, 1);
-  return t * t * (3 - 2 * t);
-}
-
 /**
  * Unit vector on the ground plane for a heading in radians.
  * A heading of 0 points east and positive headings turn clockwise, as seen from above.
@@ -83,15 +77,6 @@ export function pointInPolygon(p: Vec2, polygon: readonly Vec2[]): boolean {
     }
   }
   return inside;
-}
-
-/** Distance from a point to the outline of a polygon. It is 0 on the outline. */
-export function distanceToPolygonEdge(p: Vec2, polygon: readonly Vec2[]): number {
-  let best = Infinity;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
-    best = Math.min(best, distanceToSegment(p, polygon[j], polygon[i]));
-  }
-  return best;
 }
 
 /** A rectangle on the ground plane that can be rotated. */

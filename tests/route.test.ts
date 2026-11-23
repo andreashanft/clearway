@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BuildingData, LevelData } from '../src/game/level';
+import type { BuildingData } from '../src/game/level';
 import {
   HAULER_WIDTH,
   createRoute,
@@ -125,42 +125,4 @@ describe('timing', () => {
     expect(urgencyOf(14.9)).toBe('warning');
     expect(urgencyOf(4.9)).toBe('critical');
   });
-});
-
-/**
- * The tuning rule of the code brief: the Hauler must reach each obstacle within ±10 % of the
- * time that the design brief gives.
- */
-const levels = Object.values(
-  import.meta.glob<LevelData>(['../levels/*.json', '!../levels/*.terrain.json'], {
-    eager: true,
-    import: 'default',
-  }),
-);
-
-describe.each(levels)('arrival times of $name', (level) => {
-  const levelRoute = createRoute(level.hauler);
-  const obstacles = findObstacles(levelRoute, level.buildings);
-
-  it('drives the whole line in the given time', () => {
-    expect(level.hauler.length / level.hauler.speed).toBeCloseTo(level.expected.lineSeconds, 0);
-  });
-
-  it('meets exactly the expected building obstacles', () => {
-    const expected = level.expected.arrivals
-      .filter((arrival) => !arrival.gap)
-      .map((arrival) => arrival.obstacle);
-    expect(obstacles.map((obstacle) => obstacle.id)).toEqual(expected);
-  });
-
-  it.each(level.expected.arrivals.filter((arrival) => !arrival.gap))(
-    'reaches $obstacle at about $seconds s',
-    (arrival) => {
-      const obstacle = obstacles.find((candidate) => candidate.id === arrival.obstacle);
-      expect(obstacle).toBeDefined();
-      const seconds = (obstacle?.distance ?? 0) / level.hauler.speed;
-      expect(seconds).toBeGreaterThan(arrival.seconds * 0.9);
-      expect(seconds).toBeLessThan(arrival.seconds * 1.1);
-    },
-  );
 });

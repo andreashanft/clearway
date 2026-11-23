@@ -18,11 +18,10 @@ const TABS: [Tab, string][] = [
 const TOGGLES: Record<Tab, [Toggle, string][]> = {
   controls: [
     ['leftHanded', 'Left-handed'],
-    ['steeringAssist', 'Steering assist'],
-    ['autoSkid', 'Auto-skid (Fishtail)'],
     ['haptics', 'Haptics'],
   ],
   display: [
+    ['chaseCamera', 'Chase camera'],
     ['minimap', 'Mini-map'],
     ['fullCameraShake', 'Full camera shake'],
     ['patternMarkings', 'Pattern markings'],
@@ -39,17 +38,12 @@ const SLIDERS: [Volume, string][] = [
   ['voiceVolume', 'Crew voice'],
 ];
 
-const LAYOUTS: [Settings['touchLayout'], string][] = [
-  ['point', 'Point-to-drive'],
-  ['classic', 'Classic'],
-];
-
 export interface SettingsHandlers {
   onBack: () => void;
   onChange: (changes: Partial<Settings>) => void;
 }
 
-/** Settings: control layout, assists, display options and audio. */
+/** Settings: controls, display options and audio. */
 export class SettingsScreen {
   readonly root: HTMLElement;
   private readonly content: HTMLElement;
@@ -118,29 +112,6 @@ export class SettingsScreen {
       tabButton.setAttribute('aria-pressed', String(tab === this.tab));
     }
     const parts: HTMLElement[] = [];
-
-    if (this.tab === 'controls') {
-      const cards = LAYOUTS.map(([layout, name]) =>
-        el('button', {
-          className: 'settings__layout cw-card',
-          attributes: { type: 'button', 'aria-pressed': String(settings.touchLayout === layout) },
-          children: [el('span', { className: 'cw-display settings__layout-name', text: name })],
-          onClick: () => {
-            this.change({ touchLayout: layout });
-            this.render();
-          },
-        }),
-      );
-      parts.push(
-        el('div', {
-          className: 'settings__group',
-          children: [
-            el('div', { className: 'cw-label', text: 'Touch layout' }),
-            el('div', { className: 'settings__layouts', children: cards }),
-          ],
-        }),
-      );
-    }
 
     if (this.tab === 'audio') {
       parts.push(

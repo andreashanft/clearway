@@ -2,11 +2,14 @@ import { button, el } from '../dom';
 import { ICONS } from '../icons';
 import { createControlsHelp } from './controls-help';
 
-/** The rules of the game in three steps. Each step is one short sentence. */
+/**
+ * What to do, in three steps. Each step is one short sentence. Until the city and the carrier
+ * exist, the steps describe the test yard.
+ */
 const STEPS = [
-  'The Hauler drives one straight line and never stops.',
-  'Destroy everything in its way before it arrives.',
-  'Then wreck the rest for a better medal, until the Hauler leaves.',
+  'The test yard is for trying out how the three vehicles drive.',
+  'Use the bar at the top to switch the vehicle and the camera view, or to reset the yard.',
+  'Drive the slalom, the turning circles and the streets, and ram the buildings.',
 ];
 
 /** How to play: the three rules and the Controls help. */

@@ -3,7 +3,8 @@ import type { Vec2 } from './math';
 /** How strong a building is. Each strength has hit points in `world/damage.ts`. */
 export type Strength = 'shed' | 'house' | 'brick' | 'concrete';
 
-export type VehicleType = 'bruiser' | 'fishtail' | 'liftoff' | 'tumbler' | 'railbed' | 'pilot';
+/** The three vehicles that the player can drive. */
+export type VehicleType = 'dozer' | 'flail' | 'buggy';
 
 export type Lighting = 'morning' | 'dusk' | 'noon';
 
@@ -37,8 +38,8 @@ export type GroundLayer =
 export type GroundTag = 'water' | 'road' | 'rail';
 
 export interface TerrainData {
-  /** File name of the greyscale heightmap, next to the level file. */
-  heightmap: string;
+  /** URL of a greyscale heightmap. Without it, the ground is flat at height zero. */
+  heightmap?: string;
   /** Centre of the terrain square. */
   center: Vec2;
   /** Edge length of the terrain square in metres. */
@@ -86,31 +87,7 @@ export interface BuildingData {
   segments?: number;
 }
 
-export interface VehicleSpawn {
-  id: string;
-  type: VehicleType;
-  pos: Vec2;
-  /** Heading in degrees. 0 points east and positive values turn clockwise. */
-  yaw: number;
-  /** The vehicle starts inside this building and is free once the building is destroyed. */
-  lockedIn?: string;
-  /** For the Railbed: the two ends of the straight track that it runs on. */
-  rail?: [Vec2, Vec2];
-}
-
-/** A stretch of the Hauler's line without ground, for example across a rail cutting. */
-export interface RouteGapData {
-  id: string;
-  /** Name in lower case, as the fail screen shows it: "Hit the rail cutting". */
-  name: string;
-  /** Where the Railbed must stand to bridge the gap. */
-  slot: Vec2;
-  /** Route distances at which the gap starts and ends. */
-  from: number;
-  to: number;
-}
-
-/** A fixed deck that vehicles can drive on, for example a road bridge over a rail cutting. */
+/** A fixed deck that vehicles can drive on, for example a road bridge. */
 export interface DeckData {
   center: Vec2;
   /** Size along the heading, and across it, in metres. */
@@ -145,23 +122,15 @@ export interface HintData {
   text: string;
 }
 
-export interface ExpectedArrival {
-  /** Building id or group, or the id of a route gap. */
-  obstacle: string;
-  /** True when the obstacle is a route gap and not a building. */
-  gap?: boolean;
-  /** When the design brief says the Hauler arrives, in seconds from the level start. */
-  seconds: number;
-}
-
-/** One campaign level, as stored in `levels/<id>.json`. All positions are in metres. */
+/**
+ * One playable area. All positions are in metres.
+ *
+ * An area without a `hauler` is a free-driving area: nothing moves along a line, and the run
+ * never ends. The test yard is such an area.
+ */
 export interface LevelData {
   id: string;
-  /** Position in the campaign, starting at 1. */
-  index: number;
   name: string;
-  setting: string;
-  timeOfDay: string;
   lighting: Lighting;
   terrain: TerrainData;
   /** The play area. Vehicles cannot leave it. */
@@ -173,17 +142,19 @@ export interface LevelData {
     /** Each hedge is a polyline. Vehicles and the Hauler crush hedges. */
     hedges: Vec2[][];
   };
-  hauler: HaulerData;
-  routeGaps: RouteGapData[];
+  /** Where the player's vehicle starts. The heading is in degrees: 0 points east. */
+  spawn: { pos: Vec2; yaw: number };
+  /** The line of the Hauler. */
+  hauler?: HaulerData;
   /** Road bridges and other fixed decks. */
   decks?: DeckData[];
-  player: { vehicle: string };
-  vehicles: VehicleSpawn[];
   buildings: BuildingData[];
-  tnt: { pos: Vec2 }[];
-  beacons: { trails: BeaconTrail[] };
-  relayDish: { pos: Vec2; hiddenBy?: string };
-  hints: HintData[];
-  medals: { silverBuildings: number; silverBeacons: number };
-  expected: { lineSeconds: number; arrivals: ExpectedArrival[] };
+  /** Traffic cones. A vehicle knocks them over. */
+  cones?: Vec2[];
+  tnt?: { pos: Vec2 }[];
+  beacons?: { trails: BeaconTrail[] };
+  relayDish?: { pos: Vec2; hiddenBy?: string };
+  hints?: HintData[];
+  /** The share of buildings and beacons that the silver medal asks for, from 0 to 1. */
+  medals?: { silverBuildings: number; silverBeacons: number };
 }

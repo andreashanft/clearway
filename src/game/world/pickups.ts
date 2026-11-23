@@ -1,7 +1,7 @@
 import * as THREE from 'three/webgpu';
 import type { EventBus } from '../../engine/events';
 import type { GameEvents } from '../events';
-import type { LevelData } from '../level';
+import type { BeaconTrail } from '../level';
 import type { Vec2 } from '../math';
 import type { Effects } from './effects';
 import { MeshBuilder } from './mesh-builder';
@@ -48,13 +48,14 @@ export class Pickups {
   private clock = 0;
 
   constructor(
-    level: LevelData,
+    trails: readonly BeaconTrail[],
+    relayDish: { pos: Vec2; hiddenBy?: string },
     heightAt: (x: number, z: number) => number,
     private readonly effects: Effects,
     private readonly events: EventBus<GameEvents>,
   ) {
     this.object.name = 'pickups';
-    for (const trail of level.beacons.trails) {
+    for (const trail of trails) {
       for (let i = 0; i < trail.count; i += 1) {
         const t = trail.count === 1 ? 0.5 : i / (trail.count - 1);
         const x = trail.from[0] + (trail.to[0] - trail.from[0]) * t;
@@ -98,14 +99,14 @@ export class Pickups {
       }
     }
 
-    const [dx, dz] = level.relayDish.pos;
+    const [dx, dz] = relayDish.pos;
     this.dishPosition = new THREE.Vector3(dx, heightAt(dx, dz), dz);
     this.dishGlow = new THREE.MeshBasicMaterial({ color: SIGNAL, toneMapped: false });
     this.dish = createDish(this.dishGlow);
     this.dish.position.copy(this.dishPosition);
     this.object.add(this.dish);
 
-    const cover = level.relayDish.hiddenBy;
+    const cover = relayDish.hiddenBy;
     if (cover === 'hay-bales') {
       this.bales = createBales();
       this.bales.position.copy(this.dishPosition);

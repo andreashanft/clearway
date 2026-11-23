@@ -53,6 +53,12 @@ export async function loadHeightmap(url: string): Promise<{ grey: Uint8Array; sa
   return { grey, samples: canvas.width };
 }
 
+/** Returns the height data of flat ground at height zero, for an area without a heightmap. */
+export function flatHeightmap(): { grey: Uint8Array; samples: number } {
+  const samples = 17;
+  return { grey: new Uint8Array(samples * samples), samples };
+}
+
 /** Builds the terrain of a level and adds its collider to the physics world. */
 export function createTerrain(
   level: LevelData,

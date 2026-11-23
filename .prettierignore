@@ -4,5 +4,7 @@ coverage/
 node_modules/
 package-lock.json
 LICENSE
-levels/*.png
 public/
+
+# Instructions for coding agents. Their author formats them by hand.
+CLAUDE.md

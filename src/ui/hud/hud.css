@@ -158,7 +158,7 @@
   }
 }
 
-/* Vehicle card: desktop only. It shows the vehicle name and the action charge, no key hints. */
+/* Vehicle card: desktop only. It shows the vehicle name and its speed, no key hints. */
 .hud__card {
   position: absolute;
   left: 28px;
@@ -196,12 +196,6 @@
   min-width: 0;
 }
 
-.hud__card-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
 .hud__card-name {
   font-family: var(--cw-font-display);
   font-weight: 900;
@@ -210,27 +204,11 @@
   text-transform: uppercase;
 }
 
-.hud__card-label {
+.hud__card-speed {
   font-family: var(--cw-font-mono);
-  font-size: 11px;
+  font-size: 13px;
+  font-weight: 700;
   color: var(--cw-hazard);
-}
-
-.hud__card-track {
-  height: 6px;
-  background: rgba(var(--cw-hazard-rgb), 0.15);
-}
-
-.hud__card-bar {
-  height: 100%;
-  background: var(--cw-hazard);
-  transform-origin: left center;
-  opacity: 0.55;
-}
-
-.hud__card.is-ready .hud__card-bar {
-  opacity: 1;
-  box-shadow: 0 0 10px rgba(var(--cw-hazard-rgb), 0.5);
 }
 
 /* Path clear: a full-width banner for three seconds. */

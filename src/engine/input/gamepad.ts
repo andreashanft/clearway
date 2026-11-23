@@ -3,7 +3,7 @@ import type { Button, InputSource, InputState } from './input';
 /** Standard gamepad button indices that fire once when they go down. */
 const PRESS_BUTTONS: [number, Button][] = [
   [0, 'action'], // A
-  [3, 'enterExit'], // Y
+  [3, 'camera'], // Y
   [4, 'rotateLeft'], // LB
   [5, 'rotateRight'], // RB
   [9, 'pause'], // Start
@@ -15,9 +15,9 @@ const ZOOM_THRESHOLD = 0.6;
 /**
  * Gamepad with the standard mapping.
  *
- * The left stick steers, the right trigger accelerates, the left trigger brakes and reverses,
- * A is the action, Y enters or leaves a vehicle, the bumpers rotate the camera, the right stick
- * zooms and Start pauses.
+ * The left stick steers, the right trigger accelerates, the left trigger brakes and then
+ * reverses, A is the action, X is the handbrake, Y switches the camera view, the bumpers rotate
+ * the fixed view, the right stick zooms and Start pauses.
  */
 export class GamepadInput implements InputSource {
   private readonly wasDown = new Set<number>();
@@ -41,6 +41,7 @@ export class GamepadInput implements InputSource {
     const reverse = pad.buttons[6]?.value ?? 0;
     state.throttle += accelerate - reverse;
     state.action ||= pad.buttons[0]?.pressed ?? false;
+    state.brake ||= pad.buttons[2]?.pressed ?? false;
 
     for (const [index, button] of PRESS_BUTTONS) {
       const down = pad.buttons[index]?.pressed ?? false;

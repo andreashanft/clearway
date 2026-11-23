@@ -17,7 +17,7 @@ export interface GameEvents {
     /** Strength from 0 to 1, for sound volume and camera shake. */
     strength: number;
     material: Strength;
-    /** True when the building took no damage, for example a Bruiser against concrete. */
+    /** True when the building took no damage, for example a vehicle against concrete. */
     blocked: boolean;
     /** True when at least one segment fell. */
     broke: boolean;
@@ -33,8 +33,6 @@ export interface GameEvents {
   tntLit: { position: THREE.Vector3 };
   /** A TNT crate came back at its starting place. */
   tntRespawned: { position: THREE.Vector3 };
-  /** A vehicle fired its action, for example the ram charge. */
-  actionFired: { kind: string };
   /** A vehicle landed after a jump. */
   landed: { speed: number };
   /** A vehicle drove past a beacon and lit it. */
@@ -60,8 +58,10 @@ export interface GameEvents {
   levelEnded: { result: LevelResult };
   /** A tutorial hint should show. */
   hint: { text: string };
-  /** The player climbed into a vehicle, or left one and walks as the pilot. */
+  /** The player switched to another vehicle. */
   vehicleChanged: { type: string };
+  /** The player pressed the button that switches between the chase view and the fixed view. */
+  cameraToggled: Record<string, never>;
   /** The player pressed the pause button or key. */
   pauseRequested: Record<string, never>;
   /** The slow-motion replay of the crash started or ended. */
@@ -80,4 +80,4 @@ export interface GameEvents {
 export type Phase = 'ready' | 'playing' | 'bonus' | 'failed' | 'ended';
 
 /** What the Hauler hit. */
-export type FailCause = Strength | 'vehicle' | 'tnt' | 'explosion' | 'tree' | 'gap';
+export type FailCause = Strength | 'vehicle' | 'tnt' | 'explosion' | 'tree';

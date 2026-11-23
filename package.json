@@ -2,7 +2,7 @@
   "name": "clearway",
   "version": "0.1.0",
   "private": true,
-  "description": "Clearway is a browser demolition-puzzle game: clear the route before the Hauler arrives.",
+  "description": "Clearway is a browser demolition game: clear a path through a city before the antimatter carrier arrives.",
   "license": "GPL-3.0-or-later",
   "type": "module",
   "engines": {
@@ -18,9 +18,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "check": "npm run typecheck && npm run lint && npm run format:check && npm run test",
-    "build:icons": "tsx tools/build-icons.ts",
-    "build:terrain": "tsx tools/build-terrain.ts",
-    "report:route": "tsx tools/report-route.ts"
+    "build:icons": "tsx tools/build-icons.ts"
   },
   "dependencies": {
     "@dimforge/rapier3d-compat": "0.21.0",

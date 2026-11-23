@@ -126,3 +126,8 @@ body {
     width: 100%;
   }
 }
+
+/* The `hidden` attribute always hides an element, whatever `display` its class sets. */
+[hidden] {
+  display: none !important;
+}

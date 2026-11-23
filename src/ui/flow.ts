@@ -2,63 +2,52 @@ import './screens/screens.css';
 import type { App } from '../app';
 import type { Save, Settings } from '../engine/save';
 import type { Game } from '../game/game';
-import { LEVELS, getLevel } from '../game/levels';
 import { el } from './dom';
-import { BriefingScreen } from './screens/briefing';
-import { CampaignScreen } from './screens/campaign';
 import { FailScreen } from './screens/fail';
 import { HowToPlayScreen } from './screens/how-to-play';
 import { PauseScreen } from './screens/pause';
 import { ResultsScreen } from './screens/results';
 import { SettingsScreen } from './screens/settings';
 import { TitleScreen } from './screens/title';
+import { YardBar } from './yard-bar';
 
 /** Every state of the screen flow. `playing` shows the head-up display and no screen. */
 export type ScreenName =
-  | 'title'
-  | 'campaign'
-  | 'briefing'
-  | 'playing'
-  | 'paused'
-  | 'failed'
-  | 'results'
-  | 'settings'
-  | 'howto';
+  'title' | 'playing' | 'paused' | 'failed' | 'results' | 'settings' | 'howto';
 
 /** Screens that cover the 3D scene completely. The scene is not drawn behind them. */
-const OPAQUE: ReadonlySet<ScreenName> = new Set(['campaign', 'results', 'settings', 'howto']);
+const OPAQUE: ReadonlySet<ScreenName> = new Set(['results', 'settings', 'howto']);
 
 /** Screens on which the simulation runs. On every other screen it stands still. */
-const RUNNING: ReadonlySet<ScreenName> = new Set(['playing', 'failed', 'title', 'briefing']);
+const RUNNING: ReadonlySet<ScreenName> = new Set(['playing', 'failed', 'title']);
 
 /** Milliseconds between the crash and the fail screen, so that the explosion shows first. */
 const FAIL_DELAY = 900;
-/** Milliseconds between the end of the level and the result screen. */
+/** Milliseconds between the end of the run and the result screen. */
 const RESULT_DELAY = 500;
 
 /**
  * The screen flow of the game, as a small state machine:
  *
- * `title → campaign → briefing → playing ⇄ paused`, and
- * `playing → failed`, or `playing → results` once the Hauler has left.
- * Settings and How to play return to where they were opened from.
+ * `title → playing ⇄ paused`, and `playing → failed`, or `playing → results` once the Hauler
+ * has left. Settings and How to play return to where they were opened from.
+ *
+ * Until the city map exists, Play leads straight into the test yard.
  */
 export class Flow {
   private current: ScreenName = 'title';
   private settingsReturn: ScreenName = 'title';
-  private levelId = LEVELS[0].id;
   private clock = 0;
   private timer: number | undefined;
   private busy = false;
 
   private readonly title: TitleScreen;
-  private readonly campaign: CampaignScreen;
-  private readonly briefing: BriefingScreen;
   private readonly pause: PauseScreen;
   private readonly fail: FailScreen;
   private readonly results: ResultsScreen;
   private readonly settings: SettingsScreen;
   private readonly howto: HowToPlayScreen;
+  private readonly yardBar: YardBar;
   private readonly loading: HTMLElement;
   private readonly roots: Partial<Record<ScreenName, HTMLElement>>;
   private readonly shell: HTMLElement;
@@ -70,33 +59,24 @@ export class Flow {
   ) {
     this.shell = parent.parentElement ?? parent;
     this.title = new TitleScreen({
-      onPlay: () => this.go('campaign'),
+      onPlay: () => this.startPlay(),
       onSettings: () => this.openSettings(),
       onHowToPlay: () => this.go('howto'),
-    });
-    this.campaign = new CampaignScreen(LEVELS, {
-      onBack: () => void this.showTitle(),
-      onOpenLevel: (id) => void this.openBriefing(id),
-    });
-    this.briefing = new BriefingScreen({
-      onBack: () => this.go('campaign'),
-      onStart: () => this.startPlay(),
-      onFlyover: (progress) => this.app.game?.setFlyover(progress),
     });
     this.pause = new PauseScreen({
       onResume: () => this.resume(),
       onRestart: () => void this.restart(),
       onSettings: () => this.openSettings(),
-      onQuit: () => this.go('campaign'),
+      onQuit: () => void this.showTitle(),
     });
     this.fail = new FailScreen({
       onRetry: () => void this.restart(),
       onWatchAgain: () => this.app.game?.replayCrash(),
-      onQuit: () => this.go('campaign'),
+      onQuit: () => void this.showTitle(),
     });
     this.results = new ResultsScreen({
-      onReplay: () => void this.openBriefing(this.levelId),
-      onNext: () => this.go('campaign'),
+      onReplay: () => void this.restart(),
+      onNext: () => void this.showTitle(),
     });
     this.settings = new SettingsScreen({
       onBack: () => this.go(this.settingsReturn),
@@ -106,6 +86,11 @@ export class Flow {
       },
     });
     this.howto = new HowToPlayScreen(() => this.go('title'));
+    this.yardBar = new YardBar(parent, {
+      onVehicle: (type) => this.app.setVehicle(type),
+      onCamera: () => this.toggleCamera(),
+      onReset: () => void this.restart(),
+    });
     this.loading = el('div', {
       className: 'loading',
       attributes: { role: 'status' },
@@ -115,8 +100,6 @@ export class Flow {
 
     this.roots = {
       title: this.title.root,
-      campaign: this.campaign.root,
-      briefing: this.briefing.root,
       paused: this.pause.root,
       failed: this.fail.root,
       results: this.results.root,
@@ -134,11 +117,10 @@ export class Flow {
     this.applySettings();
   }
 
-  /** Shows the title screen, or drops straight into a level when `levelId` is given. */
-  async boot(levelId?: string): Promise<void> {
-    if (levelId) {
-      this.levelId = getLevel(levelId).id;
-      if (await this.loadLevel(this.levelId)) {
+  /** Shows the title screen, or drops straight into play when `skipTitle` is set. */
+  async boot(skipTitle = false): Promise<void> {
+    if (skipTitle) {
+      if (await this.loadLevel()) {
         this.startPlay();
       }
       return;
@@ -152,20 +134,8 @@ export class Flow {
   }
 
   private async showTitle(): Promise<void> {
-    // The backdrop is the level that the player plays next.
-    const ids = LEVELS.map((level) => level.id);
-    const next = LEVELS.find(
-      (level) => this.save.isUnlocked(level.id, ids) && !this.save.isCleared(level.id),
-    );
-    if (await this.loadLevel((next ?? LEVELS[0]).id)) {
+    if (await this.loadLevel()) {
       this.go('title');
-    }
-  }
-
-  private async openBriefing(levelId: string): Promise<void> {
-    if (await this.loadLevel(levelId)) {
-      this.levelId = levelId;
-      this.go('briefing');
     }
   }
 
@@ -185,7 +155,7 @@ export class Flow {
   }
 
   private async restart(): Promise<void> {
-    if (await this.loadLevel(this.levelId, true)) {
+    if (await this.loadLevel(true)) {
       this.startPlay();
     }
   }
@@ -195,26 +165,30 @@ export class Flow {
     this.go('settings');
   }
 
+  private toggleCamera(): void {
+    this.save.updateSettings({ chaseCamera: !this.save.settings.chaseCamera });
+    this.applySettings();
+  }
+
   /**
-   * Loads a level unless it is already loaded and has not started yet.
+   * Loads the area unless it is already loaded and has not started yet.
    *
    * @returns False when another load is still running. The caller must then do nothing.
    */
-  private async loadLevel(levelId: string, force = false): Promise<boolean> {
+  private async loadLevel(force = false): Promise<boolean> {
     if (this.busy) {
       return false;
     }
-    const game = this.app.game;
-    if (!force && game && game.level.id === levelId && game.phase === 'ready') {
+    if (!force && this.app.game?.phase === 'ready') {
       return true;
     }
     this.busy = true;
     this.loading.hidden = false;
     window.clearTimeout(this.timer);
     try {
-      // Let the browser paint the loading tag before the level builds.
+      // Let the browser paint the loading tag before the area builds.
       await new Promise((resolve) => window.setTimeout(resolve, 0));
-      await this.app.loadLevel(levelId);
+      await this.app.loadLevel();
     } finally {
       this.loading.hidden = true;
       this.busy = false;
@@ -222,13 +196,14 @@ export class Flow {
     return true;
   }
 
-  /** Listens to a freshly loaded level. */
+  /** Listens to a freshly loaded area. */
   private connect(game: Game): void {
     game.events.on('pauseRequested', () => this.pauseGame());
+    game.events.on('cameraToggled', () => this.toggleCamera());
     game.events.on('haulerDestroyed', ({ hit, cause, obstaclesCleared, obstaclesTotal }) => {
       this.vibrate([60, 40, 140]);
       this.timer = window.setTimeout(() => {
-        // The player may have left the level, or loaded another one, in the meantime.
+        // The player may have left the area, or loaded it again, in the meantime.
         if (this.app.game === game && this.current === 'playing') {
           this.fail.show(hit, cause, obstaclesCleared, obstaclesTotal);
           this.go('failed');
@@ -237,10 +212,9 @@ export class Flow {
     });
     game.events.on('levelEnded', ({ result }) => {
       const outcome = this.save.recordResult(game.level.id, result);
-      const hasNext = LEVELS.some((level) => level.index === game.level.index + 1);
       this.timer = window.setTimeout(() => {
         if (this.app.game === game && this.current === 'playing') {
-          this.results.show(game.level, result, outcome, hasNext);
+          this.results.show(game.level, result, outcome, false);
           this.go('results');
         }
       }, RESULT_DELAY);
@@ -261,8 +235,9 @@ export class Flow {
     const { app } = this;
     const playing = screen === 'playing';
     app.setPlayUi(playing);
-    // The level only runs during play and while the crash plays out. The title and the briefing
-    // need running time for their camera, and their level has not started yet.
+    this.yardBar.setVisible(playing && app.game?.level.id === 'yard');
+    // The area only runs during play and while the crash plays out. The title needs running
+    // time for its camera, and its run has not started yet.
     app.setPaused(!RUNNING.has(screen));
     app.renderScene = !OPAQUE.has(screen);
     this.shell.classList.toggle('is-paused', screen === 'paused');
@@ -271,7 +246,7 @@ export class Flow {
       app.stepper.timeScale = 1;
     }
     if (app.game) {
-      // The title shows the diorama without markings.
+      // The title shows the area without markings.
       app.game.showMarkers = screen !== 'title';
     }
     // Menus have their own quiet groove. During play the game state picks the music.
@@ -282,16 +257,8 @@ export class Flow {
     }
 
     switch (screen) {
-      case 'title': {
-        const ids = LEVELS.map((level) => level.id);
-        this.title.show(ids.filter((id) => this.save.isCleared(id)).length, ids.length);
-        break;
-      }
-      case 'campaign':
-        this.campaign.show(this.save);
-        break;
-      case 'briefing':
-        this.briefing.show(getLevel(this.levelId), this.save.record(this.levelId));
+      case 'title':
+        this.title.show();
         break;
       case 'paused':
         if (previous === 'playing' && app.game) {
@@ -318,11 +285,11 @@ export class Flow {
   /** Runs once per frame. */
   private update(frameSeconds: number): void {
     this.clock += frameSeconds;
-    if (this.current === 'briefing') {
-      this.briefing.update(frameSeconds);
-    } else if (this.current === 'title') {
-      // The title backdrop drifts slowly along the middle of the Hauler's line.
-      this.app.game?.setFlyover(0.46 + 0.1 * Math.sin(this.clock * 0.12));
+    const { game } = this.app;
+    if (this.current === 'title') {
+      game?.setBackdrop(this.clock);
+    } else if (this.current === 'playing' && game) {
+      this.yardBar.update(game, this.save.settings.chaseCamera);
     }
     if (this.current !== 'playing' && this.current !== 'failed') {
       // The game does not read input in a menu, so the pause key works as Back here.
@@ -345,12 +312,6 @@ export class Flow {
       case 'howto':
         this.go('title');
         break;
-      case 'campaign':
-        void this.showTitle();
-        break;
-      case 'briefing':
-        this.go('campaign');
-        break;
       default:
         break;
     }
@@ -361,13 +322,10 @@ export class Flow {
     const settings: Readonly<Settings> = this.save.settings;
     const { app } = this;
     app.options.cameraShake = settings.fullCameraShake ? 1 : 0.45;
-    app.options.steeringAssist = settings.steeringAssist;
     app.options.patternMarkings = settings.patternMarkings;
-    app.options.autoSkid = settings.autoSkid;
+    app.options.chaseCamera = settings.chaseCamera;
     app.hud.setMinimapVisible(settings.minimap);
     app.touch.setLeftHanded(settings.leftHanded);
-    app.touch.setClassic(settings.touchLayout === 'classic');
-    app.keyboard.classic = settings.touchLayout === 'classic';
     app.audio.setVolumes({
       music: settings.musicVolume / 100,
       effects: settings.effectsVolume / 100,

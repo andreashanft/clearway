@@ -1,7 +1,7 @@
 import './hud.css';
 import * as THREE from 'three/webgpu';
 import type { Game } from '../../game/game';
-import { formatTime, medalFor, type Medal } from '../../game/scoring';
+import { DEFAULT_MEDAL_RULES, formatTime, medalFor, type Medal } from '../../game/scoring';
 import { button, el, setText, tag } from '../dom';
 import { ICONS, vehicleIcon } from '../icons';
 import { Minimap } from './minimap';
@@ -40,8 +40,7 @@ export class Hud {
   private readonly card: HTMLElement;
   private readonly cardIcon: HTMLElement;
   private readonly cardName: HTMLElement;
-  private readonly cardLabel: HTMLElement;
-  private readonly cardBar: HTMLElement;
+  private readonly cardSpeed: HTMLElement;
   private readonly banner: HTMLElement;
   private readonly bannerClear: HTMLElement;
   private readonly bannerBonus: HTMLElement;
@@ -56,7 +55,6 @@ export class Hud {
   private cardVehicle = '';
   private unsubscribe: (() => void)[] = [];
   private readonly projected = new THREE.Vector3();
-  private readonly gapTarget = new THREE.Vector3();
   private lastMinimapTap = 0;
   private subtitles = true;
   private warned = false;
@@ -115,18 +113,14 @@ export class Hud {
 
     this.cardIcon = el('div', { className: 'hud__card-icon' });
     this.cardName = el('div', { className: 'hud__card-name' });
-    this.cardLabel = el('div', { className: 'hud__card-label' });
-    this.cardBar = el('div', { className: 'hud__card-bar' });
+    this.cardSpeed = el('div', { className: 'hud__card-speed' });
     this.card = el('div', {
       className: 'hud__card',
       children: [
         this.cardIcon,
         el('div', {
           className: 'hud__card-body',
-          children: [
-            el('div', { className: 'hud__card-row', children: [this.cardName, this.cardLabel] }),
-            el('div', { className: 'hud__card-track', children: [this.cardBar] }),
-          ],
+          children: [this.cardName, this.cardSpeed],
         }),
       ],
     });
@@ -222,7 +216,9 @@ export class Hud {
       game.events.on('phaseChanged', ({ phase }) => {
         if (phase === 'playing') {
           this.warned = false;
-          this.caption('Hauler is rolling.');
+          if (game.hauler) {
+            this.caption('Hauler is rolling.');
+          }
         } else if (phase === 'bonus') {
           this.caption('Path clear!');
         }
@@ -240,7 +236,9 @@ export class Hud {
     this.root.dataset.phase = phase;
 
     // Counters: obstacles and beacons while the path is blocked; buildings, beacons, the dish
-    // and the time until the Hauler leaves once it is clear.
+    // and the time until the Hauler leaves once it is clear. An area without a Hauler has no
+    // path, so it shows no counters.
+    this.counters.hidden = !game.hauler;
     const tally = game.tally();
     if (bonus) {
       setText(this.obstacleCount, `${tally.buildingsDestroyed} / ${tally.buildingsTotal}`);
@@ -290,7 +288,7 @@ export class Hud {
 
     // Medal earned: a short banner when bonus time lifts the medal to silver or gold.
     if (bonus && this.bannerTimer <= 0) {
-      const medal = medalFor(tally, game.level.medals);
+      const medal = medalFor(tally, game.level.medals ?? DEFAULT_MEDAL_RULES);
       if (medal !== this.medal) {
         this.medal = medal;
         if (medal === 'silver' || medal === 'gold') {
@@ -327,15 +325,6 @@ export class Hud {
     // Aim at the part of the obstacle that the Hauler reaches first.
     let target: THREE.Vector3 | undefined;
     let nearest = Infinity;
-    const gap = next.obstacle.gap;
-    if (gap) {
-      // A gap in the route: point at the slot that the Railbed must fill.
-      target = this.gapTarget.set(
-        gap.slot[0],
-        game.heightAt(gap.slot[0], gap.slot[1]),
-        gap.slot[1],
-      );
-    }
     for (const segment of next.obstacle.segments) {
       if (segment.building.hp[segment.index] > 0 && segment.enter < nearest) {
         nearest = segment.enter;
@@ -354,7 +343,7 @@ export class Hud {
     const x = (this.projected.x * 0.5 + 0.5) * width;
     const y = (-this.projected.y * 0.5 + 0.5) * height;
     // The direction on the screen follows from the direction on the ground and the view heading.
-    const view = game.cameraRig.targetHeading;
+    const view = game.cameraRig.heading;
     const dx = target.x - vehicle.x;
     const dz = target.z - vehicle.z;
     const screenRight = -dx * Math.sin(view) + dz * Math.cos(view);
@@ -366,16 +355,14 @@ export class Hud {
     this.pointer.classList.add('is-on');
   }
 
+  /** Shows the vehicle and its speed. */
   private updateCard(game: Game): void {
     const vehicle = game.activeVehicle;
     if (this.cardVehicle !== vehicle.spec.type) {
       this.cardVehicle = vehicle.spec.type;
       this.cardIcon.innerHTML = vehicleIcon(vehicle.spec.type, 44);
       setText(this.cardName, vehicle.spec.name);
-      setText(this.cardLabel, vehicle.spec.actionLabel ? `${vehicle.spec.actionLabel} CHARGE` : '');
     }
-    const charge = vehicle.actionActive ? 1 : vehicle.actionCharge;
-    this.cardBar.style.transform = `scaleX(${charge.toFixed(3)})`;
-    this.card.classList.toggle('is-ready', vehicle.actionCharge >= 1 || vehicle.actionActive);
+    setText(this.cardSpeed, `${Math.round(Math.abs(vehicle.forwardSpeed) * 3.6)} KM/H`);
   }
 }

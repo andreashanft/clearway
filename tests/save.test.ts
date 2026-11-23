@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, SAVE_KEY, Save, medalSteps, type SaveStorage } from '../src/engine/save';
+import { DEFAULT_SETTINGS, SAVE_KEY, Save, type SaveStorage } from '../src/engine/save';
 import type { LevelResult } from '../src/game/scoring';
 
 /** A stand-in for `localStorage`. */
@@ -35,8 +35,6 @@ function result(overrides: Partial<LevelResult> = {}): LevelResult {
   };
 }
 
-const LEVELS = ['one', 'two', 'three'];
-
 describe('Save', () => {
   it('starts with default settings and no records', () => {
     const save = new Save(memoryStorage());
@@ -51,7 +49,21 @@ describe('Save', () => {
     expect(storage.values.has(SAVE_KEY)).toBe(true);
     expect(reloaded.settings.leftHanded).toBe(true);
     expect(reloaded.settings.musicVolume).toBe(20);
-    expect(reloaded.settings.steeringAssist).toBe(true);
+    expect(reloaded.settings.chaseCamera).toBe(true);
+  });
+
+  it('drops stored settings that the game no longer has', () => {
+    const storage = memoryStorage();
+    storage.setItem(
+      SAVE_KEY,
+      JSON.stringify({
+        version: 1,
+        levels: {},
+        settings: { touchLayout: 'classic', autoSkid: false, leftHanded: true, musicVolume: 'x' },
+      }),
+    );
+    const { settings } = new Save(storage);
+    expect(settings).toEqual({ ...DEFAULT_SETTINGS, leftHanded: true });
   });
 
   it('keeps medals, best times and counts across reloads', () => {
@@ -105,23 +117,6 @@ describe('Save', () => {
     const save = new Save(memoryStorage());
     save.recordResult('one', result({ pathCleared: false, medal: 'none' }));
     expect(save.record('one')).toBeUndefined();
-    expect(save.isCleared('one')).toBe(false);
-  });
-
-  it('unlocks the next level on bronze', () => {
-    const save = new Save(memoryStorage());
-    expect(save.isUnlocked('one', LEVELS)).toBe(true);
-    expect(save.isUnlocked('two', LEVELS)).toBe(false);
-    save.recordResult('one', result({ medal: 'bronze' }));
-    expect(save.isUnlocked('two', LEVELS)).toBe(true);
-    expect(save.isUnlocked('three', LEVELS)).toBe(false);
-  });
-
-  it('counts medal steps', () => {
-    const save = new Save(memoryStorage());
-    save.recordResult('one', result({ medal: 'gold' }));
-    save.recordResult('two', result({ medal: 'bronze' }));
-    expect(medalSteps(save, LEVELS)).toBe(4);
   });
 
   it('survives damaged save data', () => {

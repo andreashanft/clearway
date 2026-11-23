@@ -156,8 +156,8 @@ export class Hauler {
   }
 
   /**
-   * Returns the first solid collider that the Hauler touches: a building, a vehicle, a TNT crate,
-   * the pilot or a tree. Rubble does not count.
+   * Returns the first solid collider that the Hauler touches: a building, a vehicle, a TNT crate
+   * or a tree. Rubble does not count.
    */
   findCollision(): RAPIER.Collider | undefined {
     if (this.destroyed) {
@@ -179,11 +179,8 @@ export class Hauler {
         return false;
       },
       undefined,
-      // Bridges are not in the list: the Hauler drives over the Railbed, it does not hit it.
-      collisionGroups(
-        0xffff,
-        Layer.building | Layer.vehicle | Layer.crate | Layer.pilot | Layer.prop,
-      ),
+      // Bridges are not in the list: the Hauler drives over a bridge, it does not hit it.
+      collisionGroups(0xffff, Layer.building | Layer.vehicle | Layer.crate | Layer.prop),
       undefined,
       this.body,
     );

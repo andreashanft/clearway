@@ -21,7 +21,6 @@ export const Layer = {
   crate: 0x0010,
   prop: 0x0020,
   hauler: 0x0040,
-  pilot: 0x0080,
   bridge: 0x0100,
 } as const;
 

@@ -1,0 +1,88 @@
+/* The bar of the test yard. It sits in the top row, to the right of the pause button. */
+.yard {
+  position: absolute;
+  top: calc(var(--cw-safe-top) + 12px);
+  left: calc(var(--cw-safe-left) + 70px);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  max-width: calc(100% - 24px);
+  pointer-events: auto;
+}
+
+.yard__group {
+  display: flex;
+  gap: 4px;
+}
+
+.yard__button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--cw-line);
+  background: rgba(var(--cw-chip-rgb), 0.6);
+  color: var(--cw-ink);
+  font-family: var(--cw-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.yard__button:hover {
+  border-color: var(--cw-line-strong);
+}
+
+.yard__button:focus-visible {
+  outline: 2px solid var(--cw-white);
+  outline-offset: 2px;
+}
+
+.yard__vehicle {
+  padding: 0 8px 0 4px;
+}
+
+.yard__vehicle[aria-pressed='true'] {
+  border-color: var(--cw-hazard);
+  background: rgba(var(--cw-hazard-rgb), 0.18);
+  color: var(--cw-hazard);
+}
+
+.yard__cones {
+  white-space: nowrap;
+}
+
+/* Narrow screens: the vehicle buttons show icons only, so that the bar ends before the mini-map. */
+@media (max-width: 900px) {
+  .yard__name {
+    display: none;
+  }
+
+  .yard__vehicle {
+    padding: 0 6px;
+  }
+}
+
+/* Portrait: the bar sits centred below the top row, in front of the sky. */
+@media (orientation: portrait) {
+  .yard {
+    top: calc(max(var(--cw-safe-top), 44px) + 86px);
+    left: 50%;
+    transform: translateX(-50%);
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+  }
+}
+
+/* Tablets and desktops: the top row of the head-up display has wider margins there. */
+@media (min-width: 1000px) and (min-height: 700px) {
+  .yard {
+    top: calc(var(--cw-safe-top) + 18px);
+    left: calc(var(--cw-safe-left) + 80px);
+  }
+}

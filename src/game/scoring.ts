@@ -29,6 +29,12 @@ export interface MedalRules {
   silverBeacons: number;
 }
 
+/** The medal rules of an area that does not set its own. */
+export const DEFAULT_MEDAL_RULES: Readonly<MedalRules> = {
+  silverBuildings: 0.8,
+  silverBeacons: 0.8,
+};
+
 /** What a player still needs for gold. */
 export interface GoldGap {
   buildings: number;

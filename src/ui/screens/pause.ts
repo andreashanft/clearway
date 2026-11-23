@@ -9,7 +9,7 @@ export interface PauseHandlers {
   onQuit: () => void;
 }
 
-/** Pause: Resume, Restart, Settings, Quit to map, and the Controls help. */
+/** Pause: Resume, Restart, Settings, Quit, and the Controls help. */
 export class PauseScreen {
   readonly root: HTMLElement;
   private readonly impact: HTMLElement;
@@ -40,7 +40,7 @@ export class PauseScreen {
                 button('Settings', 'ghost', handlers.onSettings),
               ],
             }),
-            button('Quit to map', 'quiet', handlers.onQuit, { className: 'pause__quit' }),
+            button('Quit to title', 'quiet', handlers.onQuit, { className: 'pause__quit' }),
           ],
         }),
         createControlsHelp(),
@@ -50,10 +50,12 @@ export class PauseScreen {
 
   /**
    * @param secondsToImpact Seconds until the Hauler hits the next obstacle, or `Infinity`.
-   * @param secondsToLeave Seconds until the Hauler leaves the map.
+   * @param secondsToLeave Seconds until the Hauler leaves the map, or `Infinity` when the area
+   *   has no Hauler.
    */
   show(secondsToImpact: number, secondsToLeave: number): void {
     const clear = !Number.isFinite(secondsToImpact);
+    this.impact.hidden = !Number.isFinite(secondsToLeave);
     setText(
       this.impact,
       clear ? `${formatTime(secondsToLeave)} BONUS` : `${formatTime(secondsToImpact)} TO IMPACT`,

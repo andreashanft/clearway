@@ -16,12 +16,10 @@ const RUBBLE_SOUNDS = ['rubble-1', 'rubble-2', 'rubble-3'];
 const BLAST_SOUNDS = ['blast-1', 'blast-2', 'blast-3'];
 
 /** The engine recording of each vehicle type, and the pitch at standstill and at top speed. */
-const ENGINES: Partial<Record<VehicleType, { sound: string; low: number; high: number }>> = {
-  bruiser: { sound: 'engine-tank', low: 0.8, high: 1.35 },
-  fishtail: { sound: 'engine-truck', low: 0.8, high: 1.5 },
-  liftoff: { sound: 'engine-idle', low: 1.0, high: 2.0 },
-  tumbler: { sound: 'engine-generator', low: 0.75, high: 1.3 },
-  railbed: { sound: 'machine', low: 0.8, high: 1.2 },
+const ENGINES: Record<VehicleType, { sound: string; low: number; high: number }> = {
+  dozer: { sound: 'engine-tank', low: 0.8, high: 1.35 },
+  flail: { sound: 'engine-truck', low: 0.8, high: 1.5 },
+  buggy: { sound: 'engine-idle', low: 1.0, high: 2.0 },
 };
 
 /** Sounds beyond this distance from the camera focus are silent, in metres. */
@@ -44,8 +42,6 @@ export class SoundDirector {
   private engine: { type: VehicleType; loop: Loop } | undefined;
   private readonly hauler: Loop;
   private readonly alarm: Loop;
-  private readonly skid: Loop;
-  private readonly rocket: Loop;
   private readonly fuse: Loop;
   private mood: Mood = 'off';
 
@@ -53,8 +49,6 @@ export class SoundDirector {
     this.music = new Music(audio);
     this.hauler = audio.loop('hauler');
     this.alarm = audio.loop('alarm');
-    this.skid = audio.loop('skid');
-    this.rocket = audio.loop('rocket');
     this.fuse = audio.loop('fuse');
     audio.preload([
       ...IMPACT_SOUNDS.shed,
@@ -146,14 +140,6 @@ export class SoundDirector {
     game.events.on('levelEnded', ({ result }) => {
       this.audio.play('bell-low', { volume: 0.8, rate: result.medal === 'gold' ? 1.5 : 1 });
     });
-    game.events.on('actionFired', ({ kind }) => {
-      if (kind === 'ram') {
-        this.audio.play('woosh', { volume: 0.7, rate: 1.6 });
-        this.audio.play('engine-load', { volume: 0.7 });
-      } else if (kind === 'roll') {
-        this.audio.play('fuzz-tom', { volume: 0.8 });
-      }
-    });
     game.events.on('vehicleChanged', () => {
       this.audio.play('door', { volume: 0.7 });
     });
@@ -179,23 +165,18 @@ export class SoundDirector {
       this.engine.loop.stop();
       this.engine = undefined;
     }
-    if (engine && !this.engine) {
-      this.engine = { type: vehicle.spec.type, loop: this.audio.loop(engine.sound) };
-    }
-    if (engine && this.engine) {
-      this.engine.loop.set(0.3 + speed * 0.35, engine.low + (engine.high - engine.low) * speed);
-    }
-    this.skid.set(vehicle.skidding ? 0.7 : 0, 0.9 + speed * 0.3);
-    this.rocket.set(vehicle.spec.actionKind === 'boost' && vehicle.actionActive ? 0.8 : 0);
+    this.engine ??= { type: vehicle.spec.type, loop: this.audio.loop(engine.sound) };
+    this.engine.loop.set(0.3 + speed * 0.35, engine.low + (engine.high - engine.low) * speed);
 
     // The Hauler rumbles louder the closer it is, and its alarm sounds in the last seconds.
-    const focus = game.cameraRig.focusPoint;
-    const haulerDistance = Math.hypot(
-      game.hauler.center.x - focus.x,
-      game.hauler.center.z - focus.z,
-    );
-    const haulerNear = game.hauler.destroyed ? 0 : Math.max(0, 1 - haulerDistance / HEARING_RANGE);
-    this.hauler.set(haulerNear * 0.8, 0.9);
+    const { hauler } = game;
+    if (hauler && !hauler.destroyed) {
+      const focus = game.cameraRig.focusPoint;
+      const distance = Math.hypot(hauler.center.x - focus.x, hauler.center.z - focus.z);
+      this.hauler.set(Math.max(0, 1 - distance / HEARING_RANGE) * 0.8, 0.9);
+    } else {
+      this.hauler.set(0);
+    }
     const urgency = game.urgency;
     this.alarm.set(urgency === 'critical' && game.phase === 'playing' ? 0.55 : 0);
     this.fuse.set(game.tnt.crates.some((crate) => crate.state === 'lit') ? 0.5 : 0);
@@ -216,7 +197,7 @@ export class SoundDirector {
 
   private silenceLoops(): void {
     this.engine?.loop.set(0);
-    for (const loop of [this.hauler, this.alarm, this.skid, this.rocket, this.fuse]) {
+    for (const loop of [this.hauler, this.alarm, this.fuse]) {
       loop.set(0);
     }
   }
