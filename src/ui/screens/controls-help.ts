@@ -8,6 +8,7 @@ const CONTROLS: Record<Device, [string, string][]> = {
     ['Left thumb', 'Steer: slide left or right'],
     ['Gas', 'Accelerate'],
     ['Brake', 'Brake, then reverse'],
+    ['Drift', 'Handbrake, slide'],
     ['Pinch', 'Zoom'],
     ['Two-finger twist', 'Rotate the fixed view'],
   ],

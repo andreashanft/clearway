@@ -57,6 +57,7 @@ The user played the yard on 2026-11-24. The cars felt precise and better than be
 - A slide turns the direction of travel towards the heading and keeps most of the speed, so that a handbrake turn into a street corner stays fast. The engine drives a sliding vehicle up to its top speed, not beyond.
 - The handbrake slows the vehicle more gently than the brake pedal, because only the rear wheels lock. The brake pedal remains the quick stop.
 - The tyres screech and throw up dust while the vehicle slides. The chase view turns part of the way towards the direction of travel.
+- Touch gets a **DRIFT** button above the **GAS** pedal. It is the handbrake.
 - The **Handling** panel has four new sliders: **Handbrake**, **Slide from km/h**, **Slide angle °** and **Slide friction**.
 - The music is removed. The step sequencer, the **Music** volume and the **Tension music** setting are gone. The sound effects stay. The drum and bass recordings stay in `public/audio/`, so that milestone 7 can bring music back.
 
@@ -70,7 +71,6 @@ The user played the yard on 2026-11-24. The cars felt precise and better than be
 - The ground is one painted texture. Up close, in the chase view, its lines look soft.
 - A thumb that lands within 56 px of the screen edge cannot reach full steering lock towards that edge.
 - A switch to a wider vehicle next to a wall starts the new vehicle inside the wall. The physics pushes it out.
-- Touch has no handbrake, so on touch only a fast turn starts a slide.
 - A slide leaves no tyre marks on the ground.
 
 **Removed**

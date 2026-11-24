@@ -7,6 +7,7 @@
   --touch-bottom: 22px;
   --gas-size: 92px;
   --brake-size: 76px;
+  --handbrake-size: 64px;
   --steer-width: 176px;
   --steer-height: 68px;
   --knob-size: 52px;
@@ -133,6 +134,22 @@
   background: rgba(var(--cw-alarm-rgb), 0.24);
 }
 
+/* The DRIFT button sits above the GAS pedal, so that the thumb can roll up to it in a turn. */
+.touch__handbrake {
+  right: calc(
+    var(--cw-safe-right) + var(--touch-edge) + (var(--gas-size) - var(--handbrake-size)) / 2
+  );
+  bottom: calc(var(--cw-safe-bottom) + var(--touch-bottom) + var(--gas-size) + 14px);
+  width: var(--handbrake-size);
+  height: var(--handbrake-size);
+  border: 2px solid rgba(var(--cw-line-rgb), 0.6);
+  font-size: 11px;
+}
+
+.touch__handbrake.is-held {
+  background: rgba(var(--cw-line-rgb), 0.24);
+}
+
 /* Left-handed: the steering control moves to the right and the pedals to the left. */
 .touch.is-lefty .touch__zone {
   left: auto;
@@ -153,6 +170,13 @@
   left: calc(var(--cw-safe-left) + var(--touch-edge) + var(--gas-size) + 14px);
 }
 
+.touch.is-lefty .touch__handbrake {
+  right: auto;
+  left: calc(
+    var(--cw-safe-left) + var(--touch-edge) + (var(--gas-size) - var(--handbrake-size)) / 2
+  );
+}
+
 /* Portrait phones: the controls sit higher, clear of the home indicator. */
 @media (orientation: portrait) {
   .touch {
@@ -160,6 +184,7 @@
     --touch-bottom: 44px;
     --gas-size: 88px;
     --brake-size: 72px;
+    --handbrake-size: 62px;
     --steer-width: 156px;
   }
 
@@ -185,6 +210,7 @@
     --touch-bottom: 40px;
     --gas-size: 108px;
     --brake-size: 88px;
+    --handbrake-size: 74px;
     --steer-width: 200px;
     --steer-height: 76px;
     --knob-size: 58px;

@@ -53,13 +53,13 @@ The vehicles use car controls. The steering is relative to the vehicle, as in a 
 | Accelerate            | **GAS**                         | W or ↑            | RT          |
 | Brake, then reverse   | **BRAKE**                       | S or ↓            | LT          |
 | Steer                 | Left thumb: slide left or right | A and D, or ← →   | Left stick  |
-| Handbrake             | –                               | Shift             | X           |
+| Handbrake             | **DRIFT**                       | Shift             | X           |
 | Switch camera view    | **Chase view** in the yard bar  | C                 | Y           |
 | Rotate the fixed view | Two-finger twist                | Q and R           | LB and RB   |
 | Zoom                  | Pinch                           | Wheel, or Z and X | Right stick |
 | Pause                 | Pause button                    | Esc               | Start       |
 
-The handbrake makes the vehicle slide. A fast turn at nearly full lock with the throttle held makes it slide too. In a slide, the steering sets how far the nose points into the turn. Steer to the centre or against the slide to straighten out. The buggy slides furthest, and the bulldozer barely slides. Touch has no handbrake yet, so on touch only a fast turn starts a slide.
+The handbrake makes the vehicle slide. A fast turn at nearly full lock with the throttle held makes it slide too. In a slide, the steering sets how far the nose points into the turn. Steer to the centre or against the slide to straighten out. The buggy slides furthest, and the bulldozer barely slides.
 
 The camera has two views. The chase view stays behind the vehicle. The fixed view looks down from a high point and keeps its direction.
 

@@ -17,8 +17,9 @@ interface Point {
  * On-screen car controls for touch.
  *
  * The steering control floats under the left thumb: slide the thumb left or right to steer. The
- * right thumb has the GAS pedal and the BRAKE pedal. The brake pedal brakes first and then
- * reverses. Two other fingers zoom with a pinch and rotate the fixed view with a twist.
+ * right thumb has the GAS pedal, the BRAKE pedal and the DRIFT button above the GAS pedal. The
+ * brake pedal brakes first and then reverses. The DRIFT button is the handbrake, which makes the
+ * vehicle slide. Two other fingers zoom with a pinch and rotate the fixed view with a twist.
  */
 export class TouchControls implements InputSource {
   private readonly root: HTMLElement;
@@ -27,6 +28,7 @@ export class TouchControls implements InputSource {
   private readonly knob: HTMLElement;
   private readonly brakeButton: HTMLButtonElement;
   private readonly gasButton: HTMLButtonElement;
+  private readonly handbrakeButton: HTMLButtonElement;
 
   /** Fingers on the scene that do not steer. Two of them make a camera gesture. */
   private readonly touches = new Map<number, Point>();
@@ -36,6 +38,7 @@ export class TouchControls implements InputSource {
   private gesture: { ids: [number, number]; distance: number; angle: number } | undefined;
   private brakeHeld = false;
   private gasHeld = false;
+  private handbrakeHeld = false;
   private readonly queued = new Set<Button>();
 
   constructor(parent: HTMLElement, canvas: HTMLElement) {
@@ -57,8 +60,10 @@ export class TouchControls implements InputSource {
     this.brakeButton.textContent = 'BRAKE';
     this.gasButton = this.createButton('touch__gas', 'Accelerate');
     this.gasButton.textContent = 'GAS';
+    this.handbrakeButton = this.createButton('touch__handbrake', 'Handbrake: slide');
+    this.handbrakeButton.textContent = 'DRIFT';
 
-    this.root.append(this.zone, this.steer, this.brakeButton, this.gasButton);
+    this.root.append(this.zone, this.steer, this.brakeButton, this.gasButton, this.handbrakeButton);
     parent.append(this.root);
 
     this.bindHold(this.brakeButton, (held) => {
@@ -66,6 +71,9 @@ export class TouchControls implements InputSource {
     });
     this.bindHold(this.gasButton, (held) => {
       this.gasHeld = held;
+    });
+    this.bindHold(this.handbrakeButton, (held) => {
+      this.handbrakeHeld = held;
     });
 
     for (const element of [this.zone, canvas]) {
@@ -116,6 +124,7 @@ export class TouchControls implements InputSource {
   poll(state: InputState): void {
     state.steer += this.steerValue;
     state.throttle += (this.gasHeld ? 1 : 0) - (this.brakeHeld ? 1 : 0);
+    state.brake ||= this.handbrakeHeld;
     for (const button of this.queued) {
       state.pressed.add(button);
     }
@@ -243,5 +252,9 @@ export class TouchControls implements InputSource {
     this.gesture = undefined;
     this.brakeHeld = false;
     this.gasHeld = false;
+    this.handbrakeHeld = false;
+    for (const button of [this.brakeButton, this.gasButton, this.handbrakeButton]) {
+      button.classList.remove('is-held');
+    }
   }
 }
