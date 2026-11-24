@@ -1,15 +1,16 @@
 import type { Game } from '../game/game';
-import type { Strength, VehicleType } from '../game/level';
+import type { BuildingClass, VehicleType } from '../game/level';
 import type { AudioEngine, Loop } from './engine';
 
-/** What a hit on each building strength sounds like: wood, wood, masonry, metal on concrete. */
-const IMPACT_SOUNDS: Record<Strength, string[]> = {
+/** What a hit on each class of building sounds like: wood, wood, masonry, metal on concrete. */
+const IMPACT_SOUNDS: Record<BuildingClass, string[]> = {
   shed: ['crack-1', 'crack-2', 'impact-4'],
   house: ['impact-4', 'crack-2', 'impact-3'],
-  brick: ['thud-1', 'thud-2', 'impact-1'],
-  concrete: ['thud-2', 'metal-1', 'impact-2'],
+  block: ['thud-1', 'thud-2', 'impact-1'],
+  tower: ['thud-2', 'metal-1', 'impact-2'],
 };
-const BLOCKED_SOUNDS = ['anvil', 'kabong', 'metal-2', 'pipe'];
+/** A piece of at least this volume, in cubic metres, adds a deep boom to its fall. */
+const BIG_PIECE_VOLUME = 1500;
 const COLLAPSE_SOUNDS = ['collapse-1', 'collapse-2', 'collapse-3'];
 const RUBBLE_SOUNDS = ['rubble-1', 'rubble-2', 'rubble-3'];
 const BLAST_SOUNDS = ['blast-1', 'blast-2', 'blast-3'];
@@ -47,7 +48,7 @@ export class SoundDirector {
     this.skid = audio.loop('skid');
     audio.preload([
       ...IMPACT_SOUNDS.shed,
-      ...IMPACT_SOUNDS.brick,
+      ...IMPACT_SOUNDS.block,
       ...COLLAPSE_SOUNDS,
       ...BLAST_SOUNDS,
       'chime',
@@ -70,28 +71,55 @@ export class SoundDirector {
       return Math.max(0, 1 - distance / HEARING_RANGE);
     };
 
-    game.events.on('impact', ({ position, strength, material, blocked, broke }) => {
+    game.events.on('impact', ({ position, strength, material, broke }) => {
       const volume = (0.5 + strength * 0.5) * near(position);
-      if (blocked) {
-        this.audio.play(pick(BLOCKED_SOUNDS), { volume, rate: 0.9 + Math.random() * 0.2 });
-      } else {
-        this.audio.play(pick(IMPACT_SOUNDS[material]), {
-          volume: volume * (broke ? 1 : 0.8),
-          rate: 0.9 + Math.random() * 0.25,
-        });
-      }
+      this.audio.play(pick(IMPACT_SOUNDS[material]), {
+        volume: volume * (broke ? 1 : 0.8),
+        rate: 0.9 + Math.random() * 0.25,
+      });
     });
     game.events.on('buildingCracked', ({ position }) => {
       this.audio.play(pick(['crack-1', 'crack-2']), { volume: 0.7 * near(position), rate: 0.8 });
     });
-    game.events.on('segmentDestroyed', ({ building, position }) => {
+    game.events.on('pieceDestroyed', ({ position, volume: size }) => {
       const volume = near(position);
-      const glass = building.data.kind === 'greenhouse';
-      this.audio.play(glass ? 'glass' : pick(COLLAPSE_SOUNDS), {
-        volume: 0.85 * volume,
-        rate: 0.9 + Math.random() * 0.25,
+      const big = size >= BIG_PIECE_VOLUME;
+      this.audio.play(pick(COLLAPSE_SOUNDS), {
+        volume: 0.9 * volume,
+        rate: (big ? 0.75 : 0.9) + Math.random() * 0.25,
       });
-      this.audio.play(pick(RUBBLE_SOUNDS), { volume: 0.5 * volume });
+      this.audio.play(pick(RUBBLE_SOUNDS), { volume: 0.6 * volume });
+      if (big) {
+        this.audio.play('boom', { volume: 0.55 * volume, rate: 1.2 });
+      }
+    });
+    game.events.on('towerCollapsing', ({ position }) => {
+      const volume = Math.max(0.4, near(position));
+      this.audio.play('boom', { volume });
+      this.audio.play('bass-drop', { volume: 0.8 * volume });
+      this.audio.play(pick(COLLAPSE_SOUNDS), { volume, rate: 0.65 });
+    });
+    game.events.on('towerFloor', ({ position, floor }) => {
+      // Every other floor rumbles, a little lower each time.
+      if (floor % 2 === 0) {
+        this.audio.play(pick(RUBBLE_SOUNDS), {
+          volume: 0.7 * Math.max(0.3, near(position)),
+          rate: Math.max(0.55, 1 - floor * 0.01),
+        });
+      }
+    });
+    game.events.on('towerFell', ({ position }) => {
+      const volume = Math.max(0.3, near(position));
+      this.audio.play(pick(COLLAPSE_SOUNDS), { volume, rate: 0.55 });
+      this.audio.play('boom', { volume: 0.7 * volume, rate: 0.8 });
+    });
+    let lastMultiplier = 1;
+    game.events.on('scored', ({ multiplier }) => {
+      // The combo chimes higher with each step of the multiplier.
+      if (multiplier > lastMultiplier) {
+        this.audio.play('chime', { volume: 0.5, rate: 2 ** ((multiplier - 1) / 6) });
+      }
+      lastMultiplier = multiplier;
     });
     game.events.on('explosion', ({ position, source }) => {
       const volume = Math.max(0.35, near(position));

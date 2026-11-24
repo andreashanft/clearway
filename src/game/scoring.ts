@@ -1,6 +1,3 @@
-import type { Strength } from './level';
-import { STRENGTH_HP } from './world/damage';
-
 export type Medal = 'none' | 'bronze' | 'silver' | 'gold';
 
 /** What the player achieved by the time the level ended. */
@@ -18,7 +15,7 @@ export interface LevelTally {
   clearSeconds: number;
   /** Seconds of bonus time that the fast clear earned. */
   bonusSeconds: number;
-  /** Points from destroyed segments, beacons and the dish. */
+  /** Points from breaks, beacons and the dish. */
   points: number;
 }
 
@@ -46,11 +43,6 @@ export interface LevelResult extends LevelTally {
   medal: Medal;
   score: number;
   forGold: GoldGap;
-}
-
-/** Points for one destroyed building segment: its hit points. */
-export function segmentPoints(strength: Strength): number {
-  return STRENGTH_HP[strength];
 }
 
 export const BEACON_POINTS = 50;

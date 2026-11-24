@@ -65,7 +65,13 @@ The camera has two views. The chase view stays behind the vehicle. The fixed vie
 
 ## Test yard
 
-The test yard is a flat area for trying out how the vehicles drive. **Play** on the title screen opens it. It holds a main straight with a line every 10 m, two slalom lanes with cones, three turning circles, a small street grid and a row of buildings to ram.
+The test yard is a flat area for trying out how the vehicles drive and how buildings break. **Play** on the title screen opens it. It holds a main straight with a line every 10 m, two slalom lanes with cones, three turning circles, a small street grid and a row of buildings to ram. In the south, a downtown has a street of houses, a block of flats around a courtyard, a tower of 40 floors and the buildings around it.
+
+## Destruction
+
+Every vehicle can break every building. A ram at three quarters of the top speed breaks a house with any vehicle. A large low building breaks in pieces about 10 m wide, so that you can carve a way through it, and a fast ram punches through several pieces in a line. A building taller than 15 m is a tower: after a few rams at its base, it sinks floor by floor into a cloud of dust and leans away from the side that you hit. Its fall damages the buildings around it, most on the side it leans to, so towers can bring each other down.
+
+Each break scores points by the volume that fell. Breaks in quick succession raise a combo multiplier, up to ×8. Breaks that a falling tower caused earn a chain bonus. The score shows at the bottom of the screen, and the points pop up where a building breaks.
 
 The bar at the top of the yard switches the vehicle and the camera view, resets the yard and counts the cones that you knocked over. On a keyboard, the keys 1, 2 and 3 choose the vehicle and Backspace resets the yard.
 
@@ -77,6 +83,8 @@ With `?debug` in the address, the debug overlay adds two panels:
 A reload of the page restores the built-in values. `src/game/vehicles/specs.ts` holds them.
 
 **Measure handling** in the debug overlay, or `clearway.measure()` in the browser console, drives each vehicle through a scripted test. It reports the top speed, the time to top speed, the stopping distance, the turning circles, the slide angle, a handbrake turn and the slalom time.
+
+**Measure rams**, or `clearway.measureRams()`, rams a house of the downtown street with each vehicle at three quarters of its top speed and reports whether one ram breaks it. It destroys three houses, so reset the yard afterwards.
 
 ## URL parameters
 
@@ -128,8 +136,8 @@ The user interface is plain DOM and CSS above the canvas. `src/ui/tokens.css` ho
 
 | #   | Milestone                                                 | State     |
 | --- | --------------------------------------------------------- | --------- |
-| 1   | Car controls and faster, more precise handling            | In review |
-| 2   | Destruction with one-hit breaks, collapse and score       | Open      |
+| 1   | Car controls and faster, more precise handling            | Done      |
+| 2   | Destruction with one-hit breaks, collapse and score       | In review |
 | 3   | Weapons: boost, flail, and rockets with ammunition crates | Open      |
 | 4   | 3D world of a real location from OpenStreetMap tiles      | Open      |
 | 5   | Seeded path, antimatter carrier and black hole            | Open      |

@@ -68,12 +68,12 @@ export class Minimap {
         continue;
       }
       const seen = new Set<unknown>();
-      for (const segment of obstacle.segments) {
-        if (segment.building.hp[segment.index] <= 0 || seen.has(segment.building)) {
+      for (const piece of obstacle.pieces) {
+        if (!piece.building.standing(piece.index) || seen.has(piece.building)) {
           continue;
         }
-        seen.add(segment.building);
-        const [x, z] = segment.building.data.pos;
+        seen.add(piece.building);
+        const [x, z] = piece.building.center;
         dot(x, z, unit, obstacle === next ? MAP.amber : MAP.alarm, false);
       }
     }

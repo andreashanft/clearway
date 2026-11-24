@@ -4,6 +4,7 @@ import type { Game } from '../game/game';
 import type { VehicleType } from '../game/level';
 import { clamp, wrapAngle } from '../game/math';
 import { VEHICLE_TYPES } from '../game/vehicles/specs';
+import { ramDamage } from '../game/world/damage';
 
 /** What the handling measurement reports for one vehicle. */
 export interface HandlingRow {
@@ -200,4 +201,75 @@ function driveSlalom(app: App, game: Game): { seconds: number; conesHit: number;
   });
   const conesHit = game.cones?.knockedCount ?? 0;
   return { seconds, conesHit, kmh: ((endX - startX) / seconds) * 3.6 };
+}
+
+/** What the destruction measurement reports for one vehicle. */
+export interface RamRow {
+  vehicle: string;
+  /** Speed of the ram in km/h: three quarters of the top speed. */
+  ramKmh: number;
+  /** Hit points of the house and the damage of the ram. */
+  houseHp: number;
+  damage: number;
+  /** True when one ram broke the house. */
+  broke: boolean;
+}
+
+/**
+ * Rams one house of the downtown street with each vehicle, at three quarters of the top speed,
+ * and reports whether one ram breaks it. The measurement destroys three houses. Reset the yard
+ * afterwards.
+ */
+export function measureRams(app: App): RamRow[] {
+  const game = app.game;
+  if (game?.level.id !== 'yard' || game.phase !== 'playing') {
+    console.warn('The ram measurement needs a running test yard. Open ?yard&debug.');
+    return [];
+  }
+  const original = game.activeVehicle.spec.type;
+  const rows = VEHICLE_TYPES.map((type): RamRow => {
+    app.setVehicle(type);
+    const vehicle = game.activeVehicle;
+    const { spec } = vehicle;
+    // A standing house on the north side of the downtown street. The vehicle comes from the open
+    // ground north of it.
+    const house = game.buildings.list.find(
+      (building) =>
+        building.kind === 'house' &&
+        building.standing(0) &&
+        Math.abs(building.center[1] - 119) < 1 &&
+        building.center[0] > -200 &&
+        building.center[0] < -130,
+    );
+    if (!house) {
+      return { vehicle: spec.name, ramKmh: 0, houseHp: 0, damage: 0, broke: false };
+    }
+    const [x, z] = house.center;
+    const target = spec.topSpeed * 0.75;
+    let damage = 0;
+    const off = game.events.on('impact', () => {
+      const { x: vx, z: vz } = vehicle.impactVelocity;
+      damage = ramDamage(spec.ram, Math.hypot(vx, vz), spec.topSpeed);
+    });
+    vehicle.teleport([x, z - 30], Math.PI / 2);
+    run(game, 8, () => {
+      setInput(app, 0, vehicle.forwardSpeed < target ? 1 : 0);
+      return !house.standing(0) || vehicle.position.z > z;
+    });
+    off();
+    setInput(app, 0, 0);
+    // Let the debris settle, so that it does not slow the next vehicle.
+    run(game, 4.5, () => false);
+    return {
+      vehicle: spec.name,
+      ramKmh: round(target * 3.6, 0),
+      houseHp: round(house.maxHp[0], 0),
+      damage: round(damage, 0),
+      broke: !house.standing(0),
+    };
+  });
+  app.setVehicle(original);
+  park(game, game.level.spawn.pos[0], game.level.spawn.pos[1]);
+  console.table(rows);
+  return rows;
 }

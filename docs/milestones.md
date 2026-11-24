@@ -8,6 +8,64 @@ To test on a phone, start the development server with `npm run dev -- --host` an
 
 ## City direction
 
+### Milestone 2: destruction
+
+The destruction felt weak in both earlier builds: a building took too many hits, the collapse had too little spectacle, and nothing rewarded it. This milestone rebuilds the buildings so that they break fast and visibly, and so that the map data of milestone 4 can feed them.
+
+**Works**
+
+- A building is a footprint polygon with a height and a base height, as OpenStreetMap gives it. The strength classes, the hand-made kinds and the segments along one side are gone.
+- The game draws a building in its own style: walls with a window texture by floor, a flat roof, or a gabled roof on a small rectangular house. The colours come from a palette by size: shed, house, block or tower.
+- A footprint is cut into pieces of about 10 m on a grid along its smallest enclosing rectangle, with at most 64 pieces. A house stays one piece. Each piece has a convex collider.
+- Hit points grow with the volume, to the power of 0.6, between 30 and 1,200. The reference house of 800 m³ has 100 hit points.
+- Each vehicle has a ram value: the damage of a ram at its top speed. A slower ram deals less, by the square of its share of the top speed. The bulldozer rams with 400, the flail car with 300 and the buggy with 200.
+- In a low building, a fallen piece passes 85 % of its spare damage on to the next piece along the ram, and weakens every neighbour by a quarter of its hit points. A fast ram therefore carves a corridor.
+- A building taller than 15 m is a tower. Its pieces share one pool of hit points. When the pool is empty, the tower sinks floor by floor into the ground and leans up to 14° away from the side that broke it. Dust and chunks burst out at every floor. Twice during the fall, it damages the buildings around it, centred on the side that it leans to, so towers can bring each other down.
+- Every break scores by its volume. Breaks within 3 seconds of each other form a combo, and every third break raises the multiplier, up to ×8. Each collapse that led to a break adds half the points again as a chain bonus.
+- The HUD shows the score at the bottom centre, the combo multiplier with a bar that drains, and pop-ups where buildings break. Breaks close together share one pop-up.
+- Pieces, towers, floors and the end of a fall have their own layered sounds. The combo chimes higher with each step.
+- The test yard has a downtown: a street of houses with a terrace and an L-shaped house, a block of flats around a courtyard, a tower of 40 floors, two more towers, an office block and an office tower.
+
+**Measured**
+
+- `clearway.measureRams()` rams a house of 756 m³ (92 hit points) at three quarters of the top speed. The bulldozer deals 226, the flail car 171 and the buggy 113, so every vehicle breaks it with one ram.
+- The 40-floor tower has 1,200 hit points. The bulldozer brings it down with three rams at top speed, the flail car with four and the buggy with six.
+- A ram of the bulldozer at top speed into the block of flats carves through four pieces. The buggy carves through two.
+- When the 40-floor tower falls towards the 54 m tower, the 54 m tower falls too. Twelve buildings fell in that test.
+- During the fall of the 40-floor tower, a simulation step with drawing took 0.3 ms on average and 1.6 ms at most on a desktop computer, and at most 96 chunks were active.
+
+**Stubbed**
+
+- The dust is made of the same flat-shaded particles as before. Large dust clouds can look like boulders.
+- The frame rate during a collapse was not measured on a phone.
+- Rubble is decoration and has no collider, as before.
+
+**Test it**
+
+1. Open the game with `?yard` appended and drive south to the downtown.
+2. Ram the houses on the street, carve through the block of flats, and ram the base of the 40-floor tower until it falls.
+3. Hit the tower from the north-west, so that it leans onto the 54 m tower south-east of it.
+4. Watch the score, the combo and the pop-ups.
+5. Optional: open the address with `?yard&debug` appended and select **Measure rams**.
+
+**Review fixes**
+
+An independent review of the change found these defects, and the build fixes them:
+
+- A ram where two pieces of a tower meet counted once per piece, so the tower lost twice or three times the damage.
+- A concave piece, such as the L-shaped house, had one convex collider that filled its missing corner. Concave pieces now get one collider per triangle.
+- A piece that a cut splits into two parts got a wall and a collider across the gap between them.
+- Cracked pieces of a large building tilted around the building's centre, which lifted or sank pieces far from it.
+- Explosions carried their spare damage through pieces as if they were rams.
+- A cracking tower played one sound and one dust burst per piece.
+- A building part that stands on another kept floating after the building under it fell. It now falls with it, and its rubble lands on the ground.
+- A footprint without area made a building that counted as destroyed from the start. The game now leaves it out.
+
+**Deviations**
+
+- The plan named fire as part of the spectacle. A building has nothing that burns yet, so breaks show dust, chunks and sparks. Fuel tanks still explode.
+- The obstacle outlines on the ground follow the footprint polygon instead of a rectangle or a ring.
+
 ### Milestone 1: driving
 
 The driving failed in both earlier builds: the vehicles felt too slow and heavy, and the steering was imprecise. This milestone rebuilds the driving in a test yard, before any other part of the new game.

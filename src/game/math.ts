@@ -64,6 +64,14 @@ export function distanceToPolyline(p: Vec2, points: readonly Vec2[]): number {
   return best;
 }
 
+/** Distance on the ground plane from a point to the nearest point of a box. 0 inside the box. */
+export function distanceToBox(point: Vec2, box: OrientedBox): number {
+  const local = toBoxLocal(point, box);
+  const dx = Math.max(0, Math.abs(local[0]) - box.half[0]);
+  const dz = Math.max(0, Math.abs(local[1]) - box.half[1]);
+  return Math.hypot(dx, dz);
+}
+
 /** Returns true when a point lies inside a polygon. */
 export function pointInPolygon(p: Vec2, polygon: readonly Vec2[]): boolean {
   let inside = false;

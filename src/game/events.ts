@@ -1,5 +1,5 @@
 import type * as THREE from 'three/webgpu';
-import type { Strength } from './level';
+import type { BuildingClass } from './level';
 import type { LevelResult } from './scoring';
 import type { Building } from './world/buildings';
 
@@ -16,18 +16,40 @@ export interface GameEvents {
     position: THREE.Vector3;
     /** Strength from 0 to 1, for sound volume and camera shake. */
     strength: number;
-    material: Strength;
-    /** True when the building took no damage, for example a vehicle against concrete. */
-    blocked: boolean;
-    /** True when at least one segment fell. */
+    material: BuildingClass;
+    /** True when at least one piece fell, or a tower started to fall. */
     broke: boolean;
   };
   /** A building lost half of its hit points and shows cracks. */
   buildingCracked: { building: Building; position: THREE.Vector3 };
-  /** One segment of a building fell. */
-  segmentDestroyed: { building: Building; position: THREE.Vector3 };
-  /** The last segment of a building fell. */
+  /** One piece of a low building fell. */
+  pieceDestroyed: {
+    building: Building;
+    position: THREE.Vector3;
+    /** Volume of the piece in cubic metres. */
+    volume: number;
+    /** How many tower collapses led to the fall. 0 when the player broke the piece. */
+    chain: number;
+  };
+  /** The base of a tower gave way, and the tower starts to sink. */
+  towerCollapsing: { building: Building; position: THREE.Vector3; chain: number };
+  /** One more floor of a falling tower reached the ground. */
+  towerFloor: { building: Building; position: THREE.Vector3; floor: number };
+  /** A falling tower has sunk completely. */
+  towerFell: { building: Building; position: THREE.Vector3 };
+  /** The last piece of a building fell, or a tower started to fall. */
   buildingDestroyed: { building: Building };
+  /** A break earned points. */
+  scored: {
+    position: THREE.Vector3;
+    points: number;
+    /** The combo multiplier that applied. */
+    multiplier: number;
+    /** How many collapses led to the break. */
+    chain: number;
+    /** True for a whole tower. */
+    tower: boolean;
+  };
   explosion: { position: THREE.Vector3; radius: number; source: ExplosionSource };
   /** A vehicle pushed a TNT crate and lit its fuse. */
   tntLit: { position: THREE.Vector3 };
@@ -80,4 +102,4 @@ export interface GameEvents {
 export type Phase = 'ready' | 'playing' | 'bonus' | 'failed' | 'ended';
 
 /** What the Hauler hit. */
-export type FailCause = Strength | 'vehicle' | 'tnt' | 'explosion' | 'tree';
+export type FailCause = BuildingClass | 'vehicle' | 'tnt' | 'explosion' | 'tree';

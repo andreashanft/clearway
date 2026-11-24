@@ -10,9 +10,9 @@ export interface FailHandlers {
 /** One tip per kind of crash. A tip names a way out, in one sentence. */
 const TIPS: Record<FailCause, string> = {
   shed: 'A ram at speed drops a shed.',
-  house: 'A house needs a heavy vehicle or a fast one.',
-  brick: 'Brick needs several rams at full speed.',
-  concrete: 'Concrete only falls to an explosion.',
+  house: 'A ram at three quarters of the top speed drops a house.',
+  block: 'Ram a large building where the Hauler will pass, and carve a way through.',
+  tower: 'Ram the base of a tower until it falls.',
   vehicle: "Keep your vehicle off the Hauler's line.",
   tnt: "Keep TNT crates off the Hauler's line.",
   explosion: 'Set TNT off before the Hauler is near.',

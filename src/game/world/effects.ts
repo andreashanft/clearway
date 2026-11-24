@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import { GRAVITY } from '../../engine/physics';
 
 /** The most puffs that are alive at once. The oldest puff is replaced first. */
-const PUFF_CAPACITY = 220;
+const PUFF_CAPACITY = 420;
 const RING_CAPACITY = 6;
 
 export const EFFECT_COLORS = {

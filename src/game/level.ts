@@ -1,7 +1,10 @@
 import type { Vec2 } from './math';
 
-/** How strong a building is. Each strength has hit points in `world/damage.ts`. */
-export type Strength = 'shed' | 'house' | 'brick' | 'concrete';
+/**
+ * What a building is by its size: a shed, a house, a block or a tower. It decides the sound, the
+ * palette and how the building falls. `world/building-class.ts` sorts buildings.
+ */
+export type BuildingClass = 'shed' | 'house' | 'block' | 'tower';
 
 /** The three vehicles that the player can drive. */
 export type VehicleType = 'dozer' | 'flail' | 'buggy';
@@ -57,34 +60,27 @@ export interface BuildingColors {
   roof: string;
 }
 
+/**
+ * One building, in the form that map data gives it: a footprint and heights.
+ *
+ * The footprint is a simple polygon in metres, in either winding order, without a repeated first
+ * corner. The game cuts it into pieces and draws it in its own style.
+ */
 export interface BuildingData {
   id: string;
-  /** Name in lower case, as the fail screen shows it: "Hit the farmhouse". */
-  name: string;
-  kind:
-    | 'house'
-    | 'terrace'
-    | 'barn'
-    | 'shed'
-    | 'silo'
-    | 'tank'
-    | 'greenhouse'
-    | 'block'
-    | 'gantry'
-    | 'chimney';
-  strength: Strength;
-  pos: Vec2;
-  /** Width along the local X axis, height, and depth along the local Z axis, in metres. */
-  size: [number, number, number];
-  /** Rotation in degrees, clockwise as seen from above. */
-  yaw: number;
-  colors: BuildingColors;
+  /** Name in lower case, as the fail screen shows it: "Hit the house". Without it, the size decides. */
+  name?: string;
+  footprint: Vec2[];
+  /** Height of the roof above the ground, in metres. */
+  height: number;
+  /** Height of the bottom above the ground, for a part that stands on another. Default 0. */
+  base?: number;
+  /** Without colours, the palette picks them by the building's size. */
+  colors?: BuildingColors;
   /** Buildings with the same group count as one route obstacle. */
   group?: string;
   /** The building explodes when it is destroyed. */
   explodes?: boolean;
-  /** Number of segments. Without it, the length of the building decides. A terrace has one per house. */
-  segments?: number;
 }
 
 /** A fixed deck that vehicles can drive on, for example a road bridge. */

@@ -6,7 +6,7 @@ import { CameraRig } from './camera';
 import type { ExplosionSource, FailCause, GameEvents, Phase } from './events';
 import { Hauler } from './hauler';
 import type { LevelData, VehicleType } from './level';
-import { DEG, clamp, type Vec2 } from './math';
+import { DEG, clamp, distanceToBox, type Vec2 } from './math';
 import {
   CRITICAL_SECONDS,
   createRoute,
@@ -18,12 +18,12 @@ import {
   type RouteObstacle,
   type Urgency,
 } from './route';
+import { ScoreKeeper } from './score';
 import {
   BEACON_POINTS,
   DEFAULT_MEDAL_RULES,
   DISH_POINTS,
   scoreLevel,
-  segmentPoints,
   type LevelResult,
   type LevelTally,
 } from './scoring';
@@ -31,7 +31,7 @@ import { NO_COMMAND, shapeSteering, type DriveCommand } from './vehicles/handlin
 import { createVehicleModel } from './vehicles/models';
 import { VEHICLE_SPECS } from './vehicles/specs';
 import { Vehicle } from './vehicles/vehicle';
-import { Buildings, distanceToBox, type Building, type SegmentRef } from './world/buildings';
+import { Buildings, type Building, type PieceRef } from './world/buildings';
 import { Cones } from './world/cones';
 import {
   MIN_IMPACT_SPEED,
@@ -39,8 +39,7 @@ import {
   TANK_BLAST_RADIUS,
   TNT_DAMAGE,
   TNT_RADIUS,
-  canDamage,
-  impactDamage,
+  ramDamage,
 } from './world/damage';
 import { Debris } from './world/debris';
 import { createDecks, deckHeightAt, type Deck } from './world/decks';
@@ -89,8 +88,8 @@ interface ReplayFrame {
 export interface ObstacleState {
   def: RouteObstacle;
   cleared: boolean;
-  /** The segments of the obstacle that stand in the Hauler's strip. */
-  segments: { building: Building; index: number; enter: number }[];
+  /** The pieces of the obstacle that stand in the Hauler's strip. */
+  pieces: { building: Building; index: number; enter: number }[];
 }
 
 const ZERO = new THREE.Vector3();
@@ -138,8 +137,8 @@ export class Game {
   readonly hauler: Hauler | undefined;
   readonly obstacles: ObstacleState[];
   readonly pickups: Pickups | undefined;
-  /** Points from destroyed segments, beacons and the dish. */
-  points = 0;
+  /** Points from breaks, beacons and the dish, and the combo. */
+  readonly score = new ScoreKeeper();
   /** Seconds from the start until the path was clear. */
   clearSeconds = 0;
   /** Seconds of bonus time that the clear earned. */
@@ -196,11 +195,7 @@ export class Game {
     this.events.on('buildingDestroyed', ({ building }) => {
       if (building.data.explodes) {
         this.pendingExplosions.push({
-          position: new THREE.Vector3(
-            building.data.pos[0],
-            building.baseY + 2,
-            building.data.pos[1],
-          ),
+          position: new THREE.Vector3(building.center[0], building.baseY + 2, building.center[1]),
           radius: TANK_BLAST_RADIUS,
           damage: TANK_BLAST_DAMAGE,
           source: 'tank',
@@ -230,11 +225,9 @@ export class Game {
         .map((def) => ({
           def,
           cleared: false,
-          segments: def.segments.flatMap((segment) => {
-            const building = this.buildings.get(segment.buildingId);
-            return building
-              ? [{ building, index: segment.segmentIndex, enter: segment.enter }]
-              : [];
+          pieces: def.pieces.flatMap((piece) => {
+            const building = this.buildings.get(piece.buildingId);
+            return building ? [{ building, index: piece.pieceIndex, enter: piece.enter }] : [];
           }),
         }))
         .sort((a, b) => a.def.distance - b.def.distance);
@@ -244,7 +237,7 @@ export class Game {
     this.markers = new ObstacleMarkers(
       this.buildings.list.filter((building) =>
         this.obstacles.some((obstacle) =>
-          obstacle.segments.some((segment) => segment.building === building),
+          obstacle.pieces.some((piece) => piece.building === building),
         ),
       ),
     );
@@ -260,16 +253,28 @@ export class Game {
       this.scene.add(this.pickups.object);
     }
 
-    this.events.on('segmentDestroyed', ({ building }) => {
-      if (this.isScoring) {
-        this.points += segmentPoints(building.data.strength);
-      }
+    this.events.on('pieceDestroyed', ({ position, volume, chain }) => {
+      this.scoreBreak(position, volume, chain, false);
+    });
+    this.events.on('towerCollapsing', ({ building, position, chain }) => {
+      this.scoreBreak(
+        position.clone().setY(building.baseY + building.height * 0.6),
+        building.volume,
+        chain,
+        true,
+      );
+      const distance = position.distanceTo(this.cameraRig.focusPoint);
+      this.cameraRig.addShake(clamp(1.4 - distance / 150, 0.3, 1.2));
+    });
+    this.events.on('towerFloor', ({ position }) => {
+      const distance = position.distanceTo(this.cameraRig.focusPoint);
+      this.cameraRig.addShake(clamp(0.5 - distance / 300, 0.05, 0.35));
     });
     this.events.on('beaconLit', () => {
-      this.points += BEACON_POINTS;
+      this.score.add(BEACON_POINTS);
     });
     this.events.on('dishFound', () => {
-      this.points += DISH_POINTS;
+      this.score.add(DISH_POINTS);
     });
     this.updateObstacles();
   }
@@ -352,10 +357,10 @@ export class Game {
       if (obstacle.cleared) {
         continue;
       }
-      for (const segment of obstacle.segments) {
-        const stands = segment.building.hp[segment.index] > 0;
-        if (stands && (!best || segment.enter < best.distance)) {
-          best = { obstacle, distance: segment.enter };
+      for (const piece of obstacle.pieces) {
+        const stands = piece.building.standing(piece.index);
+        if (stands && (!best || piece.enter < best.distance)) {
+          best = { obstacle, distance: piece.enter };
         }
       }
     }
@@ -400,7 +405,7 @@ export class Game {
       dishFound: this.pickups?.dishState === 'found',
       clearSeconds: this.clearSeconds,
       bonusSeconds: this.bonusSeconds,
-      points: this.points,
+      points: this.score.total,
     };
   }
 
@@ -500,6 +505,8 @@ export class Game {
     this.physics.step();
 
     this.resolveImpact(vehicle);
+    this.buildings.step(dt);
+    this.score.update(dt);
     this.keepInBounds(vehicle);
     vehicle.capture();
     crushHedges(this.scenery, vehicle.footprint, (position) => this.effects.leaves(position));
@@ -805,7 +812,7 @@ export class Game {
     this.events.emit('phaseChanged', { phase, previous });
   }
 
-  /** Marks obstacles whose segments have all fallen, and declares the path clear. */
+  /** Marks obstacles whose pieces have all fallen, and declares the path clear. */
   private updateObstacles(): void {
     this.blocking.clear();
     this.nextBuildings.clear();
@@ -813,9 +820,7 @@ export class Game {
       if (obstacle.cleared) {
         continue;
       }
-      const standing = obstacle.segments.filter(
-        (segment) => segment.building.hp[segment.index] > 0,
-      );
+      const standing = obstacle.pieces.filter((piece) => piece.building.standing(piece.index));
       if (standing.length === 0) {
         obstacle.cleared = true;
         this.events.emit('obstacleCleared', {
@@ -826,15 +831,15 @@ export class Game {
         this.showHint(`cleared:${obstacle.def.id}`);
         continue;
       }
-      for (const segment of standing) {
-        this.blocking.add(segment.building);
+      for (const piece of standing) {
+        this.blocking.add(piece.building);
       }
     }
     const next = this.nextObstacle;
     if (next) {
-      for (const segment of next.obstacle.segments) {
-        if (segment.building.hp[segment.index] > 0) {
-          this.nextBuildings.add(segment.building);
+      for (const piece of next.obstacle.pieces) {
+        if (piece.building.standing(piece.index)) {
+          this.nextBuildings.add(piece.building);
         }
       }
     }
@@ -871,9 +876,9 @@ export class Game {
 
   /** Names what a collider belongs to, for the fail screen. */
   private describe(collider: { handle: number }): { hit: string; cause: FailCause } {
-    const segment = this.buildings.lookup(collider.handle);
-    if (segment) {
-      return { hit: `the ${segment.building.data.name}`, cause: segment.building.data.strength };
+    const piece = this.buildings.lookup(collider.handle);
+    if (piece) {
+      return { hit: `the ${piece.building.name}`, cause: piece.building.kind };
     }
     if (collider.handle === this.activeVehicle.collider.handle) {
       return { hit: `your ${this.activeVehicle.spec.name.toLowerCase()}`, cause: 'vehicle' };
@@ -959,7 +964,7 @@ export class Game {
         const crate = this.tnt.crates.find((candidate) => candidate.state === 'idle');
         position = crate ? [crate.position.x, crate.position.z] : undefined;
       } else {
-        position = this.buildings.get(target)?.data.pos;
+        position = this.buildings.get(target)?.center;
       }
       if (position && Math.hypot(position[0] - x, position[1] - z) < HINT_RANGE) {
         this.showHint(hint.trigger);
@@ -982,7 +987,7 @@ export class Game {
       return;
     }
     const world = this.physics.world;
-    const hits: SegmentRef[] = [];
+    const hits: PieceRef[] = [];
     // The solver can spread a stop over two steps, so the lost speed understates a crash. The
     // speed at which the vehicle approached along the contact normal is the better measure.
     let approach = 0;
@@ -998,7 +1003,11 @@ export class Game {
         const normal = manifold.normal();
         const speed = Math.abs(before.x * normal.x + before.y * normal.y + before.z * normal.z);
         approach = Math.max(approach, speed);
-        if (!hits.includes(ref)) {
+        // A tower shares its hit points among its pieces, so a ram where two pieces meet counts once.
+        const counted = hits.some(
+          (hit) => hit.building === ref.building && (ref.building.tower || hit.index === ref.index),
+        );
+        if (!counted) {
           hits.push(ref);
         }
       });
@@ -1012,19 +1021,11 @@ export class Game {
     }
     vehicle.impactCooldown = 0.18;
 
-    const material = hits[0].building.data.strength;
-    const damage = impactDamage({
-      mass: vehicle.spec.mass,
-      speed,
-      vehicleFactor: vehicle.spec.damage,
-    });
+    const material = hits[0].building.kind;
+    const damage = ramDamage(vehicle.spec.ram, speed, vehicle.spec.topSpeed);
     let fallen = 0;
-    let blocked = true;
     for (const ref of hits) {
-      if (canDamage(ref.building.data.strength)) {
-        blocked = false;
-        fallen += this.buildings.damage(ref, damage, before);
-      }
+      fallen += this.buildings.damage(ref, damage, before, 0, true);
     }
 
     if (fallen > 0) {
@@ -1037,14 +1038,30 @@ export class Game {
     const position = vehicle.position.clone();
     position.x += Math.cos(vehicle.heading) * vehicle.spec.length * 0.5;
     position.z += Math.sin(vehicle.heading) * vehicle.spec.length * 0.5;
-    if (blocked) {
-      this.effects.sparks(position, 10);
-    } else if (fallen === 0) {
+    if (fallen === 0) {
       this.effects.dust(position, 2.5, 5);
+      if (material === 'tower' || material === 'block') {
+        this.effects.sparks(position, 10);
+      }
     }
     this.cameraRig.addShake(strength * (fallen > 0 ? 1 : 0.6));
     this.hitStop = fallen > 0 ? HIT_STOP_BREAK : HIT_STOP_BLOCK;
-    this.events.emit('impact', { position, strength, material, blocked, broke: fallen > 0 });
+    this.events.emit('impact', { position, strength, material, broke: fallen > 0 });
+  }
+
+  /** Scores a break while the run counts, and announces the points where the break happened. */
+  private scoreBreak(position: THREE.Vector3, volume: number, chain: number, tower: boolean): void {
+    if (!this.isScoring) {
+      return;
+    }
+    const award = this.score.award(volume, chain);
+    this.events.emit('scored', {
+      position: position.clone(),
+      points: award.points,
+      multiplier: award.multiplier,
+      chain,
+      tower,
+    });
   }
 
   /** Stops a vehicle at the edge of the play area. */

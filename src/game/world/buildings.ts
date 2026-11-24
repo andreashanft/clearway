@@ -2,74 +2,150 @@ import * as THREE from 'three/webgpu';
 import type { EventBus } from '../../engine/events';
 import { Layer, RAPIER, collisionGroups, type PhysicsWorld } from '../../engine/physics';
 import type { GameEvents } from '../events';
-import type { BuildingData, LevelData } from '../level';
-import { clamp, headingVector, toBoxLocal, type OrientedBox, type Vec2 } from '../math';
-import { buildSegmentGeometry } from './building-models';
-import { STRENGTH_HP, applySegmentDamage, blastDamage } from './damage';
+import type { BuildingClass, BuildingColors, BuildingData, LevelData } from '../level';
+import { clamp, pointInPolygon, type Vec2 } from '../math';
+import { distanceToPolygon } from '../polygon';
+import { FLOOR_HEIGHT, classifyBuilding } from './building-class';
+import {
+  buildPieceGeometry,
+  createCrackTexture,
+  createWindowTexture,
+  paletteColors,
+  type PieceStyle,
+} from './building-models';
+import { applyPieceDamage, blastDamage, hitPoints, type PieceGraph } from './damage';
 import type { Debris } from './debris';
-import type { Effects } from './effects';
+import { EFFECT_COLORS, type Effects } from './effects';
 import { shade } from './mesh-builder';
-import { segmentBoxes, segmentLayout, type SegmentLayout } from './segments';
+import { cutFootprint, type BuildingShape } from './pieces';
 
-/** Rubble pieces that stay where a segment fell. They are decoration and have no collider. */
-const RUBBLE_PER_SEGMENT = 7;
-/** A segment sheds this many chunks when it falls, at most. */
-const MAX_CHUNKS_PER_SEGMENT = 12;
+/** Rubble pieces that stay where a piece fell. They are decoration and have no collider. */
+const RUBBLE_PER_PIECE = 6;
+/** A piece sheds at least and at most this many chunks when it falls. */
+const MIN_CHUNKS = 6;
+const MAX_CHUNKS = 14;
+/** A tower leans this far away from the side that broke it while it sinks, in radians. */
+const MAX_LEAN = (14 * Math.PI) / 180;
+/** The neighbours of a falling tower take damage at these shares of the collapse. */
+const COLLAPSE_WAVES = [0.35, 0.8];
 
-interface Segment {
-  mesh: THREE.Mesh;
-  collider: RAPIER.Collider | undefined;
-  /** Footprint of the segment on the ground plane. */
-  box: OrientedBox;
+interface PieceState {
+  mesh: THREE.Mesh | undefined;
+  /** One convex collider, or several for a concave piece. Empty once the piece has fallen. */
+  colliders: RAPIER.Collider[];
+  polygon: Vec2[];
+  /** Centre of the piece at half its height. */
   center: THREE.Vector3;
+  /** Volume in cubic metres. */
+  volume: number;
   cracked: boolean;
 }
 
-/** Points at one segment of one building. */
-export interface SegmentRef {
+/** Points at one piece of one building. */
+export interface PieceRef {
   building: Building;
   index: number;
 }
 
-/** A destructible building, cut into segments along its longer side. */
+/** The fall of a tower, from the moment its base gave way. */
+interface Collapse {
+  elapsed: number;
+  duration: number;
+  /** Direction on the ground plane in which the tower leans. */
+  lean: Vec2;
+  /** Floors that have sunk into the ground so far. */
+  floors: number;
+  /** How many of the waves of damage to the neighbours have gone out. */
+  waves: number;
+  /** How many collapses led to this one. 0 when the player broke the tower directly. */
+  chain: number;
+  done: boolean;
+}
+
+/**
+ * A destructible building.
+ *
+ * A low building is cut into pieces, and each piece has its own hit points and falls on its own.
+ * A tower shares one pool of hit points among its pieces. When the pool is empty, the whole tower
+ * sinks into the ground floor by floor.
+ */
 export class Building {
-  readonly layout: SegmentLayout;
+  readonly shape: BuildingShape;
+  readonly kind: BuildingClass;
+  readonly tower: boolean;
+  readonly name: string;
+  readonly colors: BuildingColors;
+  /** Heights of the bottom and the roof above the ground, in metres. */
+  readonly base: number;
+  readonly height: number;
+  /** Centre of the footprint. */
+  readonly center: Vec2;
   readonly object = new THREE.Group();
-  readonly segments: Segment[] = [];
-  /** Hit points of every segment. */
+  readonly pieces: PieceState[] = [];
+  /** Full hit points of every piece. A tower's pieces share `towerMaxHp` instead. */
+  readonly maxHp: number[];
+  /** Current hit points of every piece of a low building. */
   readonly hp: number[];
-  readonly maxHp: number;
-  /** Heading of the longer side in radians. */
-  readonly heading: number;
-  /** Footprint of the whole building. */
-  readonly footprint: OrientedBox;
+  readonly towerMaxHp: number;
+  towerHp: number;
+  collapse: Collapse | undefined;
+  /** Direction of the last ram on the ground plane, for the lean of a tower. */
+  lastPush: Vec2 = [0, 0];
+  /** The buildings that a part above the ground stands on. */
+  readonly supports: Building[] = [];
+
+  /** Height of the ground under the building. */
+  readonly baseY: number;
 
   constructor(
     readonly data: BuildingData,
-    readonly baseY: number,
+    heightAt: (x: number, z: number) => number,
   ) {
-    this.layout = segmentLayout(data);
-    this.maxHp = STRENGTH_HP[data.strength];
-    this.hp = new Array<number>(this.layout.count).fill(this.maxHp);
-    this.heading = this.layout.heading;
-    this.footprint = {
-      center: data.pos,
-      half: [(this.layout.length * this.layout.count) / 2, this.layout.depth / 2],
-      heading: this.heading,
-    };
+    this.shape = cutFootprint(data.footprint);
+    this.baseY = heightAt(this.shape.center[0], this.shape.center[1]);
+    this.base = data.base ?? 0;
+    this.height = Math.max(this.base + 1, data.height);
+    this.kind = classifyBuilding(this.height, this.shape.area);
+    this.tower = this.kind === 'tower';
+    this.name = data.name ?? (this.kind === 'block' ? 'building' : this.kind);
+    this.colors = data.colors ?? paletteColors(data.id, this.kind);
+    this.center = this.shape.center;
+    const storey = this.height - this.base;
+    this.maxHp = this.shape.pieces.map((piece) => hitPoints(piece.area * storey));
+    this.hp = [...this.maxHp];
+    this.towerMaxHp = hitPoints(this.shape.area * storey);
+    this.towerHp = this.towerMaxHp;
     this.object.name = `building-${data.id}`;
-    this.object.position.set(data.pos[0], baseY, data.pos[1]);
-    this.object.rotation.y = -this.heading;
+    this.object.position.set(this.center[0], this.baseY, this.center[1]);
   }
 
-  /** True when every segment has fallen. */
+  /** True while a piece still stands. */
+  standing(index: number): boolean {
+    return this.tower ? this.towerHp > 0 : this.hp[index] > 0;
+  }
+
+  /** True when the building has fallen, or a tower has started to fall. */
   get destroyed(): boolean {
-    return this.hp.every((value) => value <= 0);
+    return this.tower ? this.towerHp <= 0 : this.hp.every((value) => value <= 0);
   }
 
   /** The id that route obstacles are counted by: the group, or the building itself. */
   get obstacleId(): string {
     return this.data.group ?? this.data.id;
+  }
+
+  /** Volume of the whole building in cubic metres. */
+  get volume(): number {
+    return this.shape.area * (this.height - this.base);
+  }
+
+  /** The neighbours, hit points and centres of the pieces, for the spread of damage. */
+  get graph(): PieceGraph {
+    return {
+      maxHp: this.maxHp,
+      neighbours: this.shape.neighbours,
+      centers: this.shape.pieces.map((piece) => piece.center),
+    };
   }
 }
 
@@ -78,12 +154,10 @@ export class Buildings {
   readonly object = new THREE.Group();
   readonly list: Building[] = [];
 
-  private readonly byCollider = new Map<number, SegmentRef>();
-  private readonly intactMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
-  private readonly crackedMaterial = new THREE.MeshLambertMaterial({
-    vertexColors: true,
-    map: createCrackTexture(),
-  });
+  private readonly byCollider = new Map<number, PieceRef>();
+  private readonly intact: THREE.Material[];
+  private readonly cracked: THREE.Material[];
+  private readonly textures: THREE.Texture[];
   private readonly rubble: THREE.InstancedMesh;
   private readonly dustPatches: THREE.InstancedMesh;
   private rubbleCount = 0;
@@ -100,19 +174,36 @@ export class Buildings {
     private readonly events: EventBus<GameEvents>,
   ) {
     this.object.name = 'buildings';
-    let segmentTotal = 0;
+    const windows = createWindowTexture(false);
+    const crackedWindows = createWindowTexture(true);
+    const cracks = createCrackTexture();
+    this.textures = [windows, crackedWindows, cracks];
+    this.intact = [
+      new THREE.MeshLambertMaterial({ vertexColors: true, map: windows }),
+      new THREE.MeshLambertMaterial({ vertexColors: true }),
+    ];
+    this.cracked = [
+      new THREE.MeshLambertMaterial({ vertexColors: true, map: crackedWindows }),
+      new THREE.MeshLambertMaterial({ vertexColors: true, map: cracks }),
+    ];
+
+    let pieceTotal = 0;
     for (const data of level.buildings) {
-      const building = new Building(data, heightAt(data.pos[0], data.pos[1]));
-      this.createSegments(building);
+      const building = new Building(data, heightAt);
+      if (building.shape.pieces.length === 0) {
+        // A footprint without area, for example from broken map data.
+        continue;
+      }
+      this.createPieces(building);
       this.list.push(building);
       this.object.add(building.object);
-      segmentTotal += building.layout.count;
+      pieceTotal += building.pieces.length;
     }
 
     this.rubble = new THREE.InstancedMesh(
       new THREE.BoxGeometry(1, 1, 1),
       new THREE.MeshLambertMaterial(),
-      Math.max(1, segmentTotal * RUBBLE_PER_SEGMENT),
+      Math.max(1, pieceTotal * RUBBLE_PER_PIECE),
     );
     this.rubble.name = 'rubble';
     this.rubble.count = 0;
@@ -121,7 +212,7 @@ export class Buildings {
     this.dustPatches = new THREE.InstancedMesh(
       new THREE.CircleGeometry(1, 14).rotateX(-Math.PI / 2),
       new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.42, depthWrite: false }),
-      Math.max(1, segmentTotal),
+      Math.max(1, pieceTotal),
     );
     this.dustPatches.name = 'rubble-dust';
     this.dustPatches.count = 0;
@@ -131,17 +222,64 @@ export class Buildings {
     this.rubble.setColorAt(0, this.color.setHex(0xffffff));
     this.dustPatches.setColorAt(0, this.color.setHex(0xffffff));
     this.object.add(this.dustPatches, this.rubble);
+    this.linkSupports();
   }
 
-  /** Frees the materials and the crack texture. They may not be on any mesh at the moment. */
+  /**
+   * Finds, for every part that starts above the ground, the buildings that it stands on. When one
+   * of them falls, the part falls with it.
+   */
+  private linkSupports(): void {
+    for (const part of this.list) {
+      if (part.base <= 0.5) {
+        continue;
+      }
+      for (const support of this.list) {
+        if (
+          support !== part &&
+          support.base < part.base &&
+          support.height >= part.base - 1 &&
+          pointInPolygon(part.center, support.shape.outline)
+        ) {
+          part.supports.push(support);
+        }
+      }
+    }
+    this.events.on('buildingDestroyed', ({ building }) => {
+      for (const part of this.list) {
+        if (!part.destroyed && part.supports.includes(building)) {
+          this.dropPart(part);
+        }
+      }
+    });
+  }
+
+  /** Brings down a part whose support fell: a tower part sinks, a low part breaks. */
+  private dropPart(part: Building): void {
+    const push = new THREE.Vector3();
+    if (part.tower) {
+      this.damage({ building: part, index: 0 }, part.towerHp, push, 1);
+      return;
+    }
+    part.pieces.forEach((_, index) => {
+      if (part.standing(index)) {
+        this.damage({ building: part, index }, part.hp[index], push, 1);
+      }
+    });
+  }
+
+  /** Frees the materials and textures. They may not be on any mesh at the moment. */
   dispose(): void {
-    this.crackedMaterial.map?.dispose();
-    this.crackedMaterial.dispose();
-    this.intactMaterial.dispose();
+    for (const texture of this.textures) {
+      texture.dispose();
+    }
+    for (const material of [...this.intact, ...this.cracked]) {
+      material.dispose();
+    }
   }
 
-  /** Returns the building segment that a collider belongs to. */
-  lookup(colliderHandle: number): SegmentRef | undefined {
+  /** Returns the building piece that a collider belongs to. */
+  lookup(colliderHandle: number): PieceRef | undefined {
     return this.byCollider.get(colliderHandle);
   }
 
@@ -151,48 +289,86 @@ export class Buildings {
   }
 
   /**
-   * Damages one segment. The collapse can spread to its neighbours.
+   * Damages one piece. In a low building, the collapse can spread to other pieces. In a tower,
+   * the damage goes to the tower's shared hit points.
    *
-   * @param push Velocity that the falling chunks inherit, for example from the ramming vehicle.
-   * @returns How many segments fell.
+   * @param push Velocity of the ram. The falling chunks inherit it, and a tower leans along it.
+   * @param chain How many collapses led to this damage. 0 for the player's own ram.
+   * @param ram True for a vehicle's ram. Only a ram carries its spare damage on through pieces.
+   * @returns How many pieces fell, or 1 when a tower started to fall.
    */
-  damage(ref: SegmentRef, amount: number, push: THREE.Vector3): number {
+  damage(ref: PieceRef, amount: number, push: THREE.Vector3, chain = 0, ram = false): number {
     const { building } = ref;
-    if (amount <= 0 || building.hp[ref.index] <= 0) {
+    if (amount <= 0 || !building.standing(ref.index)) {
       return 0;
     }
-    const wasDestroyed = building.destroyed;
-    const fallen = applySegmentDamage(building.hp, building.maxHp, ref.index, amount);
-    for (const index of fallen) {
-      this.dropSegment(building, index, push);
+    if (Math.hypot(push.x, push.z) > 0.5) {
+      building.lastPush = [push.x, push.z];
     }
-    building.segments.forEach((segment, index) => {
+    if (building.tower) {
+      return this.damageTower(building, amount, chain);
+    }
+    const ramming = ram && chain === 0 && Math.hypot(push.x, push.z) > 0.5;
+    const fallen = applyPieceDamage(
+      building.hp,
+      building.graph,
+      ref.index,
+      amount,
+      ramming ? [push.x, push.z] : undefined,
+    );
+    for (const index of fallen) {
+      this.dropPiece(building, index, push, chain);
+    }
+    building.pieces.forEach((piece, index) => {
       const hp = building.hp[index];
-      if (hp > 0 && hp <= building.maxHp / 2 && !segment.cracked) {
-        this.crackSegment(building, segment);
+      if (hp > 0 && hp <= building.maxHp[index] / 2 && !piece.cracked) {
+        this.crackPiece(building, index);
       }
     });
-    if (!wasDestroyed && building.destroyed) {
+    if (fallen.length > 0 && building.destroyed) {
       this.events.emit('buildingDestroyed', { building });
     }
     return fallen.length;
   }
 
-  /** Damages every segment within the radius of an explosion. Concrete is not spared. */
-  blast(center: THREE.Vector3, radius: number, peak: number): void {
+  /** Damages every piece within the radius of an explosion. */
+  blast(center: THREE.Vector3, radius: number, peak: number, chain = 0, spare?: Building): void {
     const push = new THREE.Vector3();
+    const point: Vec2 = [center.x, center.z];
     for (const building of this.list) {
-      building.segments.forEach((segment, index) => {
-        if (building.hp[index] <= 0) {
-          return;
-        }
-        const distance = distanceToBox([center.x, center.z], segment.box);
+      if (building === spare || building.destroyed) {
+        continue;
+      }
+      if (building.tower) {
+        const distance = distanceToPolygon(point, building.shape.outline);
         const amount = blastDamage(peak, radius, distance);
         if (amount > 0) {
-          push.copy(segment.center).sub(center).setY(0).normalize().multiplyScalar(9);
-          this.damage({ building, index }, amount, push);
+          push.set(building.center[0] - center.x, 0, building.center[1] - center.z);
+          push.normalize().multiplyScalar(9);
+          this.damage({ building, index: 0 }, amount, push, chain);
+        }
+        continue;
+      }
+      building.pieces.forEach((piece, index) => {
+        if (!building.standing(index)) {
+          return;
+        }
+        const amount = blastDamage(peak, radius, distanceToPolygon(point, piece.polygon));
+        if (amount > 0) {
+          push.copy(piece.center).sub(center).setY(0).normalize().multiplyScalar(9);
+          this.damage({ building, index }, amount, push, chain);
         }
       });
+    }
+  }
+
+  /** Advances the towers that are falling. Call it once per simulation step. */
+  step(dt: number): void {
+    for (const building of this.list) {
+      const collapse = building.collapse;
+      if (collapse && !collapse.done) {
+        this.stepCollapse(building, collapse, dt);
+      }
     }
   }
 
@@ -201,116 +377,167 @@ export class Buildings {
     return this.list.reduce((count, building) => count + (building.destroyed ? 1 : 0), 0);
   }
 
-  private createSegments(building: Building): void {
-    const { data, layout } = building;
-    const [forwardX, forwardZ] = headingVector(building.heading);
-    const height = data.size[1];
-    const boxes = segmentBoxes(data, layout);
-
-    for (let index = 0; index < layout.count; index += 1) {
-      const offset = (index - (layout.count - 1) / 2) * layout.length;
-      const mesh = new THREE.Mesh(buildSegmentGeometry(data, layout, index), this.intactMaterial);
-      mesh.position.x = offset;
+  private createPieces(building: Building): void {
+    const { shape } = building;
+    const gable =
+      building.kind === 'house' && shape.pieces.length === 1 && shape.rectangular
+        ? shape.rect
+        : undefined;
+    const style: PieceStyle = {
+      colors: building.colors,
+      base: building.base,
+      height: building.height,
+      gable: building.base === 0 ? gable : undefined,
+    };
+    const bottom = building.baseY + building.base;
+    const top = building.baseY + building.height;
+    shape.pieces.forEach((piece, index) => {
+      const mesh = new THREE.Mesh(buildPieceGeometry(piece, building.center, style), this.intact);
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       building.object.add(mesh);
 
-      const center = new THREE.Vector3(
-        data.pos[0] + forwardX * offset,
-        building.baseY + height / 2,
-        data.pos[1] + forwardZ * offset,
-      );
-      const shape = layout.round
-        ? RAPIER.ColliderDesc.cylinder(height / 2, Math.min(data.size[0], data.size[2]) / 2)
-        : RAPIER.ColliderDesc.cuboid(layout.length / 2, height / 2, layout.depth / 2);
-      const half = -building.heading / 2;
-      const collider = this.physics.world.createCollider(
-        shape
-          .setTranslation(center.x, center.y, center.z)
-          .setRotation({ x: 0, y: Math.sin(half), z: 0, w: Math.cos(half) })
-          .setFriction(0.3)
-          .setCollisionGroups(collisionGroups(Layer.building, 0xffff)),
-      );
-      this.byCollider.set(collider.handle, { building, index });
-
-      building.segments.push({
+      const colliders: RAPIER.Collider[] = [];
+      for (const part of convexParts(piece.polygon, piece.convex)) {
+        const points = new Float32Array(part.length * 6);
+        part.forEach(([x, z], i) => {
+          points.set([x, bottom, z, x, top, z], i * 6);
+        });
+        // A part of no area has no hull, so it gets no collider.
+        const desc = RAPIER.ColliderDesc.convexHull(points);
+        if (desc) {
+          const collider = this.physics.world.createCollider(
+            desc.setFriction(0.3).setCollisionGroups(collisionGroups(Layer.building, 0xffff)),
+          );
+          this.byCollider.set(collider.handle, { building, index });
+          colliders.push(collider);
+        }
+      }
+      building.pieces.push({
         mesh,
-        collider,
-        box: boxes[index],
-        center,
+        colliders,
+        polygon: piece.polygon,
+        center: new THREE.Vector3(piece.center[0], (bottom + top) / 2, piece.center[1]),
+        volume: piece.area * (building.height - building.base),
         cracked: false,
       });
+    });
+  }
+
+  private damageTower(building: Building, amount: number, chain: number): number {
+    const before = building.towerHp;
+    building.towerHp = Math.max(0, before - amount);
+    if (building.towerHp > 0) {
+      if (building.towerHp <= building.towerMaxHp / 2 && !building.pieces[0]?.cracked) {
+        building.pieces.forEach((_, index) => this.crackPiece(building, index, true));
+        const position = new THREE.Vector3(
+          building.center[0],
+          building.baseY + 1,
+          building.center[1],
+        );
+        this.effects.dust(position, Math.sqrt(building.shape.area) * 0.5 + 3, 10);
+        this.events.emit('buildingCracked', { building, position });
+      }
+      return 0;
+    }
+    this.startCollapse(building, chain);
+    return 1;
+  }
+
+  /** Shows cracks on a piece. `quiet` leaves out the dust and the event, for a whole tower. */
+  private crackPiece(building: Building, index: number, quiet = false): void {
+    const piece = building.pieces[index];
+    if (piece.cracked || !piece.mesh) {
+      return;
+    }
+    piece.cracked = true;
+    piece.mesh.material = this.cracked;
+    if (!building.tower) {
+      // A cracked piece sags a little, so that the damage reads from far away. The geometry sits
+      // around the building's centre, so the piece only moves down and does not tilt.
+      piece.mesh.position.y = -0.25;
+    }
+    if (quiet) {
+      return;
+    }
+    const position = new THREE.Vector3(piece.center.x, building.baseY + 1, piece.center.z);
+    this.effects.dust(position, Math.sqrt(piece.volume) * 0.12 + 2, 6);
+    this.events.emit('buildingCracked', { building, position });
+  }
+
+  private removeCollider(piece: PieceState): void {
+    for (const collider of piece.colliders) {
+      this.byCollider.delete(collider.handle);
+      this.physics.world.removeCollider(collider, true);
+    }
+    piece.colliders.length = 0;
+  }
+
+  private removeMesh(building: Building, piece: PieceState): void {
+    if (piece.mesh) {
+      building.object.remove(piece.mesh);
+      piece.mesh.geometry.dispose();
+      piece.mesh = undefined;
     }
   }
 
-  private crackSegment(building: Building, segment: Segment): void {
-    segment.cracked = true;
-    segment.mesh.material = this.crackedMaterial;
-    // A cracked segment sags a little, so that the damage reads from far away.
-    segment.mesh.rotation.z = (Math.random() - 0.5) * 0.07;
-    segment.mesh.rotation.x = (Math.random() - 0.5) * 0.07;
-    segment.mesh.position.y = -0.25;
-    this.effects.dust(segment.center, building.layout.depth * 0.35, 6);
-    this.events.emit('buildingCracked', { building, position: segment.center });
-  }
-
-  private dropSegment(building: Building, index: number, push: THREE.Vector3): void {
-    const segment = building.segments[index];
-    if (segment.collider) {
-      this.byCollider.delete(segment.collider.handle);
-      this.physics.world.removeCollider(segment.collider, true);
-      segment.collider = undefined;
+  private dropPiece(building: Building, index: number, push: THREE.Vector3, chain: number): void {
+    const piece = building.pieces[index];
+    this.removeCollider(piece);
+    this.removeMesh(building, piece);
+    const height = building.height - building.base;
+    const reach = Math.sqrt(building.shape.pieces[index].area);
+    this.spawnChunks(building, piece, push, height, reach);
+    this.addRubble(building, index);
+    const ground = new THREE.Vector3(piece.center.x, building.baseY + 0.5, piece.center.z);
+    this.effects.dust(ground, reach * 0.7 + height * 0.25, 16);
+    if (building.kind === 'block') {
+      this.effects.sparks(piece.center, 8, 10);
     }
-    building.object.remove(segment.mesh);
-    segment.mesh.geometry.dispose();
-
-    this.spawnChunks(building, segment, push);
-    this.addRubble(building, segment);
-    this.effects.dust(
-      segment.center,
-      Math.max(building.layout.length, building.layout.depth) * 0.5,
-      14,
-    );
-    this.events.emit('segmentDestroyed', { building, position: segment.center });
+    this.events.emit('pieceDestroyed', {
+      building,
+      position: piece.center,
+      volume: piece.volume,
+      chain,
+    });
   }
 
-  private spawnChunks(building: Building, segment: Segment, push: THREE.Vector3): void {
-    const { layout, data } = building;
-    const height = data.size[1];
-    const wall = Number.parseInt(data.colors.wall.slice(1), 16);
-    const roof = Number.parseInt(data.colors.roof.slice(1), 16);
-    const volume = layout.length * height * layout.depth;
-    const count = clamp(Math.round(volume / 110), 6, MAX_CHUNKS_PER_SEGMENT);
-    const [forwardX, forwardZ] = headingVector(building.heading);
-
+  private spawnChunks(
+    building: Building,
+    piece: PieceState,
+    push: THREE.Vector3,
+    height: number,
+    reach: number,
+  ): void {
+    const wall = Number.parseInt(building.colors.wall.slice(1), 16);
+    const roof = Number.parseInt(building.colors.roof.slice(1), 16);
+    const count = clamp(Math.round(piece.volume / 90), MIN_CHUNKS, MAX_CHUNKS);
     const position = new THREE.Vector3();
     const size = new THREE.Vector3();
     const velocity = new THREE.Vector3();
     const spin = new THREE.Vector3();
     for (let i = 0; i < count; i += 1) {
-      const along = (Math.random() - 0.5) * layout.length * 0.8;
-      const across = (Math.random() - 0.5) * layout.depth * 0.8;
-      const up = (0.15 + Math.random() * 0.75) * height;
+      const up = (0.15 + Math.random() * 0.8) * height;
       position.set(
-        segment.center.x + forwardX * along - forwardZ * across,
-        building.baseY + up,
-        segment.center.z + forwardZ * along + forwardX * across,
+        piece.center.x + (Math.random() - 0.5) * reach * 0.8,
+        building.baseY + building.base + up,
+        piece.center.z + (Math.random() - 0.5) * reach * 0.8,
       );
-      const scale = 0.5 + Math.random() * 0.7;
+      const scale = 0.5 + Math.random() * 0.8;
       size.set(
-        clamp(layout.length * 0.3 * scale, 1.2, 5),
-        clamp(height * 0.28 * scale, 1, 4),
-        clamp(layout.depth * 0.3 * scale, 1.2, 5),
+        clamp(reach * 0.3 * scale, 1.2, 5.5),
+        clamp(height * 0.3 * scale, 1, 4.5),
+        clamp(reach * 0.3 * scale, 1.2, 5.5),
       );
-      // Chunks fly outwards from the middle of the segment, upwards, and along the push.
+      // Chunks fly outwards from the middle of the piece, upwards, and along the push.
       velocity
-        .set(position.x - segment.center.x, 0, position.z - segment.center.z)
+        .set(position.x - piece.center.x, 0, position.z - piece.center.z)
         .normalize()
-        .multiplyScalar(3 + Math.random() * 5)
-        .addScaledVector(push, 0.45 + Math.random() * 0.35);
-      velocity.y = 6 + Math.random() * 9;
-      spin.set((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8);
-      const isRoof = up > height * 0.62;
+        .multiplyScalar(4 + Math.random() * 7)
+        .addScaledVector(push, 0.5 + Math.random() * 0.4);
+      velocity.y = 7 + Math.random() * 11;
+      spin.set((Math.random() - 0.5) * 9, (Math.random() - 0.5) * 9, (Math.random() - 0.5) * 9);
+      const isRoof = up > height * 0.7;
       this.debris.spawn(
         position,
         size,
@@ -321,24 +548,26 @@ export class Buildings {
     }
   }
 
-  /** Leaves a dusty patch and a few half-buried pieces where a segment stood. */
-  private addRubble(building: Building, segment: Segment): void {
-    const { layout, data } = building;
-    const wall = shade(data.colors.wall, -0.12);
-    const roof = shade(data.colors.roof, -0.08);
-    const [forwardX, forwardZ] = headingVector(building.heading);
+  /** Leaves a dusty patch and a few half-buried pieces where a piece stood. */
+  private addRubble(building: Building, index: number): void {
+    const piece = building.shape.pieces[index];
+    const wall = shade(building.colors.wall, -0.12);
+    const roof = shade(building.colors.roof, -0.08);
+    const reach = Math.sqrt(piece.area);
     const rotation = new THREE.Quaternion();
     const euler = new THREE.Euler();
+    // A part that stood on another building falls to the ground too.
+    const ground = building.baseY;
 
     if (this.patchCount < this.dustPatches.instanceMatrix.count) {
       this.matrix.compose(
         new THREE.Vector3(
-          segment.center.x,
-          building.baseY + 0.08 + this.patchCount * 0.004,
-          segment.center.z,
+          piece.center[0],
+          ground + 0.08 + this.patchCount * 0.002,
+          piece.center[1],
         ),
-        rotation.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, -building.heading),
-        new THREE.Vector3(layout.length * 0.72, 1, layout.depth * 0.72),
+        rotation.identity(),
+        new THREE.Vector3(reach * 0.62, 1, reach * 0.62),
       );
       this.dustPatches.setMatrixAt(this.patchCount, this.matrix);
       this.dustPatches.setColorAt(this.patchCount, this.color.setHex(0xcfc3a4));
@@ -352,18 +581,16 @@ export class Buildings {
 
     for (
       let i = 0;
-      i < RUBBLE_PER_SEGMENT && this.rubbleCount < this.rubble.instanceMatrix.count;
+      i < RUBBLE_PER_PIECE && this.rubbleCount < this.rubble.instanceMatrix.count;
       i += 1
     ) {
-      const along = (Math.random() - 0.5) * layout.length * 0.9;
-      const across = (Math.random() - 0.5) * layout.depth * 0.9;
       const size = 0.8 + Math.random() * 1.8;
       euler.set(Math.random() * 0.5, Math.random() * Math.PI, Math.random() * 0.5);
       this.matrix.compose(
         new THREE.Vector3(
-          segment.center.x + forwardX * along - forwardZ * across,
-          building.baseY + size * 0.12,
-          segment.center.z + forwardZ * along + forwardX * across,
+          piece.center[0] + (Math.random() - 0.5) * reach * 0.8,
+          ground + size * 0.12,
+          piece.center[1] + (Math.random() - 0.5) * reach * 0.8,
         ),
         rotation.setFromEuler(euler),
         new THREE.Vector3(size * (0.8 + Math.random()), size * 0.5, size),
@@ -378,60 +605,142 @@ export class Buildings {
       this.rubble.instanceColor.needsUpdate = true;
     }
   }
-}
 
-/** Distance on the ground plane from a point to the nearest point of a box. 0 inside the box. */
-export function distanceToBox(point: Vec2, box: OrientedBox): number {
-  const local = toBoxLocal(point, box);
-  const dx = Math.max(0, Math.abs(local[0]) - box.half[0]);
-  const dz = Math.max(0, Math.abs(local[1]) - box.half[1]);
-  return Math.hypot(dx, dz);
-}
-
-/** Paints jagged dark lines on white. Cracked segments multiply it with their colours. */
-function createCrackTexture(): THREE.Texture {
-  const size = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = size;
-  canvas.height = size;
-  const context = canvas.getContext('2d');
-  if (!context) {
-    throw new Error('The browser cannot create a 2D canvas for the crack texture.');
-  }
-  context.fillStyle = '#d9d2c8';
-  context.fillRect(0, 0, size, size);
-  let seed = 99;
-  const random = (): number => {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 4294967296;
-  };
-  context.lineCap = 'round';
-  context.lineJoin = 'round';
-  for (let crack = 0; crack < 9; crack += 1) {
-    let x = random() * size;
-    let y = random() * size;
-    let angle = random() * Math.PI * 2;
-    context.strokeStyle = crack % 3 === 0 ? '#3a3632' : '#5b554e';
-    context.lineWidth = 2 + random() * 3;
-    context.beginPath();
-    context.moveTo(x, y);
-    for (let step = 0; step < 9; step += 1) {
-      angle += (random() - 0.5) * 1.6;
-      x += Math.cos(angle) * (12 + random() * 22);
-      y += Math.sin(angle) * (12 + random() * 22);
-      context.lineTo(x, y);
+  private startCollapse(building: Building, chain: number): void {
+    const [px, pz] = building.lastPush;
+    const length = Math.hypot(px, pz);
+    const angle = Math.random() * Math.PI * 2;
+    const lean: Vec2 =
+      length > 0.5 ? [px / length, pz / length] : [Math.cos(angle), Math.sin(angle)];
+    building.collapse = {
+      elapsed: 0,
+      // A tall tower takes longer, so that the floors visibly go one after another.
+      duration: 1.2 + (building.height - building.base) / 45,
+      lean,
+      floors: 0,
+      waves: 0,
+      chain,
+      done: false,
+    };
+    for (const piece of building.pieces) {
+      this.removeCollider(piece);
     }
-    context.stroke();
+    const position = new THREE.Vector3(building.center[0], building.baseY + 1, building.center[1]);
+    const radius = Math.sqrt(building.shape.area) * 0.6 + 6;
+    this.effects.ring(position, radius * 1.6, EFFECT_COLORS.dust);
+    this.effects.dust(position, radius, 30);
+    this.events.emit('towerCollapsing', { building, position, chain });
+    this.events.emit('buildingDestroyed', { building });
   }
-  for (let blotch = 0; blotch < 14; blotch += 1) {
-    context.fillStyle = 'rgba(70, 62, 54, 0.25)';
-    context.beginPath();
-    context.arc(random() * size, random() * size, 8 + random() * 22, 0, Math.PI * 2);
-    context.fill();
+
+  private stepCollapse(building: Building, collapse: Collapse, dt: number): void {
+    collapse.elapsed += dt;
+    const share = Math.min(1, collapse.elapsed / collapse.duration);
+    // The fall speeds up like a real one. A part on top of another building sinks all the way.
+    const depth = building.height * share ** 1.7;
+    building.object.position.y = building.baseY - depth;
+    const [lx, lz] = collapse.lean;
+    building.object.quaternion.setFromAxisAngle(
+      new THREE.Vector3(lz, 0, -lx),
+      MAX_LEAN * share ** 1.2,
+    );
+
+    const floors = Math.floor(depth / FLOOR_HEIGHT);
+    while (collapse.floors < floors) {
+      collapse.floors += 1;
+      this.burstFloor(building, collapse);
+    }
+    while (collapse.waves < COLLAPSE_WAVES.length && share >= COLLAPSE_WAVES[collapse.waves]) {
+      collapse.waves += 1;
+      this.hitNeighbours(building, collapse);
+    }
+    if (share >= 1) {
+      collapse.done = true;
+      building.pieces.forEach((piece, index) => {
+        this.removeMesh(building, piece);
+        this.addRubble(building, index);
+      });
+      const position = new THREE.Vector3(
+        building.center[0],
+        building.baseY + 1,
+        building.center[1],
+      );
+      this.effects.dust(position, Math.sqrt(building.shape.area) * 0.7 + 6, 24);
+      this.events.emit('towerFell', { building, position });
+    }
   }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.wrapS = THREE.RepeatWrapping;
-  texture.wrapT = THREE.RepeatWrapping;
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
+
+  /** One floor reaches the ground: dust and chunks burst out around the base. */
+  private burstFloor(building: Building, collapse: Collapse): void {
+    const outline = building.shape.outline;
+    const [lx, lz] = collapse.lean;
+    const ground = building.baseY + 0.6;
+    const wall = Number.parseInt(building.colors.wall.slice(1), 16);
+    const position = new THREE.Vector3();
+    const velocity = new THREE.Vector3();
+    const size = new THREE.Vector3();
+    const spin = new THREE.Vector3();
+    // A cloud of dust rolls out around the base and hides where the floors sink into the ground.
+    const scale = clamp(Math.sqrt(building.shape.area) / 20, 0.6, 1.6);
+    const bursts = 5;
+    for (let i = 0; i < bursts; i += 1) {
+      const a = outline[Math.floor(Math.random() * outline.length)];
+      const b = outline[(outline.indexOf(a) + 1) % outline.length];
+      const t = Math.random();
+      position.set(a[0] + (b[0] - a[0]) * t, ground, a[1] + (b[1] - a[1]) * t);
+      const out = new THREE.Vector3(
+        position.x - building.center[0],
+        0,
+        position.z - building.center[1],
+      ).normalize();
+      velocity.copy(out).multiplyScalar(6 + Math.random() * 8);
+      velocity.x += lx * 5;
+      velocity.z += lz * 5;
+      velocity.y = 2 + Math.random() * 6;
+      this.effects.puff({
+        position,
+        velocity,
+        color: Math.random() > 0.5 ? EFFECT_COLORS.dust : EFFECT_COLORS.dustDark,
+        size: (4 + Math.random() * 4) * scale,
+        life: 1.8 + Math.random() * 1.2,
+        drag: 1.1,
+      });
+      if (i < 2 && collapse.floors % 2 === 0) {
+        size.set(1.2 + Math.random() * 1.8, 0.8 + Math.random() * 1.2, 1.2 + Math.random() * 1.8);
+        spin.set((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8);
+        velocity.y = 6 + Math.random() * 6;
+        this.debris.spawn(position, size, shade(wall, (Math.random() - 0.5) * 0.1), velocity, spin);
+      }
+    }
+    this.events.emit('towerFloor', {
+      building,
+      position: new THREE.Vector3(building.center[0], ground, building.center[1]),
+      floor: collapse.floors,
+    });
+  }
+
+  /** The falling tower damages the buildings around it, most on the side that it leans to. */
+  private hitNeighbours(building: Building, collapse: Collapse): void {
+    const storey = building.height - building.base;
+    const reach = storey * 0.25 * collapse.waves;
+    const center = new THREE.Vector3(
+      building.center[0] + collapse.lean[0] * reach,
+      building.baseY,
+      building.center[1] + collapse.lean[1] * reach,
+    );
+    const radius = 10 + storey * 0.35 + Math.sqrt(building.shape.area) * 0.3;
+    const peak = Math.min(700, 200 + storey * 4);
+    this.blast(center, radius, peak, collapse.chain + 1, building);
+  }
+}
+
+/** Splits a piece into convex parts for its colliders: itself when convex, else its triangles. */
+function convexParts(polygon: readonly Vec2[], convex: boolean): Vec2[][] {
+  if (convex) {
+    return [[...polygon]];
+  }
+  const contour = polygon.map((p) => new THREE.Vector2(p[0], p[1]));
+  return THREE.ShapeUtils.triangulateShape(contour, []).map((triangle) =>
+    triangle.map((index) => polygon[index]),
+  );
 }

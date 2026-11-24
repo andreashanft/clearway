@@ -1,0 +1,130 @@
+/* The score counter sits at the bottom centre, between the steering control and the pedals. */
+.score {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--cw-safe-bottom) + 16px);
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  pointer-events: none;
+  text-shadow: 0 2px 10px rgba(var(--cw-ground-rgb), 0.8);
+}
+
+.score__total {
+  font-family: var(--cw-font-display);
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--cw-ink);
+}
+
+.score__combo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity var(--cw-fast) ease-out;
+}
+
+.score__combo.is-on {
+  opacity: 1;
+}
+
+.score__multiplier {
+  font-family: var(--cw-font-display);
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--cw-amber);
+}
+
+.score__multiplier.is-bump {
+  animation: score-bump 0.35s ease-out;
+}
+
+@keyframes score-bump {
+  from {
+    transform: scale(1.6);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.score__bar {
+  width: 72px;
+  height: 5px;
+  background: rgba(var(--cw-line-rgb), 0.25);
+}
+
+.score__bar-fill {
+  width: 100%;
+  height: 100%;
+  background: var(--cw-amber);
+  transform-origin: left center;
+}
+
+/* Pop-ups follow the place of the break across the screen. */
+.score-popups {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.score-popup {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  white-space: nowrap;
+  font-family: var(--cw-font-display);
+  font-weight: 800;
+  line-height: 1;
+  color: var(--cw-ink);
+  text-shadow:
+    0 2px 0 rgba(var(--cw-ground-rgb), 0.9),
+    0 0 12px rgba(var(--cw-ground-rgb), 0.6);
+  will-change: transform, opacity;
+}
+
+.score-popup__points {
+  font-size: 24px;
+}
+
+.score-popup__tag {
+  font-size: 16px;
+  color: var(--cw-amber);
+}
+
+.score-popup.is-chain .score-popup__tag {
+  color: var(--cw-signal);
+}
+
+.score-popup.is-tower .score-popup__points {
+  font-size: 40px;
+  color: var(--cw-hazard);
+}
+
+/* Portrait phones: the pedals reach the middle, so the counter sits above them. */
+@media (orientation: portrait) {
+  .score {
+    bottom: calc(var(--cw-safe-bottom) + 170px);
+  }
+
+  .score__total {
+    font-size: 28px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .score__multiplier.is-bump {
+    animation: none;
+  }
+}

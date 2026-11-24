@@ -53,8 +53,11 @@ export interface VehicleSpec {
   slideAngle: number;
   /** How strongly the sliding tyres slow sideways motion, in m/s². Lower values drift further. */
   slideFriction: number;
-  /** Multiplies the damage that this vehicle deals. */
-  damage: number;
+  /**
+   * Damage of a ram at the top speed, in hit points. A slower ram deals less, by the square of
+   * its share of the top speed. A house has about 100 hit points.
+   */
+  ram: number;
 }
 
 /** 1 km/h in m/s. */
@@ -92,7 +95,7 @@ export const VEHICLE_SPECS: Record<VehicleType, VehicleSpec> = {
     slideSpeed: 54 * KMH,
     slideAngle: 12 * DEG,
     slideFriction: 26,
-    damage: 1.2,
+    ram: 400,
   },
   // The flail car: an all-terrain car between the other two in speed and weight.
   flail: {
@@ -118,7 +121,7 @@ export const VEHICLE_SPECS: Record<VehicleType, VehicleSpec> = {
     slideSpeed: 62 * KMH,
     slideAngle: 30 * DEG,
     slideFriction: 30,
-    damage: 1,
+    ram: 300,
   },
   // The buggy: light, fast and agile.
   buggy: {
@@ -145,7 +148,7 @@ export const VEHICLE_SPECS: Record<VehicleType, VehicleSpec> = {
     slideSpeed: 80 * KMH,
     slideAngle: 38 * DEG,
     slideFriction: 38,
-    damage: 0.8,
+    ram: 200,
   },
 };
 

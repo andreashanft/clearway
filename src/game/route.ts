@@ -1,6 +1,6 @@
 import type { BuildingData, HaulerData } from './level';
-import { DEG, boxCorners, headingVector, type OrientedBox, type Vec2 } from './math';
-import { segmentBoxes, segmentLayout } from './world/segments';
+import { DEG, headingVector, type Vec2 } from './math';
+import { cutFootprint } from './world/pieces';
 
 /** Size of the Hauler in metres. */
 export const HAULER_LENGTH = 26;
@@ -20,13 +20,13 @@ export interface Route {
   halfWidth: number;
 }
 
-/** One building segment that stands in the Hauler's strip. */
-export interface RouteSegment {
+/** One building piece that stands in the Hauler's strip. */
+export interface RoutePiece {
   buildingId: string;
-  segmentIndex: number;
-  /** Route distance at which the Hauler's front reaches the segment. */
+  pieceIndex: number;
+  /** Route distance at which the Hauler's front reaches the piece. */
   enter: number;
-  /** Route distance at which the Hauler's front leaves the segment. */
+  /** Route distance at which the Hauler's front leaves the piece. */
   exit: number;
 }
 
@@ -38,7 +38,7 @@ export interface RouteObstacle {
   name: string;
   /** Route distance at which the Hauler first touches the obstacle. */
   distance: number;
-  segments: RouteSegment[];
+  pieces: RoutePiece[];
 }
 
 export function createRoute(hauler: HaulerData): Route {
@@ -112,25 +112,6 @@ export function sweepPolygon(route: Route, polygon: readonly Vec2[]): [number, n
   return [enter, exit];
 }
 
-/** Corners of the footprint of a segment. A round footprint becomes an octagon. */
-export function footprintPolygon(box: OrientedBox, round: boolean): Vec2[] {
-  if (!round) {
-    return boxCorners(box);
-  }
-  const radius = Math.min(box.half[0], box.half[1]);
-  const corners: Vec2[] = [];
-  for (let i = 0; i < 8; i += 1) {
-    const angle = (i / 8) * Math.PI * 2 + Math.PI / 8;
-    // The octagon encloses the circle.
-    const reach = radius / Math.cos(Math.PI / 8);
-    corners.push([
-      box.center[0] + Math.cos(angle) * reach,
-      box.center[1] + Math.sin(angle) * reach,
-    ]);
-  }
-  return corners;
-}
-
 /**
  * Sweeps the Hauler's footprint along its line and lists what stands in the way.
  *
@@ -139,21 +120,20 @@ export function footprintPolygon(box: OrientedBox, round: boolean): Vec2[] {
 export function findObstacles(route: Route, buildings: readonly BuildingData[]): RouteObstacle[] {
   const byId = new Map<string, RouteObstacle>();
   for (const building of buildings) {
-    const layout = segmentLayout(building);
-    segmentBoxes(building, layout).forEach((box, segmentIndex) => {
-      const range = sweepPolygon(route, footprintPolygon(box, layout.round));
+    cutFootprint(building.footprint).pieces.forEach((piece, pieceIndex) => {
+      const range = sweepPolygon(route, piece.polygon);
       if (!range) {
         return;
       }
       const id = building.group ?? building.id;
       let obstacle = byId.get(id);
       if (!obstacle) {
-        obstacle = { id, name: building.name, distance: Infinity, segments: [] };
+        obstacle = { id, name: building.name ?? 'building', distance: Infinity, pieces: [] };
         byId.set(id, obstacle);
       }
-      obstacle.segments.push({
+      obstacle.pieces.push({
         buildingId: building.id,
-        segmentIndex,
+        pieceIndex,
         enter: range[0],
         exit: range[1],
       });

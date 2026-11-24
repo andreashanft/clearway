@@ -5,6 +5,7 @@ import { DEFAULT_MEDAL_RULES, formatTime, medalFor, type Medal } from '../../gam
 import { button, el, setText, tag } from '../dom';
 import { ICONS, vehicleIcon } from '../icons';
 import { Minimap } from './minimap';
+import { ScoreDisplay } from './score-display';
 
 /** Distance of the pointer from the vehicle on the screen, in CSS pixels. */
 const POINTER_OFFSET = 68;
@@ -35,6 +36,7 @@ export class Hud {
   private readonly leaveCounter: HTMLElement;
   private readonly leaveTime: HTMLElement;
   private readonly minimap = new Minimap();
+  private readonly score = new ScoreDisplay();
   private readonly minimapFrame: HTMLElement;
   private readonly pointer: HTMLElement;
   private readonly card: HTMLElement;
@@ -154,8 +156,10 @@ export class Hud {
     this.root = el('div', {
       className: 'hud',
       children: [
+        this.score.popupLayer,
         el('div', { className: 'hud__shade' }),
         el('div', { className: 'hud__top-left', children: [pause, this.counters] }),
+        this.score.root,
         this.minimapFrame,
         this.pointer,
         this.card,
@@ -204,6 +208,7 @@ export class Hud {
     this.toast.classList.remove('is-on');
 
     this.unsubscribe = [
+      this.score.attach(game),
       game.events.on('pathClear', ({ clearSeconds, bonusSeconds }) => {
         setText(this.bannerClear, `CLEARED ${formatTime(clearSeconds)}`);
         setText(this.bannerBonus, `BONUS ${formatTime(bonusSeconds)}`);
@@ -262,6 +267,7 @@ export class Hud {
     }
     this.updatePointer(game, camera);
     this.updateCard(game);
+    this.score.update(game, camera, frameSeconds);
     if (!this.minimapFrame.hidden) {
       this.minimap.draw(game);
     }
@@ -325,10 +331,10 @@ export class Hud {
     // Aim at the part of the obstacle that the Hauler reaches first.
     let target: THREE.Vector3 | undefined;
     let nearest = Infinity;
-    for (const segment of next.obstacle.segments) {
-      if (segment.building.hp[segment.index] > 0 && segment.enter < nearest) {
-        nearest = segment.enter;
-        target = segment.building.segments[segment.index].center;
+    for (const piece of next.obstacle.pieces) {
+      if (piece.building.standing(piece.index) && piece.enter < nearest) {
+        nearest = piece.enter;
+        target = piece.building.pieces[piece.index].center;
       }
     }
     const vehicle = game.activeVehicle.object.position;

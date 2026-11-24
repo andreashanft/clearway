@@ -13,17 +13,16 @@ import {
 const route = createRoute({ speed: 4, start: [0, 0], heading: 0, length: 400 });
 
 function box(id: string, x: number, z: number, size = 10, group?: string): BuildingData {
-  return {
-    id,
-    name: id,
-    kind: 'shed',
-    strength: 'shed',
-    pos: [x, z],
-    size: [size, 4, size],
-    yaw: 0,
-    colors: { wall: '#ffffff', roof: '#ffffff' },
-    group,
-  };
+  return { id, name: id, footprint: rectangle(x, z, size, size), height: 4, group };
+}
+
+function rectangle(x: number, z: number, width: number, depth: number): [number, number][] {
+  return [
+    [x - width / 2, z - depth / 2],
+    [x + width / 2, z - depth / 2],
+    [x + width / 2, z + depth / 2],
+    [x - width / 2, z + depth / 2],
+  ];
 }
 
 describe('toRoute', () => {
@@ -101,16 +100,16 @@ describe('findObstacles', () => {
       box('b', 120, 0, 10, 'row'),
     ]);
     expect(obstacles).toHaveLength(1);
-    expect(obstacles[0].segments).toHaveLength(2);
+    expect(obstacles[0].pieces).toHaveLength(2);
     expect(obstacles[0].distance).toBeCloseTo(95);
   });
 
-  it('only lists the segments of a long building that stand in the strip', () => {
-    // A 50 m building across the line has four segments. The strip is about 9 m wide.
-    const long: BuildingData = { ...box('long', 200, 0), size: [10, 4, 50] };
+  it('only lists the pieces of a long building that stand in the strip', () => {
+    // A 50 m building across the line has five pieces. The strip is about 9 m wide.
+    const long: BuildingData = { ...box('long', 200, 0), footprint: rectangle(200, 0, 10, 50) };
     const [obstacle] = findObstacles(route, [long]);
-    expect(obstacle.segments.length).toBeLessThan(4);
-    expect(obstacle.segments.length).toBeGreaterThan(0);
+    expect(obstacle.pieces.length).toBeLessThan(4);
+    expect(obstacle.pieces.length).toBeGreaterThan(0);
   });
 });
 
