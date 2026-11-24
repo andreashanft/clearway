@@ -60,6 +60,7 @@ For comparison, the fastest vehicle of the first prototype reached 110 km/h and 
 - The six old vehicles, the pilot on foot and the mechanics that only they used: point-to-drive, ram charge, skid, boost, roll, stomp, the Railbed and route gaps.
 - The campaign map, the briefing and the level thumbnails.
 - The settings for the touch layout, the steering assist and the auto-skid.
+- The music, after the first playtest on 2026-11-24, at the user's request. The step sequencer, the **Music** volume and the **Tension music** setting are gone. The sound effects stay. The drum and bass recordings stay in `public/audio/`, so that milestone 7 can bring music back.
 
 **Test it**
 

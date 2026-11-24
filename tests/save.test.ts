@@ -44,11 +44,11 @@ describe('Save', () => {
 
   it('stores settings under the versioned key', () => {
     const storage = memoryStorage();
-    new Save(storage).updateSettings({ leftHanded: true, musicVolume: 20 });
+    new Save(storage).updateSettings({ leftHanded: true, effectsVolume: 20 });
     const reloaded = new Save(storage);
     expect(storage.values.has(SAVE_KEY)).toBe(true);
     expect(reloaded.settings.leftHanded).toBe(true);
-    expect(reloaded.settings.musicVolume).toBe(20);
+    expect(reloaded.settings.effectsVolume).toBe(20);
     expect(reloaded.settings.chaseCamera).toBe(true);
   });
 

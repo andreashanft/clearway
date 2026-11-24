@@ -1,7 +1,6 @@
 import type { Game } from '../game/game';
 import type { Strength, VehicleType } from '../game/level';
 import type { AudioEngine, Loop } from './engine';
-import { Music, type Mood } from './music';
 
 /** What a hit on each building strength sounds like: wood, wood, masonry, metal on concrete. */
 const IMPACT_SOUNDS: Record<Strength, string[]> = {
@@ -31,22 +30,16 @@ function pick(sounds: readonly string[]): string {
 
 /**
  * Turns what happens in the game into sound: impacts, collapses, explosions, engines, the
- * Hauler, pickups and the music. It only listens to the event bus and reads the game state.
+ * Hauler and pickups. It only listens to the event bus and reads the game state.
  */
 export class SoundDirector {
-  readonly music: Music;
-  /** False keeps the music at its calm tempo, for the Tension music setting. */
-  tensionMusic = true;
-
   private game: Game | undefined;
   private engine: { type: VehicleType; loop: Loop } | undefined;
   private readonly hauler: Loop;
   private readonly alarm: Loop;
   private readonly fuse: Loop;
-  private mood: Mood = 'off';
 
   constructor(private readonly audio: AudioEngine) {
-    this.music = new Music(audio);
     this.hauler = audio.loop('hauler');
     this.alarm = audio.loop('alarm');
     this.fuse = audio.loop('fuse');
@@ -59,12 +52,6 @@ export class SoundDirector {
       'click',
       'radio',
     ]);
-  }
-
-  /** Sets the music for a menu or stops it. During play, `update` chooses the mood. */
-  setMenuMood(mood: 'menu' | 'off'): void {
-    this.mood = mood;
-    this.music.setMood(mood);
   }
 
   /** A short tick for buttons. */
@@ -112,7 +99,7 @@ export class SoundDirector {
     game.events.on('haulerDestroyed', () => {
       this.audio.play('blast-1', { volume: 1, rate: 0.8 });
       this.audio.play('boom', { volume: 1 });
-      this.audio.play('bass-drop', { volume: 0.8, bus: 'music' });
+      this.audio.play('bass-drop', { volume: 0.8 });
     });
     game.events.on('tntLit', ({ position }) => {
       this.audio.play('glitch-4', { volume: 0.7 * near(position) });
@@ -135,7 +122,7 @@ export class SoundDirector {
       this.audio.play('radio', { volume: 0.8, bus: 'voice' });
       this.audio.play('chime', { volume: 0.9, rate: 1 });
       this.audio.play('chime', { volume: 0.8, rate: 1.5 });
-      this.audio.play('crash', { volume: 0.5, bus: 'music' });
+      this.audio.play('crash', { volume: 0.5 });
     });
     game.events.on('levelEnded', ({ result }) => {
       this.audio.play('bell-low', { volume: 0.8, rate: result.medal === 'gold' ? 1.5 : 1 });
@@ -148,10 +135,9 @@ export class SoundDirector {
     });
   }
 
-  /** Updates the loops and the mood of the music. Call it once per frame. */
-  update(frameSeconds: number, playing: boolean): void {
+  /** Updates the loops. Call it once per frame. */
+  update(playing: boolean): void {
     const game = this.game;
-    this.music.update(frameSeconds);
     if (!game || !playing) {
       this.silenceLoops();
       return;
@@ -180,19 +166,6 @@ export class SoundDirector {
     const urgency = game.urgency;
     this.alarm.set(urgency === 'critical' && game.phase === 'playing' ? 0.55 : 0);
     this.fuse.set(game.tnt.crates.some((crate) => crate.state === 'lit') ? 0.5 : 0);
-
-    let mood: Mood = 'calm';
-    if (game.phase === 'bonus') {
-      mood = 'bonus';
-    } else if (game.phase === 'failed' || game.phase === 'ended') {
-      mood = 'off';
-    } else if (this.tensionMusic && urgency !== 'calm') {
-      mood = urgency;
-    }
-    if (mood !== this.mood) {
-      this.mood = mood;
-      this.music.setMood(mood);
-    }
   }
 
   private silenceLoops(): void {

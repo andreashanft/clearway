@@ -249,13 +249,6 @@ export class Flow {
       // The title shows the area without markings.
       app.game.showMarkers = screen !== 'title';
     }
-    // Menus have their own quiet groove. During play the game state picks the music.
-    if (screen === 'failed' || screen === 'results') {
-      app.sound.setMenuMood('off');
-    } else if (screen !== 'playing' && screen !== 'paused') {
-      app.sound.setMenuMood('menu');
-    }
-
     switch (screen) {
       case 'title':
         this.title.show();
@@ -327,11 +320,9 @@ export class Flow {
     app.hud.setMinimapVisible(settings.minimap);
     app.touch.setLeftHanded(settings.leftHanded);
     app.audio.setVolumes({
-      music: settings.musicVolume / 100,
       effects: settings.effectsVolume / 100,
       voice: settings.voiceVolume / 100,
     });
-    app.sound.tensionMusic = settings.tensionMusic;
     app.hud.setSubtitles(settings.subtitles);
   }
 

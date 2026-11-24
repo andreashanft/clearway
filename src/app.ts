@@ -193,7 +193,7 @@ export class App {
       this.hud.setTouchLayout(this.touch.shown);
       this.hud.update(game, game.cameraRig.camera, Math.min(frameSeconds, 0.1));
     }
-    this.sound.update(Math.min(frameSeconds, 0.1), this.playing && !this.stepper.paused);
+    this.sound.update(this.playing && !this.stepper.paused);
     for (const listener of this.frameListeners) {
       listener(frameSeconds);
     }

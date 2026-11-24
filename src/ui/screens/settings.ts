@@ -6,7 +6,7 @@ type Tab = 'controls' | 'display' | 'audio';
 type Toggle = {
   [K in keyof Settings]: Settings[K] extends boolean ? K : never;
 }[keyof Settings];
-type Volume = 'musicVolume' | 'effectsVolume' | 'voiceVolume';
+type Volume = 'effectsVolume' | 'voiceVolume';
 
 const TABS: [Tab, string][] = [
   ['controls', 'Controls'],
@@ -26,14 +26,10 @@ const TOGGLES: Record<Tab, [Toggle, string][]> = {
     ['fullCameraShake', 'Full camera shake'],
     ['patternMarkings', 'Pattern markings'],
   ],
-  audio: [
-    ['tensionMusic', 'Tension music'],
-    ['subtitles', 'Subtitles'],
-  ],
+  audio: [['subtitles', 'Subtitles']],
 };
 
 const SLIDERS: [Volume, string][] = [
-  ['musicVolume', 'Music'],
   ['effectsVolume', 'Effects'],
   ['voiceVolume', 'Crew voice'],
 ];

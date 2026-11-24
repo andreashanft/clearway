@@ -1,7 +1,7 @@
 import { Howl, Howler } from 'howler';
 
-/** The three volume groups of the Settings screen. */
-export type Bus = 'music' | 'effects' | 'voice';
+/** The volume groups of the Settings screen. */
+export type Bus = 'effects' | 'voice';
 
 export interface PlayOptions {
   /** Volume from 0 to 1, before the bus volume. */
@@ -25,7 +25,7 @@ export interface Loop {
  */
 export class AudioEngine {
   private readonly sounds = new Map<string, Howl>();
-  private readonly volumes: Record<Bus, number> = { music: 0.7, effects: 0.85, voice: 0.8 };
+  private readonly volumes: Record<Bus, number> = { effects: 0.85, voice: 0.8 };
 
   /** Sets the volume of each group from 0 to 1. */
   setVolumes(volumes: Partial<Record<Bus, number>>): void {

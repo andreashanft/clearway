@@ -15,11 +15,8 @@ export interface Settings {
   fullCameraShake: boolean;
   /** Dashed outline for the next obstacle, so that it does not rely on colour. */
   patternMarkings: boolean;
-  /** The music speeds up as the Hauler closes in. */
-  tensionMusic: boolean;
   subtitles: boolean;
   /** Volumes from 0 to 100. */
-  musicVolume: number;
   effectsVolume: number;
   voiceVolume: number;
 }
@@ -31,9 +28,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   minimap: true,
   fullCameraShake: false,
   patternMarkings: false,
-  tensionMusic: true,
   subtitles: true,
-  musicVolume: 70,
   effectsVolume: 85,
   voiceVolume: 80,
 };
