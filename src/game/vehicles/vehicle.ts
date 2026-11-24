@@ -1,7 +1,15 @@
 import * as THREE from 'three/webgpu';
 import { Layer, RAPIER, collisionGroups, type PhysicsWorld } from '../../engine/physics';
 import { approach, clamp, damp, lerp, wrapAngle, type OrientedBox, type Vec2 } from '../math';
-import { driveSpeed, fullLockTurnRate, type DriveCommand } from './handling';
+import {
+  driveSpeed,
+  fullLockTurnRate,
+  nextSlide,
+  slideTurnRate,
+  tyreVelocity,
+  NO_COMMAND,
+  type DriveCommand,
+} from './handling';
 import type { VehicleModel } from './models';
 import type { VehicleSpec } from './specs';
 
@@ -44,6 +52,14 @@ export class Vehicle {
   forwardSpeed = 0;
   /** Position of the steering wheel from -1 (full left) to 1 (full right). */
   steering = 0;
+  /** How much the vehicle slides, from 0 (full grip) to 1 (full slide). */
+  slide = 0;
+  /**
+   * Angle between the heading and the direction of travel, in radians. It is positive when the
+   * nose points to the right of the direction of travel. It is 0 while the vehicle reverses or
+   * moves forwards at less than 1 m/s.
+   */
+  slip = 0;
   grounded = true;
   /** Velocity before the latest physics step. The damage model reads it on impact. */
   readonly impactVelocity = new THREE.Vector3();
@@ -192,8 +208,11 @@ export class Vehicle {
       forward = approach(forward, 0, spec.coasting * 0.5 * dt);
       sideways *= Math.exp(-1.5 * dt);
       this.yawRate = lerp(this.yawRate, 0, damp(1.5, dt));
+      // The driver's slide ends, so that it does not hold on after the controls come back.
+      this.slide = nextSlide(spec, this.slide, forward, 0, NO_COMMAND, dt);
     } else if (this.grounded || supported) {
-      forward = driveSpeed(spec, forward, command, dt);
+      const travelBefore = Math.atan2(sideways, forward);
+      forward = driveSpeed(spec, forward, command, dt, sideways);
       if (this.grounded) {
         forward -= SLOPE_GRAVITY * Math.sin(slopePitch) * dt;
         // A bank that is too steep stops the vehicle like a wall.
@@ -203,8 +222,16 @@ export class Vehicle {
           forward = 0;
         }
       }
-      sideways *= Math.exp(-spec.grip * dt);
-      const target = this.steering * fullLockTurnRate(spec, forward);
+      this.slide = nextSlide(spec, this.slide, forward, this.steering, command, dt);
+      ({ forward, sideways } = tyreVelocity(spec, forward, sideways, this.slide, dt));
+      let target = this.steering * fullLockTurnRate(spec, forward);
+      if (this.slide > 0 && forward > 1) {
+        // In a slide, the steering sets the slip angle instead of the turn rate.
+        const travel = Math.atan2(sideways, forward);
+        const travelTurn = wrapAngle(travel - travelBefore) / dt;
+        const slideRate = slideTurnRate(spec, -travel, travelTurn, this.steering);
+        target = lerp(target, slideRate, this.slide);
+      }
       this.yawRate = lerp(this.yawRate, target, damp(spec.turnResponse, dt));
     } else {
       // In the air the vehicle keeps its speed and stops turning.
@@ -212,6 +239,7 @@ export class Vehicle {
     }
 
     this.forwardSpeed = forward;
+    this.slip = forward > 1 ? -Math.atan2(sideways, forward) : 0;
     body.setLinvel(
       { x: fx * forward - fz * sideways, y: vertical, z: fz * forward + fx * sideways },
       true,
@@ -297,6 +325,8 @@ export class Vehicle {
     this.yawRate = 0;
     this.forwardSpeed = 0;
     this.steering = 0;
+    this.slide = 0;
+    this.slip = 0;
     this.impactVelocity.set(0, 0, 0);
     this.currentPosition.set(position[0], y, position[1]);
     this.previousPosition.copy(this.currentPosition);

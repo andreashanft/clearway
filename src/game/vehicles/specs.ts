@@ -3,8 +3,10 @@ import type { VehicleType } from '../level';
 /**
  * Tuning of one vehicle type.
  *
- * The vehicles are arcade cars, not simulations. They reach their top speed in about a second,
- * hold the line that the driver steers, and do not slide. Speeds are in metres per second.
+ * The vehicles are arcade cars, not simulations. They reach their top speed in about a second
+ * and hold the line that the driver steers. They slide only when the driver asks for it: with
+ * the handbrake, or with a fast turn at nearly full lock and the throttle held. Speeds are in metres per
+ * second.
  */
 export interface VehicleSpec {
   type: VehicleType;
@@ -21,8 +23,10 @@ export interface VehicleSpec {
   reverseSpeed: number;
   /** Acceleration in m/s². */
   acceleration: number;
-  /** Deceleration in m/s² while braking. */
+  /** Deceleration in m/s² with the brake pedal. */
   braking: number;
+  /** Deceleration in m/s² with the handbrake. It is lower, because only the rear wheels lock. */
+  handbrakeBraking: number;
   /** Deceleration in m/s² when neither throttle nor brake is applied. */
   coasting: number;
   /**
@@ -41,14 +45,22 @@ export interface VehicleSpec {
   steerSpeed: number;
   /** How quickly the turn rate follows the steering wheel, per second. */
   turnResponse: number;
-  /** How quickly sideways sliding stops, per second. A high value means no drift. */
+  /** How quickly sideways motion stops while the tyres grip, per second. */
   grip: number;
+  /** From this speed, a turn at nearly full lock with the throttle held starts a slide, in m/s. */
+  slideSpeed: number;
+  /** The slip angle that full lock holds in a slide, in radians. */
+  slideAngle: number;
+  /** How strongly the sliding tyres slow sideways motion, in m/s². Lower values drift further. */
+  slideFriction: number;
   /** Multiplies the damage that this vehicle deals. */
   damage: number;
 }
 
 /** 1 km/h in m/s. */
 const KMH = 1 / 3.6;
+/** 1 degree in radians. */
+const DEG = Math.PI / 180;
 
 /**
  * The three vehicles. The debug tuning panel changes these values while the game runs, so the
@@ -68,6 +80,7 @@ export const VEHICLE_SPECS: Record<VehicleType, VehicleSpec> = {
     reverseSpeed: 8,
     acceleration: 16,
     braking: 40,
+    handbrakeBraking: 30,
     coasting: 12,
     turnRadius: 0,
     pivotRate: 2.2,
@@ -75,6 +88,10 @@ export const VEHICLE_SPECS: Record<VehicleType, VehicleSpec> = {
     steerSpeed: 8,
     turnResponse: 14,
     grip: 16,
+    // The tracks barely slide.
+    slideSpeed: 54 * KMH,
+    slideAngle: 12 * DEG,
+    slideFriction: 26,
     damage: 1.2,
   },
   // The flail car: an all-terrain car between the other two in speed and weight.
@@ -90,6 +107,7 @@ export const VEHICLE_SPECS: Record<VehicleType, VehicleSpec> = {
     reverseSpeed: 10,
     acceleration: 20,
     braking: 46,
+    handbrakeBraking: 10,
     coasting: 8,
     turnRadius: 8,
     pivotRate: 0,
@@ -97,6 +115,9 @@ export const VEHICLE_SPECS: Record<VehicleType, VehicleSpec> = {
     steerSpeed: 7,
     turnResponse: 12,
     grip: 14,
+    slideSpeed: 62 * KMH,
+    slideAngle: 30 * DEG,
+    slideFriction: 30,
     damage: 1,
   },
   // The buggy: light, fast and agile.
@@ -112,6 +133,7 @@ export const VEHICLE_SPECS: Record<VehicleType, VehicleSpec> = {
     reverseSpeed: 12,
     acceleration: 28,
     braking: 55,
+    handbrakeBraking: 12,
     coasting: 7,
     turnRadius: 6.5,
     pivotRate: 0,
@@ -119,6 +141,10 @@ export const VEHICLE_SPECS: Record<VehicleType, VehicleSpec> = {
     steerSpeed: 9,
     turnResponse: 14,
     grip: 18,
+    // The buggy slides the furthest.
+    slideSpeed: 80 * KMH,
+    slideAngle: 38 * DEG,
+    slideFriction: 38,
     damage: 0.8,
   },
 };

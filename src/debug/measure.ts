@@ -21,6 +21,12 @@ export interface HandlingRow {
   fastTurnRadius: number;
   /** Seconds for a turn of 180° from top speed, at full lock and full throttle. */
   uTurnSeconds: number;
+  /** Largest slip angle on the circle at top speed, in degrees. */
+  powerSlideDegrees: number;
+  /** Seconds for a turn of 90°, as at a street corner, from top speed with the handbrake at full lock. */
+  handbrakeTurnSeconds: number;
+  /** Speed at the end of that turn, in km/h. */
+  handbrakeTurnKmh: number;
   /** Seconds through the wide slalom, and the cones that the driver model knocked over. */
   slalomSeconds: number;
   slalomConesHit: number;
@@ -97,6 +103,7 @@ function measureVehicle(app: App, game: Game, type: VehicleType): HandlingRow {
   const stoppingMetres = vehicle.position.x - brakeFrom;
 
   // Turning circles on open ground: the radius is half the width of the driven circle.
+  let maxSlip = 0;
   const circle = (throttle: number): number => {
     park(game, -100, 180);
     setInput(app, 0, throttle);
@@ -105,16 +112,19 @@ function measureVehicle(app: App, game: Game, type: VehicleType): HandlingRow {
     run(game, 3, () => false);
     let minX = Infinity;
     let maxX = -Infinity;
+    maxSlip = 0;
     const start = vehicle.heading;
     run(game, 30, () => {
       minX = Math.min(minX, vehicle.position.x);
       maxX = Math.max(maxX, vehicle.position.x);
+      maxSlip = Math.max(maxSlip, Math.abs(vehicle.slip));
       return Math.abs(vehicle.heading - start) >= Math.PI * 2;
     });
     return (maxX - minX) / 2;
   };
   const slowTurnRadius = circle(0.25);
   const fastTurnRadius = circle(1);
+  const powerSlideDegrees = (maxSlip * 180) / Math.PI;
 
   // U-turn from top speed.
   park(game, -200, 180);
@@ -123,6 +133,21 @@ function measureVehicle(app: App, game: Game, type: VehicleType): HandlingRow {
   setInput(app, 1, 1);
   const turnStart = vehicle.heading;
   const uTurnSeconds = run(game, 20, () => Math.abs(vehicle.heading - turnStart) >= Math.PI);
+
+  // Handbrake turn of 90° from top speed, as at a street corner.
+  park(game, -200, 180);
+  setInput(app, 0, 1);
+  run(game, 6, () => false);
+  setInput(app, 1, 0);
+  app.scripted.brake = true;
+  const handbrakeStart = vehicle.heading;
+  const handbrakeTurnSeconds = run(
+    game,
+    20,
+    () => Math.abs(vehicle.heading - handbrakeStart) >= Math.PI / 2,
+  );
+  const handbrakeTurnKmh = Math.hypot(vehicle.impactVelocity.x, vehicle.impactVelocity.z) * 3.6;
+  app.scripted.brake = false;
 
   const slalom = driveSlalom(app, game);
   setInput(app, 0, 0);
@@ -136,6 +161,9 @@ function measureVehicle(app: App, game: Game, type: VehicleType): HandlingRow {
     slowTurnRadius: round(slowTurnRadius),
     fastTurnRadius: round(fastTurnRadius),
     uTurnSeconds: round(uTurnSeconds, 2),
+    powerSlideDegrees: round(powerSlideDegrees, 0),
+    handbrakeTurnSeconds: round(handbrakeTurnSeconds, 2),
+    handbrakeTurnKmh: round(handbrakeTurnKmh, 0),
     slalomSeconds: round(slalom.seconds, 2),
     slalomConesHit: slalom.conesHit,
     slalomKmh: round(slalom.kmh, 0),

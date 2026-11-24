@@ -64,6 +64,10 @@ const TUNING_SLIDERS: TuningSlider[] = [
   { key: 'steerSpeed', label: 'Steer speed', min: 1, max: 20, step: 0.5 },
   { key: 'turnResponse', label: 'Turn response', min: 2, max: 30, step: 1 },
   { key: 'grip', label: 'Grip', min: 2, max: 40, step: 1 },
+  { key: 'handbrakeBraking', label: 'Handbrake', min: 0, max: 60, step: 1 },
+  { key: 'slideSpeed', label: 'Slide from km/h', min: 0, max: 240, step: 1, scale: 3.6 },
+  { key: 'slideAngle', label: 'Slide angle °', min: 0, max: 70, step: 1, scale: 180 / Math.PI },
+  { key: 'slideFriction', label: 'Slide friction', min: 5, max: 90, step: 1 },
 ];
 
 /** Adds the debug overlay and the console API to a running app. */

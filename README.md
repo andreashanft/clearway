@@ -59,6 +59,8 @@ The vehicles use car controls. The steering is relative to the vehicle, as in a 
 | Zoom                  | Pinch                           | Wheel, or Z and X | Right stick |
 | Pause                 | Pause button                    | Esc               | Start       |
 
+The handbrake makes the vehicle slide. A fast turn at nearly full lock with the throttle held makes it slide too. In a slide, the steering sets how far the nose points into the turn. Steer to the centre or against the slide to straighten out. The buggy slides furthest, and the bulldozer barely slides. Touch has no handbrake yet, so on touch only a fast turn starts a slide.
+
 The camera has two views. The chase view stays behind the vehicle. The fixed view looks down from a high point and keeps its direction.
 
 ## Test yard
@@ -69,12 +71,12 @@ The bar at the top of the yard switches the vehicle and the camera view, resets 
 
 With `?debug` in the address, the debug overlay adds two panels:
 
-- **Handling** changes the tuning of the current vehicle while the game runs, for example the top speed, the turning circle and the grip. **Copy values** puts the values on the clipboard.
+- **Handling** changes the tuning of the current vehicle while the game runs, for example the top speed, the turning circle, the grip and the slide. **Copy values** puts the values on the clipboard.
 - **Chase camera** changes the distance, the pitch and the field of view of the chase view.
 
 A reload of the page restores the built-in values. `src/game/vehicles/specs.ts` holds them.
 
-**Measure handling** in the debug overlay, or `clearway.measure()` in the browser console, drives each vehicle through a scripted test. It reports the top speed, the time to top speed, the stopping distance, the turning circles and the slalom time.
+**Measure handling** in the debug overlay, or `clearway.measure()` in the browser console, drives each vehicle through a scripted test. It reports the top speed, the time to top speed, the stopping distance, the turning circles, the slide angle, a handbrake turn and the slalom time.
 
 ## URL parameters
 

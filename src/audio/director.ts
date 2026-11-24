@@ -38,11 +38,13 @@ export class SoundDirector {
   private readonly hauler: Loop;
   private readonly alarm: Loop;
   private readonly fuse: Loop;
+  private readonly skid: Loop;
 
   constructor(private readonly audio: AudioEngine) {
     this.hauler = audio.loop('hauler');
     this.alarm = audio.loop('alarm');
     this.fuse = audio.loop('fuse');
+    this.skid = audio.loop('skid');
     audio.preload([
       ...IMPACT_SOUNDS.shed,
       ...IMPACT_SOUNDS.brick,
@@ -154,6 +156,15 @@ export class SoundDirector {
     this.engine ??= { type: vehicle.spec.type, loop: this.audio.loop(engine.sound) };
     this.engine.loop.set(0.3 + speed * 0.35, engine.low + (engine.high - engine.low) * speed);
 
+    // The tyres screech while the vehicle slides. The tracks of the bulldozer grind lower.
+    // After a crash or the end of a level, the world stands still.
+    const driving = game.phase !== 'failed' && game.phase !== 'ended';
+    const sliding =
+      driving && vehicle.grounded
+        ? vehicle.slide * Math.min(1, Math.abs(vehicle.forwardSpeed) / 12)
+        : 0;
+    this.skid.set(sliding * 0.55, vehicle.spec.type === 'dozer' ? 0.7 : 0.9 + speed * 0.2);
+
     // The Hauler rumbles louder the closer it is, and its alarm sounds in the last seconds.
     const { hauler } = game;
     if (hauler && !hauler.destroyed) {
@@ -170,7 +181,7 @@ export class SoundDirector {
 
   private silenceLoops(): void {
     this.engine?.loop.set(0);
-    for (const loop of [this.hauler, this.alarm, this.fuse]) {
+    for (const loop of [this.hauler, this.alarm, this.fuse, this.skid]) {
       loop.set(0);
     }
   }

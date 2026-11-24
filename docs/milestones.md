@@ -36,12 +36,29 @@ The scripted test gives these values with the built-in tuning:
 | Time to 95 % of the top speed    | 1.03 s    | 1.33 s    | 1.33 s   |
 | Stopping distance from top speed | 3.6 m     | 8.2 m     | 13.4 m   |
 | Turning circle radius, slow      | 2.0 m     | 8.0 m     | 6.5 m    |
-| Turning circle radius, top speed | 11.4 m    | 24.2 m    | 34.4 m   |
-| Turn of 180° from top speed      | 2.2 s     | 2.9 s     | 2.9 s    |
+| Turning circle radius, top speed | 11.2 m    | 23.1 m    | 33.6 m   |
+| Turn of 180° from top speed      | 2.1 s     | 2.3 s     | 2.2 s    |
+| Slip angle in a power slide      | 12°       | 30°       | 38°      |
+| Handbrake turn of 90°, top speed | 0.7 s     | 1.0 s     | 1.0 s    |
+| Speed after that handbrake turn  | 0 km/h    | 56 km/h   | 84 km/h  |
 | Wide slalom, average speed       | 56 km/h   | 71 km/h   | 86 km/h  |
 | Wide slalom, cones knocked over  | 0         | 0         | 0        |
 
 For comparison, the fastest vehicle of the first prototype reached 110 km/h and was 6.6 m long. The buggy reaches 140 km/h and is 4.2 m long, so it covers about twice as many of its own lengths per second.
+
+At top speed and full lock with the throttle held, every vehicle slides, so the two rows for the top speed measure a power slide. The bulldozer stops before its handbrake turn ends and then turns on the spot.
+
+**After the first playtest**
+
+The user played the yard on 2026-11-24. The cars felt precise and better than before, but the user missed sliding. The user also asked to remove the music for now. These changes follow:
+
+- The vehicles slide. The handbrake starts a slide above 15 km/h, and every slide fades out near standstill. A turn at nearly full lock with the throttle held starts one from a speed of each vehicle's own: 54 km/h for the bulldozer, 62 km/h for the flail car and 80 km/h for the buggy. A short steering correction keeps the grip, because that slide sets in over about 0.4 seconds.
+- In a slide, the steering sets the slip angle: the angle between the heading and the direction of travel. Full lock holds 12° on the bulldozer, 30° on the flail car and 38° on the buggy. Steering to the centre or against the slide straightens the vehicle out.
+- A slide turns the direction of travel towards the heading and keeps most of the speed, so that a handbrake turn into a street corner stays fast. The engine drives a sliding vehicle up to its top speed, not beyond.
+- The handbrake slows the vehicle more gently than the brake pedal, because only the rear wheels lock. The brake pedal remains the quick stop.
+- The tyres screech and throw up dust while the vehicle slides. The chase view turns part of the way towards the direction of travel.
+- The **Handling** panel has four new sliders: **Handbrake**, **Slide from km/h**, **Slide angle °** and **Slide friction**.
+- The music is removed. The step sequencer, the **Music** volume and the **Tension music** setting are gone. The sound effects stay. The drum and bass recordings stay in `public/audio/`, so that milestone 7 can bring music back.
 
 **Stubbed**
 
@@ -53,6 +70,8 @@ For comparison, the fastest vehicle of the first prototype reached 110 km/h and 
 - The ground is one painted texture. Up close, in the chase view, its lines look soft.
 - A thumb that lands within 56 px of the screen edge cannot reach full steering lock towards that edge.
 - A switch to a wider vehicle next to a wall starts the new vehicle inside the wall. The physics pushes it out.
+- Touch has no handbrake, so on touch only a fast turn starts a slide.
+- A slide leaves no tyre marks on the ground.
 
 **Removed**
 
@@ -60,7 +79,6 @@ For comparison, the fastest vehicle of the first prototype reached 110 km/h and 
 - The six old vehicles, the pilot on foot and the mechanics that only they used: point-to-drive, ram charge, skid, boost, roll, stomp, the Railbed and route gaps.
 - The campaign map, the briefing and the level thumbnails.
 - The settings for the touch layout, the steering assist and the auto-skid.
-- The music, after the first playtest on 2026-11-24, at the user's request. The step sequencer, the **Music** volume and the **Tension music** setting are gone. The sound effects stay. The drum and bass recordings stay in `public/audio/`, so that milestone 7 can bring music back.
 
 **Test it**
 

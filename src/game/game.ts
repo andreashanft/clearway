@@ -75,6 +75,8 @@ const FLYOVER_DISTANCE = 84;
 /** Camera distance and turn rate of the backdrop view around a parked vehicle. */
 const BACKDROP_DISTANCE = 46;
 const BACKDROP_TURN = 0.1;
+/** In a full slide, the chase view turns this share of the slip angle towards the direction of travel. */
+const SLIDE_CAMERA_SHARE = 0.6;
 
 /** One recorded step, for the slow-motion replay of a crash. */
 interface ReplayFrame {
@@ -565,8 +567,9 @@ export class Game {
       following ? active.impactVelocity : ZERO,
       following ? Math.abs(active.forwardSpeed) / active.spec.topSpeed : 0,
       this.options.cameraShake,
-      // The model already holds the heading between the two latest steps.
-      -active.object.rotation.y,
+      // The model already holds the heading between the two latest steps. In a slide, the
+      // view turns part of the way towards the direction of travel.
+      -active.object.rotation.y - active.slip * active.slide * SLIDE_CAMERA_SHARE,
     );
     this.lighting.follow(this.cameraRig.focusPoint);
   }
@@ -712,6 +715,31 @@ export class Game {
         size: 0.4,
         life: 0.4,
       });
+    }
+    if (puff && vehicle.grounded && vehicle.slide > 0.3 && speed > 4) {
+      // A slide throws up dust behind both rear wheels.
+      const back = vehicle.spec.length * 0.4;
+      const side = vehicle.spec.width * 0.45;
+      const fx = Math.cos(vehicle.heading);
+      const fz = Math.sin(vehicle.heading);
+      for (const sign of [-1, 1]) {
+        position.set(
+          vehicle.position.x - fx * back - fz * side * sign,
+          ground + 0.3,
+          vehicle.position.z - fz * back + fx * side * sign,
+        );
+        this.effects.puff({
+          position,
+          velocity: velocity.set(
+            -vehicle.impactVelocity.x * 0.15 + (Math.random() - 0.5) * 2,
+            1 + Math.random() * 1.5,
+            -vehicle.impactVelocity.z * 0.15 + (Math.random() - 0.5) * 2,
+          ),
+          color: Math.random() > 0.5 ? EFFECT_COLORS.dust : EFFECT_COLORS.dustDark,
+          size: 0.3 + vehicle.slide * 0.2,
+          life: 0.5 + Math.random() * 0.3,
+        });
+      }
     }
     if (puff && this.hauler && this.route && !this.hauler.destroyed && this.isScoring) {
       const [dx, dz] = this.route.direction;
