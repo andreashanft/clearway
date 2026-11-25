@@ -19,6 +19,8 @@ import type { Effects } from './effects';
 import { shade } from './mesh-builder';
 import { cutFootprint, type BuildingShape } from './pieces';
 
+/** A matrix that shrinks an instance to nothing. */
+const HIDDEN = new THREE.Matrix4().makeScale(0, 0, 0);
 /** Rubble pieces that stay where a section fell. They are decoration and have no collider. */
 const RUBBLE_PER_SECTION = 6;
 /** A section that breaks in place sheds at least and at most this many chunks. */
@@ -264,7 +266,10 @@ export class Buildings {
       Math.max(1, sectionTotal * RUBBLE_PER_SECTION),
     );
     this.rubble.name = 'rubble';
-    this.rubble.count = 0;
+    // One hidden instance from the start, so that the GPU compiles the shader while the level
+    // loads and not at the first break.
+    this.rubble.count = 1;
+    this.rubble.setMatrixAt(0, HIDDEN);
     this.rubble.receiveShadow = true;
     this.rubble.frustumCulled = false;
     this.dustPatches = new THREE.InstancedMesh(
@@ -273,13 +278,14 @@ export class Buildings {
       Math.max(1, sectionTotal),
     );
     this.dustPatches.name = 'rubble-dust';
-    this.dustPatches.count = 0;
+    this.dustPatches.count = 1;
+    this.dustPatches.setMatrixAt(0, HIDDEN);
     this.dustPatches.frustumCulled = false;
     // Create the colour attributes before the first frame. A mesh that is first drawn without
     // them keeps ignoring instance colours.
     this.rubble.setColorAt(0, this.color.setHex(0xffffff));
     this.dustPatches.setColorAt(0, this.color.setHex(0xffffff));
-    this.object.add(this.dustPatches, this.rubble);
+    this.object.add(this.dustPatches, this.rubble, this.createWarmUpMesh());
     this.linkSupports();
     physics.setContactFilter((a, b) => this.allowContact(a, b));
   }
@@ -334,6 +340,30 @@ export class Buildings {
         }
       });
     }
+  }
+
+  /**
+   * A tiny cracked section far below the ground. Every material of the buildings is then drawn
+   * from the first frame, so that the GPU compiles its shaders while the level loads.
+   */
+  private createWarmUpMesh(): THREE.Mesh {
+    const square: Vec2[] = [
+      [0, 0],
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ];
+    const piece = cutFootprint(square).pieces[0];
+    const colors = { wall: '#ffffff', roof: '#ffffff' };
+    const mesh = new THREE.Mesh(
+      buildPieceGeometry(piece, [0, 0], { colors, base: 0, height: 1, closed: true }),
+      this.cracked,
+    );
+    mesh.name = 'shader-warm-up';
+    mesh.scale.setScalar(0.01);
+    mesh.position.set(0, -500, 0);
+    mesh.frustumCulled = false;
+    return mesh;
   }
 
   /** Frees the materials and textures. They may not be on any mesh at the moment. */
@@ -727,7 +757,9 @@ export class Buildings {
     });
     geometry.translate(0, -(bottom + height / 2), 0);
     const mesh = new THREE.Mesh(geometry, piece.cracked ? this.cracked : this.intact);
+    // The same shadow settings as a standing building, so that the section needs no new shader.
     mesh.castShadow = true;
+    mesh.receiveShadow = true;
     mesh.position.copy(position);
     this.object.add(mesh);
 
@@ -971,7 +1003,7 @@ export class Buildings {
       this.dustPatches.setMatrixAt(this.patchCount, this.matrix);
       this.dustPatches.setColorAt(this.patchCount, this.color.setHex(0xcfc3a4));
       this.patchCount += 1;
-      this.dustPatches.count = this.patchCount;
+      this.dustPatches.count = Math.max(1, this.patchCount);
       this.dustPatches.instanceMatrix.needsUpdate = true;
       if (this.dustPatches.instanceColor) {
         this.dustPatches.instanceColor.needsUpdate = true;
@@ -998,7 +1030,7 @@ export class Buildings {
       this.rubble.setColorAt(this.rubbleCount, this.color.setHex(i % 3 === 0 ? roof : wall));
       this.rubbleCount += 1;
     }
-    this.rubble.count = this.rubbleCount;
+    this.rubble.count = Math.max(1, this.rubbleCount);
     this.rubble.instanceMatrix.needsUpdate = true;
     if (this.rubble.instanceColor) {
       this.rubble.instanceColor.needsUpdate = true;

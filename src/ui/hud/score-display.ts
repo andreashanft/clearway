@@ -12,10 +12,20 @@ const MERGE_METRES = 30;
 const MERGE_SECONDS = 0.4;
 /** The counter rolls towards the score by this share of the gap per second. */
 const ROLL_RATE = 8;
+/** Pop-ups appear this high above the vehicle, in metres. */
+const ANCHOR_HEIGHT = 3.5;
+/** Pop-ups start this far above the vehicle on the screen and rise this fast, in pixels. */
+const POPUP_LIFT = 36;
+const POPUP_RISE_SPEED = 46;
+/** Pop-ups take turns at these horizontal offsets from the vehicle, in pixels, so that they do not cover each other. */
+const POPUP_SLOTS = [0, -84, 84, -42, 42];
 
 interface Popup {
   element: HTMLElement;
+  /** Where the break happened. Breaks close together share one pop-up. */
   position: THREE.Vector3;
+  /** Horizontal offset from the vehicle on the screen, in pixels. */
+  offset: number;
   age: number;
   points: number;
   multiplier: number;
@@ -25,7 +35,8 @@ interface Popup {
 
 /**
  * The score counter, the combo multiplier with its draining bar, and the points that pop up
- * where a building breaks.
+ * above the vehicle when a building breaks. The pop-ups follow the vehicle, because the camera
+ * often does not show the place of the break.
  */
 export class ScoreDisplay {
   readonly root: HTMLElement;
@@ -36,6 +47,7 @@ export class ScoreDisplay {
   private readonly layer: HTMLElement;
   private readonly popups: Popup[] = [];
   private readonly projected = new THREE.Vector3();
+  private nextSlot = 0;
   private shown = 0;
   private lastMultiplier = 1;
 
@@ -96,6 +108,13 @@ export class ScoreDisplay {
 
     const width = this.layer.clientWidth;
     const height = this.layer.clientHeight;
+    this.projected
+      .copy(game.activeVehicle.object.position)
+      .setY(game.activeVehicle.object.position.y + ANCHOR_HEIGHT)
+      .project(camera);
+    const behind = this.projected.z > 1;
+    const anchorX = ((this.projected.x + 1) / 2) * width;
+    const anchorY = ((1 - this.projected.y) / 2) * height;
     for (let i = this.popups.length - 1; i >= 0; i -= 1) {
       const popup = this.popups[i];
       popup.age += frameSeconds;
@@ -104,10 +123,8 @@ export class ScoreDisplay {
         this.popups.splice(i, 1);
         continue;
       }
-      this.projected.copy(popup.position).project(camera);
-      const behind = this.projected.z > 1;
-      const x = ((this.projected.x + 1) / 2) * width;
-      const y = ((1 - this.projected.y) / 2) * height - popup.age * 46;
+      const x = anchorX + popup.offset;
+      const y = anchorY - POPUP_LIFT - popup.age * POPUP_RISE_SPEED;
       popup.element.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px) translate(-50%, -50%)`;
       popup.element.style.opacity = behind
         ? '0'
@@ -148,12 +165,14 @@ export class ScoreDisplay {
     const popup: Popup = {
       element: el('div', { className: 'score-popup' }),
       position: position.clone(),
+      offset: POPUP_SLOTS[this.nextSlot],
       age: 0,
       points,
       multiplier,
       chain,
       tower,
     };
+    this.nextSlot = (this.nextSlot + 1) % POPUP_SLOTS.length;
     this.render(popup);
     this.layer.append(popup.element);
     this.popups.push(popup);

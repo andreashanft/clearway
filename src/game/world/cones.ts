@@ -62,9 +62,10 @@ export class Cones {
       this.object.add(mesh);
     }
 
+    // Cones are props, so that vehicles hit them. Vehicles drive through debris.
     const groups = collisionGroups(
-      Layer.debris,
-      Layer.terrain | Layer.vehicle | Layer.building | Layer.debris,
+      Layer.prop,
+      Layer.terrain | Layer.vehicle | Layer.building | Layer.prop,
     );
     for (const [x, z] of positions) {
       const home = new THREE.Vector3(x, heightAt(x, z) + CONE_HEIGHT / 2, z);

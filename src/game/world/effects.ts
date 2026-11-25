@@ -107,6 +107,13 @@ export class Effects {
       this.object.add(mesh);
       this.rings.push({ mesh, material, age: 0, life: 0, radius: 1 });
     }
+    // Show one ring far below the ground for a moment, so that the GPU compiles its shader while
+    // the level loads and not at the first explosion.
+    const warmUp = this.rings[0];
+    warmUp.mesh.visible = true;
+    warmUp.mesh.position.set(0, -500, 0);
+    warmUp.life = 0.2;
+    warmUp.radius = 0.01;
   }
 
   /** Adds one particle. */

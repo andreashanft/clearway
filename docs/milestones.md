@@ -71,6 +71,12 @@ The first playtest found three problems, and the build fixes them:
 - Chunks of debris blocked the vehicles and took their speed. Vehicles now drive through debris.
 - A falling tower filled the screen with one large sinking mass and dust, so you could not see what happened. A tower now breaks in sections, and only the columns that you hit come down.
 
+The second playtest found three more problems, and the build fixes them:
+
+- The game froze for a moment at the first ram after loading. The GPU compiled the shaders of the rubble, the cracked walls and the falling sections at their first use. The level now compiles the shaders of every object while it loads, and falling sections use the same shadow settings as standing buildings, so play creates no new shader.
+- The score pop-ups appeared where a building broke, which the camera often did not show. They now rise above the vehicle and take turns at five places beside each other.
+- Vehicles drove through the traffic cones, because the cones shared the layer of debris. Cones are now props, which vehicles hit.
+
 An independent review of these changes found four defects, and the build fixes them:
 
 - A falling section could crash the game when a collider next to it was removed in the same step.

@@ -50,10 +50,13 @@ export class SoundDirector {
     this.fuse = audio.loop('fuse');
     this.skid = audio.loop('skid');
     audio.preload([
-      ...IMPACT_SOUNDS.shed,
-      ...IMPACT_SOUNDS.block,
+      ...new Set(Object.values(IMPACT_SOUNDS).flat()),
       ...COLLAPSE_SOUNDS,
+      ...RUBBLE_SOUNDS,
       ...BLAST_SOUNDS,
+      'boom',
+      'bass-drop',
+      'blast-crack',
       'chime',
       'click',
       'radio',

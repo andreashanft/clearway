@@ -103,6 +103,7 @@ export class App {
   /** Loads the area and makes it the current game. */
   async loadLevel(): Promise<Game> {
     const game = await Game.create(this.level, this.input, this.options, this.vehicleType);
+    await this.compileShaders(game);
     this.game?.dispose();
     this.game = game;
     game.resize(this.render.aspect);
@@ -118,6 +119,28 @@ export class App {
       listener(game);
     }
     return game;
+  }
+
+  /**
+   * Compiles the shaders of every object in a level while the level loads. Otherwise the GPU
+   * compiles a shader when the first object that needs it comes into view, and that frame stalls.
+   */
+  private async compileShaders(game: Game): Promise<void> {
+    // The compilation skips objects outside the view, so it briefly treats every object as seen.
+    const culled: { frustumCulled: boolean }[] = [];
+    game.scene.traverse((object) => {
+      if (object.frustumCulled) {
+        culled.push(object);
+        object.frustumCulled = false;
+      }
+    });
+    try {
+      await this.render.renderer.compileAsync(game.scene, game.cameraRig.camera);
+    } finally {
+      for (const object of culled) {
+        object.frustumCulled = true;
+      }
+    }
   }
 
   /** Puts the player into another vehicle, now and after every reload. */

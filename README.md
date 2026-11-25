@@ -71,7 +71,7 @@ The test yard is a flat area for trying out how the vehicles drive and how build
 
 Every vehicle can break every building. A ram at three quarters of the top speed breaks a house with any vehicle. A large low building breaks in pieces about 10 m wide, so that you can carve a way through it, and a fast ram punches through several pieces in a line. A building taller than 15 m is a tower, and its columns are stacks of sections of about four floors. When you break the bottom section of a column, the sections above it topple away from you and break where they land. A falling section damages the buildings that it hits, so towers can bring each other down. A ram that breaks a building does not slow your vehicle, and vehicles drive through debris.
 
-Each break scores points by the volume that fell. Breaks in quick succession raise a combo multiplier, up to ×8. Breaks that falling sections of another building caused earn a chain bonus. The score shows at the bottom of the screen, and the points pop up where a building breaks.
+Each break scores points by the volume that fell. Breaks in quick succession raise a combo multiplier, up to ×8. Breaks that falling sections of another building caused earn a chain bonus. The score shows at the bottom of the screen, and the points pop up above your vehicle.
 
 The bar at the top of the yard switches the vehicle and the camera view, resets the yard and counts the cones that you knocked over. On a keyboard, the keys 1, 2 and 3 choose the vehicle and Backspace resets the yard.
 
