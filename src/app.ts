@@ -214,6 +214,9 @@ export class App {
         this.render.renderer.render(game.scene, game.cameraRig.camera);
       }
       this.hud.setTouchLayout(this.touch.shown);
+      if (this.touch.shown) {
+        this.touch.setWeapon(game.weaponStatus);
+      }
       this.hud.update(game, game.cameraRig.camera, Math.min(frameSeconds, 0.1));
     }
     this.sound.update(this.playing && !this.stepper.paused);

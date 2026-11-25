@@ -58,6 +58,13 @@ export interface VehicleSpec {
    * its share of the top speed. A house has about 100 hit points.
    */
   ram: number;
+  /** Factor on the damage of a ram with the front. The bulldozer's spiked blade raises it. */
+  blade: number;
+  /**
+   * Width of the strip in front of the vehicle that its blade breaks, in metres. It can be wider
+   * than the vehicle. 0 for a vehicle without a blade.
+   */
+  bladeWidth: number;
 }
 
 /** 1 km/h in m/s. */
@@ -96,6 +103,8 @@ export const VEHICLE_SPECS: Record<VehicleType, VehicleSpec> = {
     slideAngle: 12 * DEG,
     slideFriction: 26,
     ram: 400,
+    blade: 1.5,
+    bladeWidth: 8,
   },
   // The flail car: an all-terrain car between the other two in speed and weight.
   flail: {
@@ -122,6 +131,8 @@ export const VEHICLE_SPECS: Record<VehicleType, VehicleSpec> = {
     slideAngle: 30 * DEG,
     slideFriction: 30,
     ram: 300,
+    blade: 1,
+    bladeWidth: 0,
   },
   // The buggy: light, fast and agile.
   buggy: {
@@ -149,6 +160,8 @@ export const VEHICLE_SPECS: Record<VehicleType, VehicleSpec> = {
     slideAngle: 38 * DEG,
     slideFriction: 38,
     ram: 200,
+    blade: 1,
+    bladeWidth: 0,
   },
 };
 

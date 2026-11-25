@@ -8,6 +8,7 @@
   --gas-size: 92px;
   --brake-size: 76px;
   --handbrake-size: 64px;
+  --action-size: 76px;
   --steer-width: 176px;
   --steer-height: 68px;
   --knob-size: 52px;
@@ -150,6 +151,50 @@
   background: rgba(var(--cw-line-rgb), 0.24);
 }
 
+/*
+ * The ACTION button sits above the BRAKE pedal, beside the DRIFT button. A ring shows the
+ * weapon's meter: the boost cooldown, the spin of the flail or the rockets left.
+ */
+.touch__action {
+  right: calc(var(--cw-safe-right) + var(--touch-edge) + var(--gas-size) + 14px);
+  bottom: calc(var(--cw-safe-bottom) + var(--touch-bottom) + var(--gas-size) + 14px);
+  width: var(--action-size);
+  height: var(--action-size);
+  flex-direction: column;
+  gap: 2px;
+  border: 2px solid rgba(var(--cw-hazard-rgb), 0.45);
+  color: rgba(var(--cw-hazard-rgb), 0.6);
+  background:
+    radial-gradient(circle, rgba(var(--cw-ground-rgb), 0.55) 62%, transparent 63%),
+    conic-gradient(
+      rgba(var(--cw-hazard-rgb), 0.85) calc(var(--meter, 0) * 360deg),
+      rgba(var(--cw-line-rgb), 0.18) 0
+    );
+}
+
+.touch__action.is-ready,
+.touch__action.is-active {
+  border-color: rgba(var(--cw-hazard-rgb), 0.9);
+  color: var(--cw-hazard);
+}
+
+.touch__action.is-held {
+  transform: scale(0.94);
+}
+
+.touch__action-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.touch__action-value {
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
 /* Left-handed: the steering control moves to the right and the pedals to the left. */
 .touch.is-lefty .touch__zone {
   left: auto;
@@ -177,6 +222,11 @@
   );
 }
 
+.touch.is-lefty .touch__action {
+  right: auto;
+  left: calc(var(--cw-safe-left) + var(--touch-edge) + var(--gas-size) + 14px);
+}
+
 /* Portrait phones: the controls sit higher, clear of the home indicator. */
 @media (orientation: portrait) {
   .touch {
@@ -185,6 +235,7 @@
     --gas-size: 88px;
     --brake-size: 72px;
     --handbrake-size: 62px;
+    --action-size: 70px;
     --steer-width: 156px;
   }
 

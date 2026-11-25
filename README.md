@@ -54,6 +54,7 @@ The vehicles use car controls. The steering is relative to the vehicle, as in a 
 | Brake, then reverse   | **BRAKE**                       | S or ↓            | LT          |
 | Steer                 | Left thumb: slide left or right | A and D, or ← →   | Left stick  |
 | Handbrake             | **DRIFT**                       | Shift             | X           |
+| Use the weapon        | **ACTION**                      | Space             | A           |
 | Switch camera view    | **Chase view** in the yard bar  | C                 | Y           |
 | Rotate the fixed view | Two-finger twist                | Q and R           | LB and RB   |
 | Zoom                  | Pinch                           | Wheel, or Z and X | Right stick |
@@ -61,11 +62,21 @@ The vehicles use car controls. The steering is relative to the vehicle, as in a 
 
 The handbrake makes the vehicle slide. A fast turn at nearly full lock with the throttle held makes it slide too. In a slide, the steering sets how far the nose points into the turn. Steer to the centre or against the slide to straighten out. The buggy slides furthest, and the bulldozer barely slides.
 
+Each vehicle has its own weapon on the action button:
+
+| Vehicle   | Weapon                                                                                                                                                                                                                      |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Bulldozer | A press boosts the top speed by 60 % for 2 seconds. The next boost is ready 4 seconds later. The spiked blade is wider than the tracks and breaks everything in an 8 m strip in front of the bulldozer.                     |
+| Flail car | While you hold the button, a spiked ball spins around the car on a 7 m chain and breaks the buildings that it hits. A wall that holds throws the ball back. When you let go, the ball slows down and trails behind the car. |
+| Buggy     | A press fires a rocket straight ahead. The aim assist bends it towards the nearest building close to the line of fire. The buggy starts with 6 rockets and carries at most 12.                                              |
+
+Ammunition crates with a yellow light beam give the buggy 4 rockets each. They show only while you drive the buggy. A crate at a fixed place comes back after 25 seconds, and large buildings sometimes drop a crate when they break. The HUD card and the **ACTION** button show the boost cooldown, the spin of the flail or the rockets left.
+
 The camera has two views. The chase view stays behind the vehicle. The fixed view looks down from a high point and keeps its direction.
 
 ## Test yard
 
-The test yard is a flat area for trying out how the vehicles drive and how buildings break. **Play** on the title screen opens it. It holds a main straight with a line every 10 m, two slalom lanes with cones, three turning circles, a small street grid and a row of buildings to ram. In the south, a downtown has a street of houses, a block of flats around a courtyard, a tower of 40 floors and the buildings around it.
+The test yard is a flat area for trying out how the vehicles drive and how buildings break. **Play** on the title screen opens it. It holds a main straight with a line every 10 m, two slalom lanes with cones, three turning circles, a small street grid and a row of buildings to ram. In the south, a downtown has a street of houses, a block of flats around a courtyard, a tower of 40 floors and the buildings around it. Along the north edge, a reference street between two yellow lines holds a mix of buildings in the way, from sheds to a tower of 36 m.
 
 ## Destruction
 
@@ -85,6 +96,8 @@ A reload of the page restores the built-in values. `src/game/vehicles/specs.ts` 
 **Measure handling** in the debug overlay, or `clearway.measure()` in the browser console, drives each vehicle through a scripted test. It reports the top speed, the time to top speed, the stopping distance, the turning circles, the slide angle, a handbrake turn and the slalom time.
 
 **Measure rams**, or `clearway.measureRams()`, rams a house of the downtown street with each vehicle at three quarters of its top speed and reports whether one ram breaks it. It destroys three houses, so reset the yard afterwards.
+
+**Measure street**, or `clearway.measureStreet()`, drives each vehicle along the reference street with a simple driver model that uses the weapon. It reports how long each vehicle takes to clear a strip as wide as the carrier's. The measurement reloads the yard before and after each vehicle.
 
 ## URL parameters
 
@@ -137,8 +150,8 @@ The user interface is plain DOM and CSS above the canvas. `src/ui/tokens.css` ho
 | #   | Milestone                                                 | State     |
 | --- | --------------------------------------------------------- | --------- |
 | 1   | Car controls and faster, more precise handling            | Done      |
-| 2   | Destruction with one-hit breaks, collapse and score       | In review |
-| 3   | Weapons: boost, flail, and rockets with ammunition crates | Open      |
+| 2   | Destruction with one-hit breaks, collapse and score       | Done      |
+| 3   | Weapons: boost, flail, and rockets with ammunition crates | In review |
 | 4   | 3D world of a real location from OpenStreetMap tiles      | Open      |
 | 5   | Seeded path, antimatter carrier and black hole            | Open      |
 | 6   | Screens: location picker, vehicle selection, HUD, results | Open      |

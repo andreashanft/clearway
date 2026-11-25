@@ -14,7 +14,9 @@ import type { Vec2 } from './math';
  * - a row of sheds, houses and brick blocks to ram, north of the straight,
  * - a cone gate in the south-east that is only a little wider than the bulldozer,
  * - a downtown in the south: a street of houses, a block of flats around a courtyard, a tower of
- *   40 floors and the buildings around it.
+ *   40 floors and the buildings around it,
+ * - the reference street along the north edge, which buildings block, for comparing the vehicles,
+ * - ammunition crates for the buggy's rockets.
  */
 
 const ASPHALT = '#5b6472';
@@ -29,6 +31,11 @@ const STRAIGHT_HALF_LENGTH = 250;
 const STRAIGHT_WIDTH = 16;
 const SLALOM_WIDE_Z = 44;
 const SLALOM_TIGHT_Z = 78;
+/** The reference street along the north edge: its line, its ends and the width to clear. */
+export const REFERENCE_STREET_Z = -250;
+export const REFERENCE_STREET_START_X = -230;
+export const REFERENCE_STREET_END_X = 215;
+export const REFERENCE_STREET_WIDTH = 16;
 /** The street of houses and the avenue of the downtown in the south. */
 const TOWN_STREET_Z = 130;
 const TOWN_AVENUE_X = -120;
@@ -71,6 +78,30 @@ function createGround(): GroundLayer[] {
         [STRAIGHT_HALF_LENGTH, 0],
       ],
       STRAIGHT_WIDTH,
+    ),
+    // The reference street along the north edge, with a start and a finish line.
+    road(
+      [
+        [REFERENCE_STREET_START_X - 10, REFERENCE_STREET_Z],
+        [REFERENCE_STREET_END_X + 10, REFERENCE_STREET_Z],
+      ],
+      REFERENCE_STREET_WIDTH,
+    ),
+    line(
+      [
+        [REFERENCE_STREET_START_X, REFERENCE_STREET_Z - 8],
+        [REFERENCE_STREET_START_X, REFERENCE_STREET_Z + 8],
+      ],
+      1,
+      HAZARD,
+    ),
+    line(
+      [
+        [REFERENCE_STREET_END_X, REFERENCE_STREET_Z - 8],
+        [REFERENCE_STREET_END_X, REFERENCE_STREET_Z + 8],
+      ],
+      1,
+      HAZARD,
     ),
   ];
   const half = STRAIGHT_WIDTH / 2;
@@ -314,6 +345,21 @@ function createBuildings(): BuildingData[] {
   for (const x of [-40, -24, -8]) {
     add('house', rect(x, 178, 12, 9), 7);
   }
+
+  // The reference street: a mix of buildings in the way, from small to a tower. Two houses reach
+  // into the street from the sides.
+  const z = REFERENCE_STREET_Z;
+  add('house', rect(-180, z - 4.5, 12, 9), 7);
+  add('house', rect(-180, z + 4.5, 12, 9), 7);
+  for (const dz of [-6, 0, 6]) {
+    add('shed', rect(-130, z + dz, 6, 5), 3.6);
+  }
+  add('block', rect(-70, z, 20, 30), 11);
+  add('house', rect(-10, z - 10, 12, 9), 7);
+  add('house', rect(-10, z + 10, 12, 9), 7);
+  add('terrace', rect(50, z, 10, 26), 8);
+  add('tower', rect(120, z, 20, 20), 36);
+  add('house', rect(180, z, 12, 9), 7);
   return buildings;
 }
 
@@ -341,5 +387,12 @@ export function createYard(): LevelData {
     spawn: { pos: [-230, 0], yaw: 0 },
     buildings: createBuildings(),
     cones: createCones(),
+    ammoCrates: [
+      [-212, 12],
+      [-110, REFERENCE_STREET_Z],
+      [200, -20],
+      [-125, 160],
+      [-80, 228],
+    ],
   };
 }

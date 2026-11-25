@@ -1,3 +1,4 @@
+import type { WeaponStatus } from '../../game/weapons';
 import './touch-controls.css';
 import type { Button, InputSource, InputState } from '../../engine/input/input';
 
@@ -39,6 +40,11 @@ export class TouchControls implements InputSource {
   private brakeHeld = false;
   private gasHeld = false;
   private handbrakeHeld = false;
+  private actionHeld = false;
+  private readonly actionButton: HTMLButtonElement;
+  private readonly actionLabel: HTMLElement;
+  private readonly actionValue: HTMLElement;
+  private actionText = '';
   private readonly queued = new Set<Button>();
 
   constructor(parent: HTMLElement, canvas: HTMLElement) {
@@ -63,7 +69,22 @@ export class TouchControls implements InputSource {
     this.handbrakeButton = this.createButton('touch__handbrake', 'Handbrake: slide');
     this.handbrakeButton.textContent = 'DRIFT';
 
-    this.root.append(this.zone, this.steer, this.brakeButton, this.gasButton, this.handbrakeButton);
+    this.actionButton = this.createButton('touch__action', 'Action: weapon');
+    this.actionLabel = document.createElement('span');
+    this.actionLabel.className = 'touch__action-label';
+    this.actionLabel.textContent = 'ACTION';
+    this.actionValue = document.createElement('span');
+    this.actionValue.className = 'touch__action-value';
+    this.actionButton.append(this.actionLabel, this.actionValue);
+
+    this.root.append(
+      this.zone,
+      this.steer,
+      this.brakeButton,
+      this.gasButton,
+      this.handbrakeButton,
+      this.actionButton,
+    );
     parent.append(this.root);
 
     this.bindHold(this.brakeButton, (held) => {
@@ -74,6 +95,12 @@ export class TouchControls implements InputSource {
     });
     this.bindHold(this.handbrakeButton, (held) => {
       this.handbrakeHeld = held;
+    });
+    this.bindHold(this.actionButton, (held) => {
+      if (held && !this.actionHeld) {
+        this.queued.add('action');
+      }
+      this.actionHeld = held;
     });
 
     for (const element of [this.zone, canvas]) {
@@ -125,10 +152,25 @@ export class TouchControls implements InputSource {
     state.steer += this.steerValue;
     state.throttle += (this.gasHeld ? 1 : 0) - (this.brakeHeld ? 1 : 0);
     state.brake ||= this.handbrakeHeld;
+    state.action ||= this.actionHeld;
     for (const button of this.queued) {
       state.pressed.add(button);
     }
     this.queued.clear();
+  }
+
+  /** Shows the weapon's name, its state and its meter on the action button. */
+  setWeapon(status: WeaponStatus): void {
+    const text = `${status.label}|${status.value}`;
+    if (text !== this.actionText) {
+      this.actionText = text;
+      this.actionLabel.textContent = status.label;
+      this.actionValue.textContent = status.value;
+      this.actionButton.setAttribute('aria-label', `${status.label}: ${status.value}`);
+    }
+    this.actionButton.style.setProperty('--meter', status.meter.toFixed(3));
+    this.actionButton.classList.toggle('is-ready', status.ready);
+    this.actionButton.classList.toggle('is-active', status.active);
   }
 
   private createButton(className: string, label: string): HTMLButtonElement {
@@ -253,7 +295,13 @@ export class TouchControls implements InputSource {
     this.brakeHeld = false;
     this.gasHeld = false;
     this.handbrakeHeld = false;
-    for (const button of [this.brakeButton, this.gasButton, this.handbrakeButton]) {
+    this.actionHeld = false;
+    for (const button of [
+      this.brakeButton,
+      this.gasButton,
+      this.handbrakeButton,
+      this.actionButton,
+    ]) {
       button.classList.remove('is-held');
     }
   }

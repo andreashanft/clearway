@@ -4,7 +4,7 @@ import type { LevelResult } from './scoring';
 import type { Building } from './world/buildings';
 
 /** Where an explosion comes from. */
-export type ExplosionSource = 'tnt' | 'tank' | 'hauler';
+export type ExplosionSource = 'tnt' | 'tank' | 'hauler' | 'rocket';
 
 /**
  * Everything that the game layer announces. The user interface, the audio and the camera listen
@@ -90,6 +90,12 @@ export interface GameEvents {
   hint: { text: string };
   /** The player switched to another vehicle. */
   vehicleChanged: { type: string };
+  /** The bulldozer started a boost, or the buggy fired a rocket. */
+  weaponFired: { weapon: 'boost' | 'rocket'; position: THREE.Vector3 };
+  /** The flail's ball hit a building. */
+  flailHit: { position: THREE.Vector3; broke: boolean };
+  /** The buggy picked up an ammunition crate. */
+  ammoCollected: { position: THREE.Vector3 };
   /** The player pressed the button that switches between the chase view and the fixed view. */
   cameraToggled: Record<string, never>;
   /** The player pressed the pause button or key. */

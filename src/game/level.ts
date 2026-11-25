@@ -147,6 +147,8 @@ export interface LevelData {
   buildings: BuildingData[];
   /** Traffic cones. A vehicle knocks them over. */
   cones?: Vec2[];
+  /** Places of the ammunition crates for the buggy's rockets. */
+  ammoCrates?: Vec2[];
   tnt?: { pos: Vec2 }[];
   beacons?: { trails: BeaconTrail[] };
   relayDish?: { pos: Vec2; hiddenBy?: string };

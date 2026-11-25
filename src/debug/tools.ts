@@ -8,7 +8,14 @@ import { DEG } from '../game/math';
 import { routePoint } from '../game/route';
 import { formatTime } from '../game/scoring';
 import type { VehicleSpec } from '../game/vehicles/specs';
-import { measureHandling, measureRams, type HandlingRow, type RamRow } from './measure';
+import {
+  measureHandling,
+  measureRams,
+  measureStreet,
+  type HandlingRow,
+  type RamRow,
+  type StreetRow,
+} from './measure';
 import { DebugOverlay, type DebugControls } from './overlay';
 
 /** Functions on `window.clearway` for testing from the browser console. */
@@ -35,6 +42,8 @@ export interface DebugApi {
   measure(): HandlingRow[];
   /** Rams a house of the downtown street with each vehicle and reports whether it broke. */
   measureRams(): RamRow[];
+  /** Drives each vehicle along the reference street and reports how long it takes to clear. */
+  measureStreet(): Promise<StreetRow[]>;
 }
 
 declare global {
@@ -152,6 +161,7 @@ export function installDebugTools(app: App): void {
   });
   controls.addButton('Measure handling', () => measureHandling(app));
   controls.addButton('Measure rams', () => measureRams(app));
+  controls.addButton('Measure street', () => void measureStreet(app));
 
   const handling = overlay.addPanel('Handling');
   addCameraPanel(overlay.addPanel('Chase camera'));
@@ -210,6 +220,7 @@ export function installDebugTools(app: App): void {
     setVehicle: (type) => app.setVehicle(type),
     measure: () => measureHandling(app),
     measureRams: () => measureRams(app),
+    measureStreet: () => measureStreet(app),
     vehicle: (): Record<string, number | boolean | string> => {
       const vehicle = app.game?.activeVehicle;
       if (!vehicle) {

@@ -4,7 +4,10 @@ import type { Game } from '../game/game';
 import type { VehicleType } from '../game/level';
 import { clamp, wrapAngle } from '../game/math';
 import { VEHICLE_TYPES } from '../game/vehicles/specs';
+import { HAULER_WIDTH } from '../game/route';
+import { CHAIN_LENGTH } from '../game/weapons/flail';
 import { ramDamage } from '../game/world/damage';
+import { REFERENCE_STREET_END_X, REFERENCE_STREET_START_X, REFERENCE_STREET_Z } from '../game/yard';
 
 /** What the handling measurement reports for one vehicle. */
 export interface HandlingRow {
@@ -254,7 +257,7 @@ export function measureRams(app: App): RamRow[] {
     let damage = 0;
     const off = game.events.on('impact', () => {
       const { x: vx, z: vz } = vehicle.impactVelocity;
-      damage = ramDamage(spec.ram, Math.hypot(vx, vz), spec.topSpeed);
+      damage = ramDamage(spec.ram, Math.hypot(vx, vz), spec.topSpeed) * spec.blade;
     });
     vehicle.teleport([x, z - 30], Math.PI / 2);
     let speedBefore = 0;
@@ -290,4 +293,184 @@ export function measureRams(app: App): RamRow[] {
   park(game, game.level.spawn.pos[0], game.level.spawn.pos[1]);
   console.table(rows);
   return rows;
+}
+
+/** What the reference street measurement reports for one vehicle. */
+export interface StreetRow {
+  vehicle: string;
+  /** Seconds from the start line until the last building section in the street broke. */
+  seconds: number;
+  /** True when every building section that reaches into the strip broke. */
+  cleared: boolean;
+  /** Building sections in the strip that still stand at the end. */
+  left: number;
+  /** Boosts, rockets or seconds of flail spin that the driver model used. */
+  weaponUses: number;
+  /** Number of times that the driver drove along the street. */
+  passes: number;
+  /** The sections that the first pass missed, with the X of each section. */
+  firstPassMissed: string;
+  /** The buildings whose sections still stand in the street, with the X of the section. */
+  missed: string;
+}
+
+/** The driver model gives up after this many seconds. */
+const STREET_LIMIT_SECONDS = 90;
+/** A piece blocks the strip when it reaches at least this far into it, in metres. */
+const STRIP_OVERLAP = 0.5;
+/** A turn at the end of the street counts this many seconds. */
+const TURN_SECONDS = 3;
+/** Half the width of the strip to clear: the strip of the carrier. */
+const CLEAR_HALF_WIDTH = HAULER_WIDTH / 2 + 0.4;
+
+/**
+ * Drives each vehicle along the reference street of the test yard and measures how long it
+ * takes to clear a strip as wide as the carrier's. A simple driver model steers towards the next
+ * building section in the strip and uses the weapon: the bulldozer boosts when a section is near,
+ * the flail spins all the time and the car slows down near a building, and the buggy fires when
+ * a section lies ahead. At the end of the street, the driver turns and drives back for the
+ * sections that it missed. A turn counts `TURN_SECONDS`.
+ *
+ * The measurement reloads the yard before each vehicle and once more at the end.
+ */
+export async function measureStreet(app: App): Promise<StreetRow[]> {
+  if (app.game?.level.id !== 'yard') {
+    console.warn('The street measurement needs the test yard. Open ?yard&debug.');
+    return [];
+  }
+  const original = app.game.activeVehicle.spec.type;
+  const rows: StreetRow[] = [];
+  for (const type of VEHICLE_TYPES) {
+    const game = await app.loadLevel();
+    game.start();
+    app.setVehicle(type);
+    rows.push(driveStreet(app, game));
+  }
+  setInput(app, 0, 0);
+  app.scripted.action = false;
+  const game = await app.loadLevel();
+  game.start();
+  app.setVehicle(original);
+  console.table(rows);
+  return rows;
+}
+
+function driveStreet(app: App, game: Game): StreetRow {
+  const vehicle = game.activeVehicle;
+  const z = REFERENCE_STREET_Z;
+  const half = CLEAR_HALF_WIDTH;
+  // Every column of a building that reaches into the strip to clear.
+  const targets = game.buildings.list.flatMap((building) =>
+    building.pieces.flatMap((piece, index) => {
+      const xs = piece.polygon.map((p) => p[0]);
+      const zs = piece.polygon.map((p) => p[1]);
+      // A piece that only grazes the edge of the strip does not block it.
+      const inStrip =
+        Math.min(...zs) < z + half - STRIP_OVERLAP &&
+        Math.max(...zs) > z - half + STRIP_OVERLAP &&
+        Math.max(...xs) > REFERENCE_STREET_START_X &&
+        Math.min(...xs) < REFERENCE_STREET_END_X;
+      const target = {
+        building,
+        index,
+        x: piece.center.x,
+        z: piece.center.z,
+        near: Math.min(...zs),
+        far: Math.max(...zs),
+      };
+      return inStrip ? [target] : [];
+    }),
+  );
+  const left = (): typeof targets => targets.filter((t) => t.building.standing(t.index));
+  vehicle.teleport([REFERENCE_STREET_START_X - 20, z], 0);
+
+  let direction = 1;
+  let passes = 1;
+  let firstPassMissed = '';
+  let uses = 0;
+  let time = 0;
+  let lastBreak = 0;
+  let lastLeft = targets.length;
+  let wasHeld = false;
+  run(game, STREET_LIMIT_SECONDS, () => {
+    time += STEP_SECONDS;
+    const standing = left();
+    if (standing.length !== lastLeft) {
+      lastBreak = time;
+      lastLeft = standing.length;
+    }
+    if (standing.length === 0) {
+      return true;
+    }
+    const { x } = vehicle.position;
+    const along = (t: { x: number }): number => (t.x - x) * direction;
+    const ahead = standing.filter((t) => along(t) > -3).sort((a, b) => along(a) - along(b));
+    const beyond =
+      direction > 0 ? x > REFERENCE_STREET_END_X + 10 : x < REFERENCE_STREET_START_X - 10;
+    if (ahead.length === 0 || beyond) {
+      // Turn round for the sections that were missed.
+      if (passes === 1) {
+        firstPassMissed = standing
+          .map((t) => `${t.building.name} ${Math.round(t.x)}/${Math.round(t.z)}`)
+          .join(', ');
+      }
+      direction = -direction;
+      passes += 1;
+      vehicle.teleport([x, z], direction > 0 ? 0 : Math.PI);
+      time += TURN_SECONDS;
+      return false;
+    }
+    // Steer towards the next section, kept within the street.
+    const next = ahead[0];
+    const distance = along(next);
+    // Swerve only as far as the vehicle's reach needs: the blade, the flail or the body.
+    const reach =
+      vehicle.spec.type === 'flail'
+        ? CHAIN_LENGTH
+        : Math.max(vehicle.spec.width, vehicle.spec.bladeWidth) / 2;
+    // The gap between the centre of the street and the nearest edge of the section.
+    const offset = next.near > z ? next.near - z : next.far < z ? next.far - z : 0;
+    const swerve = Math.sign(offset) * Math.max(0, Math.abs(offset) - reach + 1);
+    const lane = distance < 45 ? clamp(z + swerve, z - half + 1, z + half - 1) : z;
+    const forward = direction > 0 ? 0 : Math.PI;
+    const wanted = forward + Math.atan2((lane - vehicle.position.z) * direction, 18);
+    const steer = clamp(wrapAngle(wanted - vehicle.heading) * 2.5, -1, 1);
+
+    const type = vehicle.spec.type;
+    const status = game.weaponStatus;
+    let throttle = 1;
+    let held: boolean;
+    if (type === 'flail') {
+      held = true;
+      uses += STEP_SECONDS;
+      // A flail driver slows down at a building, so that the ball has time to hit it.
+      if (distance < 25 && vehicle.forwardSpeed > vehicle.spec.topSpeed * 0.45) {
+        throttle = 0;
+      }
+    } else if (type === 'dozer') {
+      held = distance < 30 && status.ready;
+    } else {
+      held = distance > 12 && distance < 70 && status.ready && !wasHeld;
+    }
+    if (held && !wasHeld && type !== 'flail') {
+      app.scripted.press('action');
+      uses += 1;
+    }
+    app.scripted.action = held;
+    wasHeld = held;
+    setInput(app, steer, throttle);
+    return false;
+  });
+  app.scripted.action = false;
+  const remaining = left();
+  return {
+    vehicle: vehicle.spec.name,
+    seconds: round(remaining.length === 0 ? lastBreak : time, 1),
+    cleared: remaining.length === 0,
+    left: remaining.length,
+    weaponUses: round(uses, 1),
+    passes,
+    firstPassMissed,
+    missed: remaining.map((t) => `${t.building.name} ${Math.round(t.x)}`).join(', '),
+  };
 }

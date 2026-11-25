@@ -69,6 +69,8 @@ export class Vehicle {
   stunned = 0;
   /** Seconds until the next impact counts. It keeps one crash from counting twice. */
   impactCooldown = 0;
+  /** True during a boost: the top speed and the acceleration rise. */
+  boosting = false;
   /** Seconds since the vehicle left the ground. */
   airTime = 0;
 
@@ -111,6 +113,18 @@ export class Vehicle {
         .setCollisionGroups(collisionGroups(Layer.vehicle, solids | Layer.hauler)),
       this.body,
     );
+    if (spec.bladeWidth > spec.width) {
+      // A blade wider than the body: walls that hold stop its ends, and it pushes cones.
+      physics.world.createCollider(
+        RAPIER.ColliderDesc.cuboid(0.3, 0.9, (spec.bladeWidth - 1) / 2)
+          .setTranslation(spec.length / 2 + 0.2, BLADE_CENTER_HEIGHT - spec.rideHeight, 0)
+          .setMass(0)
+          .setFriction(0.2)
+          .setRestitution(0)
+          .setCollisionGroups(collisionGroups(Layer.vehicle, solids | Layer.hauler)),
+        this.body,
+      );
+    }
 
     this.object = new THREE.Group();
     this.object.name = `vehicle-${spec.type}`;
@@ -212,7 +226,7 @@ export class Vehicle {
       this.slide = nextSlide(spec, this.slide, forward, 0, NO_COMMAND, dt);
     } else if (this.grounded || supported) {
       const travelBefore = Math.atan2(sideways, forward);
-      forward = driveSpeed(spec, forward, command, dt, sideways);
+      forward = driveSpeed(this.boosting ? boosted(spec) : spec, forward, command, dt, sideways);
       if (this.grounded) {
         forward -= SLOPE_GRAVITY * Math.sin(slopePitch) * dt;
         // A bank that is too steep stops the vehicle like a wall.
@@ -345,6 +359,21 @@ export class Vehicle {
       }
     });
   }
+}
+
+/** Height of the middle of a blade above the ground, in metres. */
+const BLADE_CENTER_HEIGHT = 1.05;
+/** During a boost, the top speed rises by this factor and the acceleration by `BOOST_PUSH`. */
+export const BOOST_SPEED = 1.6;
+const BOOST_PUSH = 2.5;
+
+/** The tuning of a vehicle during a boost. */
+function boosted(spec: VehicleSpec): VehicleSpec {
+  return {
+    ...spec,
+    topSpeed: spec.topSpeed * BOOST_SPEED,
+    acceleration: spec.acceleration * BOOST_PUSH,
+  };
 }
 
 /** Quaternion of a body that points along a heading. */

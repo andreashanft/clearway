@@ -211,6 +211,50 @@
   color: var(--cw-hazard);
 }
 
+/* The weapon: its name, a meter and its state, for example the boost cooldown. */
+.hud__weapon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--cw-font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(var(--cw-line-rgb), 0.75);
+}
+
+.hud__weapon-label {
+  width: 58px;
+}
+
+.hud__weapon-bar {
+  flex: 1;
+  height: 6px;
+  background: rgba(var(--cw-line-rgb), 0.2);
+}
+
+.hud__weapon-fill {
+  width: 100%;
+  height: 100%;
+  background: rgba(var(--cw-hazard-rgb), 0.55);
+  transform-origin: left center;
+}
+
+.hud__weapon-value {
+  min-width: 52px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.hud__weapon.is-ready,
+.hud__weapon.is-active {
+  color: var(--cw-hazard);
+}
+
+.hud__weapon.is-ready .hud__weapon-fill,
+.hud__weapon.is-active .hud__weapon-fill {
+  background: var(--cw-hazard);
+}
+
 /* Path clear: a full-width banner for three seconds. */
 .hud__banner {
   position: absolute;

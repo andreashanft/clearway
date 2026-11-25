@@ -158,15 +158,27 @@ function createDozer(spec: VehicleSpec): VehicleModel {
   for (const side of [-1, 1]) {
     addBox(object, [2.2, 0.3, 0.3], [1.9, floor + 0.95, side * 1.75], paint(C.track));
   }
+  // The blade is wider than the tracks, so that it clears a whole lane.
+  const bladeWidth = Math.max(spec.width + 0.2, spec.bladeWidth - 1);
   const blade = new THREE.Group();
   blade.position.set(2.95, floor + 1.05, 0);
   blade.rotation.z = 0.1;
-  addBox(blade, [0.4, 1.9, spec.width + 0.2], [0, 0, 0], paint(C.bodyDeep));
-  addBox(blade, [0.34, 0.34, spec.width + 0.26], [0.2, 0.86, 0], paint(C.body));
-  addBox(blade, [0.16, 0.24, spec.width + 0.26], [0.26, -0.86, 0], paint(C.steelLight));
-  const spikes = 6;
+  addBox(blade, [0.4, 1.9, bladeWidth], [0, 0, 0], paint(C.bodyDeep));
+  addBox(blade, [0.34, 0.34, bladeWidth + 0.06], [0.2, 0.86, 0], paint(C.body));
+  addBox(blade, [0.16, 0.24, bladeWidth + 0.06], [0.26, -0.86, 0], paint(C.steelLight));
+  // Side plates turn the ends of the blade forwards.
+  for (const side of [-1, 1]) {
+    const plate = addBox(
+      blade,
+      [0.9, 1.9, 0.22],
+      [0.3, 0, side * (bladeWidth / 2 - 0.1)],
+      paint(C.bodyDeep),
+    );
+    plate.rotation.y = side * 0.35;
+  }
+  const spikes = 9;
   for (let i = 0; i < spikes; i += 1) {
-    const z = (i / (spikes - 1) - 0.5) * (spec.width - 0.5);
+    const z = (i / (spikes - 1) - 0.5) * (bladeWidth - 0.6);
     const spike = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.75, 6), paint(C.steelLight));
     // The cone points along +Y by default. Turn it so that it points forwards.
     spike.rotation.z = -Math.PI / 2;
@@ -250,6 +262,26 @@ function createBuggy(spec: VehicleSpec): VehicleModel {
   addBox(object, [0.12, 0.12, 1.48], [-1.1, floor + 2.25, 0], paint(C.steel));
   addBox(object, [0.12, 0.12, 1.48], [0.5, floor + 2.25, 0], paint(C.steel));
   addCylinder(object, 0.12, 0.16, [-1.1, floor + 2.4, 0], paint(C.lamp, C.lamp), 8);
+  // Rocket launcher: two pods of tubes on the roll cage, pointing forwards
+  for (const side of [-1, 1]) {
+    addBox(object, [1.3, 0.42, 0.42], [-0.3, floor + 2.55, side * 0.5], paint(C.bodyDeep));
+    for (const [dy, dz] of [
+      [-0.1, -0.1],
+      [-0.1, 0.1],
+      [0.1, -0.1],
+      [0.1, 0.1],
+    ]) {
+      const tube = addCylinder(
+        object,
+        0.07,
+        0.06,
+        [0.36, floor + 2.55 + dy, side * 0.5 + dz],
+        paint(C.dark),
+        6,
+      );
+      tube.rotation.z = Math.PI / 2;
+    }
+  }
 
   return { object, update: (state) => animateWheels(wheels, state) };
 }

@@ -43,6 +43,10 @@ export class Hud {
   private readonly cardIcon: HTMLElement;
   private readonly cardName: HTMLElement;
   private readonly cardSpeed: HTMLElement;
+  private readonly cardWeapon: HTMLElement;
+  private readonly cardWeaponLabel: HTMLElement;
+  private readonly cardWeaponFill: HTMLElement;
+  private readonly cardWeaponValue: HTMLElement;
   private readonly banner: HTMLElement;
   private readonly bannerClear: HTMLElement;
   private readonly bannerBonus: HTMLElement;
@@ -116,13 +120,24 @@ export class Hud {
     this.cardIcon = el('div', { className: 'hud__card-icon' });
     this.cardName = el('div', { className: 'hud__card-name' });
     this.cardSpeed = el('div', { className: 'hud__card-speed' });
+    this.cardWeaponLabel = el('span', { className: 'hud__weapon-label' });
+    this.cardWeaponFill = el('div', { className: 'hud__weapon-fill' });
+    this.cardWeaponValue = el('span', { className: 'hud__weapon-value' });
+    this.cardWeapon = el('div', {
+      className: 'hud__weapon',
+      children: [
+        this.cardWeaponLabel,
+        el('div', { className: 'hud__weapon-bar', children: [this.cardWeaponFill] }),
+        this.cardWeaponValue,
+      ],
+    });
     this.card = el('div', {
       className: 'hud__card',
       children: [
         this.cardIcon,
         el('div', {
           className: 'hud__card-body',
-          children: [this.cardName, this.cardSpeed],
+          children: [this.cardName, this.cardSpeed, this.cardWeapon],
         }),
       ],
     });
@@ -361,7 +376,7 @@ export class Hud {
     this.pointer.classList.add('is-on');
   }
 
-  /** Shows the vehicle and its speed. */
+  /** Shows the vehicle, its speed and the state of its weapon. */
   private updateCard(game: Game): void {
     const vehicle = game.activeVehicle;
     if (this.cardVehicle !== vehicle.spec.type) {
@@ -370,5 +385,11 @@ export class Hud {
       setText(this.cardName, vehicle.spec.name);
     }
     setText(this.cardSpeed, `${Math.round(Math.abs(vehicle.forwardSpeed) * 3.6)} KM/H`);
+    const weapon = game.weaponStatus;
+    setText(this.cardWeaponLabel, weapon.label);
+    setText(this.cardWeaponValue, weapon.value);
+    this.cardWeaponFill.style.transform = `scaleX(${weapon.meter.toFixed(3)})`;
+    this.cardWeapon.classList.toggle('is-ready', weapon.ready);
+    this.cardWeapon.classList.toggle('is-active', weapon.active);
   }
 }

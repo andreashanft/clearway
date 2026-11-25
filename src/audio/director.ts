@@ -43,12 +43,14 @@ export class SoundDirector {
   private readonly alarm: Loop;
   private readonly fuse: Loop;
   private readonly skid: Loop;
+  private readonly flail: Loop;
 
   constructor(private readonly audio: AudioEngine) {
     this.hauler = audio.loop('hauler');
     this.alarm = audio.loop('alarm');
     this.fuse = audio.loop('fuse');
     this.skid = audio.loop('skid');
+    this.flail = audio.loop('woosh');
     audio.preload([
       ...new Set(Object.values(IMPACT_SOUNDS).flat()),
       ...COLLAPSE_SOUNDS,
@@ -59,6 +61,11 @@ export class SoundDirector {
       'blast-crack',
       'chime',
       'click',
+      'rocket',
+      'woosh',
+      'clank',
+      'anvil',
+      'metal-2',
       'radio',
     ]);
   }
@@ -139,9 +146,29 @@ export class SoundDirector {
       }
       lastMultiplier = multiplier;
     });
+    game.events.on('weaponFired', ({ weapon }) => {
+      if (weapon === 'boost') {
+        this.audio.play('woosh', { volume: 0.9, rate: 0.7 });
+        this.audio.play('bass-drop', { volume: 0.5, rate: 1.6 });
+      } else {
+        this.audio.play('rocket', { volume: 0.8, rate: 0.95 + Math.random() * 0.1 });
+      }
+    });
+    game.events.on('flailHit', ({ position, broke }) => {
+      const volume = near(position);
+      this.audio.play(broke ? 'metal-2' : pick(['clank', 'anvil']), {
+        volume: (broke ? 0.6 : 0.9) * volume,
+        rate: 0.9 + Math.random() * 0.2,
+      });
+    });
+    game.events.on('ammoCollected', () => {
+      this.audio.play('click', { volume: 0.8 });
+      this.audio.play('chime', { volume: 0.5, rate: 1.5 });
+    });
     game.events.on('explosion', ({ position, source }) => {
       const volume = Math.max(0.35, near(position));
-      this.audio.play(pick(BLAST_SOUNDS), { volume, rate: source === 'tank' ? 1.25 : 1 });
+      const rate = source === 'tank' ? 1.25 : source === 'rocket' ? 1.15 : 1;
+      this.audio.play(pick(BLAST_SOUNDS), { volume, rate });
       this.audio.play('blast-crack', { volume: volume * 0.7 });
     });
     game.events.on('haulerDestroyed', () => {
@@ -211,6 +238,11 @@ export class SoundDirector {
         : 0;
     this.skid.set(sliding * 0.55, vehicle.spec.type === 'dozer' ? 0.7 : 0.9 + speed * 0.2);
 
+    // The flail's chain whistles while the ball spins, higher the faster it turns.
+    const weapon = game.weaponStatus;
+    const spinning = vehicle.spec.type === 'flail' && driving ? weapon.meter : 0;
+    this.flail.set(spinning * 0.45, 0.6 + spinning * 0.6);
+
     // The Hauler rumbles louder the closer it is, and its alarm sounds in the last seconds.
     const { hauler } = game;
     if (hauler && !hauler.destroyed) {
@@ -227,7 +259,7 @@ export class SoundDirector {
 
   private silenceLoops(): void {
     this.engine?.loop.set(0);
-    for (const loop of [this.hauler, this.alarm, this.fuse, this.skid]) {
+    for (const loop of [this.hauler, this.alarm, this.fuse, this.skid, this.flail]) {
       loop.set(0);
     }
   }

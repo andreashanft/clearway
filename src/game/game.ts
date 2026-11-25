@@ -2,7 +2,7 @@ import * as THREE from 'three/webgpu';
 import { EventBus } from '../engine/events';
 import type { Input, InputState } from '../engine/input/input';
 import { STEP_SECONDS } from '../engine/loop';
-import { Layer, PhysicsWorld, collisionGroups } from '../engine/physics';
+import { Layer, PhysicsWorld, RAPIER, collisionGroups } from '../engine/physics';
 import { CameraRig } from './camera';
 import type { ExplosionSource, FailCause, GameEvents, Phase } from './events';
 import { Hauler } from './hauler';
@@ -42,6 +42,9 @@ import {
   TNT_RADIUS,
   ramDamage,
 } from './world/damage';
+import { createWeapon, type Weapon, type WeaponStatus } from './weapons';
+import { Rockets, START_AMMO } from './weapons/rockets';
+import { AmmoCrates } from './world/ammo-crates';
 import { Debris } from './world/debris';
 import { createDecks, deckHeightAt, type Deck } from './world/decks';
 import { EFFECT_COLORS, Effects } from './world/effects';
@@ -62,8 +65,19 @@ const HIT_STOP_BLOCK = 0.035;
 const HIT_STOP_EXPLOSION = 0.09;
 /** The vehicle looks ahead this many simulation steps for walls that its ram breaks. */
 const BREAK_AHEAD_STEPS = 1.5;
+/** The blade counts when at least this share of the vehicle's speed points forwards. */
+const BLADE_FRONT_SHARE = 0.8;
+/** A blade reaches this far in front of the vehicle, in metres, besides the next step's travel. */
+const BLADE_DEPTH = 0.8;
 /** At most this many walls break ahead of the vehicle in one step. */
 const MAX_BREAKS_AHEAD = 4;
+/** Rockets in one ammunition crate. */
+const CRATE_AMMO = 4;
+/** A break of at least this volume, in cubic metres, can drop an ammunition crate. */
+const AMMO_DROP_MIN_VOLUME = 1000;
+/** The chance of a drop is the volume divided by this, up to `AMMO_DROP_MAX_CHANCE`. */
+const AMMO_DROP_VOLUME = 20000;
+const AMMO_DROP_MAX_CHANCE = 0.35;
 /** Seconds between the destruction of a fuel tank and its explosion. */
 const TANK_FUSE_SECONDS = 0.25;
 
@@ -132,8 +146,13 @@ export class Game {
   readonly buildings: Buildings;
   readonly tnt: TntCrates;
   readonly cones: Cones | undefined;
+  readonly ammoCrates: AmmoCrates;
   /** The vehicle that the player drives. */
   activeVehicle: Vehicle;
+  /** The weapon of the active vehicle. */
+  weapon: Weapon;
+  /** Rockets in the buggy's launcher, kept while the player drives another vehicle. */
+  private rockets = START_AMMO;
   /** Simulated time since the run started, in seconds. */
   time = 0;
   phase: Phase = 'ready';
@@ -219,6 +238,10 @@ export class Game {
     }
 
     this.activeVehicle = this.createVehicle(vehicleType, level.spawn.pos, level.spawn.yaw * DEG);
+    this.weapon = this.createWeapon(vehicleType);
+    this.ammoCrates = new AmmoCrates(level.ammoCrates ?? [], heightAt);
+    this.ammoCrates.enabled = vehicleType === 'buggy';
+    this.scene.add(this.ammoCrates.object);
 
     if (level.hauler) {
       const route = createRoute(level.hauler);
@@ -260,9 +283,14 @@ export class Game {
 
     this.events.on('pieceDestroyed', ({ building, position, volume, chain }) => {
       this.scoreBreak(position, volume, chain, building.tower);
+      // A tower rolls for a crate once, when its stack falls.
+      if (!building.tower) {
+        this.maybeDropAmmo(position, volume);
+      }
     });
     this.events.on('sectionsFalling', ({ building, position, count, volume, chain }) => {
       this.scoreBreak(position, volume, chain, building.tower);
+      this.maybeDropAmmo(position, volume);
       const distance = position.distanceTo(this.cameraRig.focusPoint);
       const size = clamp(count / 6, 0.3, 1);
       this.cameraRig.addShake(size * clamp(1 - distance / 200, 0.1, 0.8));
@@ -307,7 +335,66 @@ export class Game {
     // Keep the height of the wheels, so that a vehicle on a bridge stays on the bridge.
     vehicle.teleport(position, heading, wheels + vehicle.spec.rideHeight);
     this.activeVehicle = vehicle;
+    if (this.weapon instanceof Rockets) {
+      this.rockets = this.weapon.count;
+    }
+    this.weapon.dispose();
+    this.weapon = this.createWeapon(type);
+    this.ammoCrates.enabled = type === 'buggy';
     this.events.emit('vehicleChanged', { type });
+  }
+
+  /** The state of the active vehicle's weapon, for the HUD. */
+  get weaponStatus(): WeaponStatus {
+    return this.weapon.status();
+  }
+
+  private createWeapon(type: VehicleType): Weapon {
+    const weapon = createWeapon(
+      type,
+      {
+        physics: this.physics,
+        buildings: this.buildings,
+        effects: this.effects,
+        events: this.events,
+        explode: (position, radius, damage, source) =>
+          this.explode(position, radius, damage, source),
+        groundAt: (x, z, fromY) => this.groundAt(x, z, fromY),
+      },
+      this.rockets,
+    );
+    this.scene.add(weapon.object);
+    return weapon;
+  }
+
+  /**
+   * Sometimes drops an ammunition crate where a large building broke, while the buggy is the
+   * active vehicle. The chance grows with the volume that fell.
+   */
+  private maybeDropAmmo(position: THREE.Vector3, volume: number): void {
+    if (!this.ammoCrates.enabled || volume < AMMO_DROP_MIN_VOLUME) {
+      return;
+    }
+    if (Math.random() >= Math.min(AMMO_DROP_MAX_CHANCE, volume / AMMO_DROP_VOLUME)) {
+      return;
+    }
+    // No crate inside a part of a building that still stands, where the buggy cannot reach it.
+    const ground = this.heightAt(position.x, position.z);
+    let blocked = false;
+    this.physics.world.intersectionsWithShape(
+      { x: position.x, y: ground + 1, z: position.z },
+      { x: 0, y: 0, z: 0, w: 1 },
+      new RAPIER.Ball(1.5),
+      () => {
+        blocked = true;
+        return false;
+      },
+      undefined,
+      collisionGroups(Layer.crate, Layer.building),
+    );
+    if (!blocked) {
+      this.ammoCrates.drop(position.x, position.z);
+    }
   }
 
   private createVehicle(type: VehicleType, position: Vec2, heading: number): Vehicle {
@@ -482,6 +569,10 @@ export class Game {
 
     const playing = this.phase !== 'failed';
     const vehicle = this.activeVehicle;
+    // A press counts only while the button is still down. A press that waited in the queue while
+    // a menu was open, for example Space on the Resume button, does not fire the weapon.
+    const held = playing && input.action;
+    this.weapon.step(dt, vehicle, held, held && input.pressed.has('action'));
     vehicle.step(dt, playing ? this.driveCommand(input) : NO_COMMAND);
     this.hauler?.step(dt);
 
@@ -514,6 +605,11 @@ export class Game {
     this.cones?.capture();
     this.debris.step(dt);
     this.emitTrails(dt);
+    for (const position of this.ammoCrates.step(dt, vehicle.position, () =>
+      this.weapon.addAmmo(CRATE_AMMO),
+    )) {
+      this.events.emit('ammoCollected', { position });
+    }
 
     if (playing) {
       if (this.hauler) {
@@ -540,6 +636,8 @@ export class Game {
     this.cones?.sync(alpha);
     this.debris.sync(alpha);
     this.buildings.sync(alpha);
+    this.weapon.sync(alpha, this.activeVehicle);
+    this.ammoCrates.sync();
     this.pickups?.sync(frameSeconds);
     this.markers.object.visible = this.showMarkers;
     this.markers.update(
@@ -621,7 +719,10 @@ export class Game {
     this.effects.explosion(position, radius * 0.5);
     const distanceToView = position.distanceTo(this.cameraRig.focusPoint);
     this.cameraRig.addShake(clamp(1.5 - distanceToView / 80, 0.2, 1.3));
-    this.hitStop = HIT_STOP_EXPLOSION;
+    // The player's own rockets must not interrupt the flow of driving.
+    if (source !== 'rocket') {
+      this.hitStop = HIT_STOP_EXPLOSION;
+    }
     this.events.emit('explosion', { position, radius, source });
   }
 
@@ -1015,7 +1116,8 @@ export class Game {
         grazed.add(hit.collider.handle);
         continue;
       }
-      const damage = ramDamage(vehicle.spec.ram, approach, vehicle.spec.topSpeed);
+      const damage =
+        ramDamage(vehicle.spec.ram, approach, vehicle.spec.topSpeed) * bladeFactor(vehicle);
       if (!this.buildings.wouldBreak(ref, damage)) {
         break;
       }
@@ -1023,9 +1125,56 @@ export class Game {
       strongest = Math.max(strongest, approach);
       fallen += this.buildings.damage(ref, damage, velocity, 0, true);
     }
+    const ploughed = this.plough(vehicle);
+    if (ploughed.fallen > 0) {
+      fallen += ploughed.fallen;
+      material = ploughed.material ?? material;
+      strongest = Math.max(strongest, vehicle.forwardSpeed);
+    }
     if (fallen > 0) {
       this.announceRam(vehicle, strongest, material, true);
     }
+  }
+
+  /**
+   * Breaks the sections that a wide blade reaches in the next physics step. The blade can be
+   * wider than the vehicle, so it clears a whole lane and not only the vehicle's own width.
+   */
+  private plough(vehicle: Vehicle): { fallen: number; material: Building['kind'] | undefined } {
+    const { spec } = vehicle;
+    const speed = vehicle.forwardSpeed;
+    if (spec.bladeWidth <= 0 || speed < MIN_IMPACT_SPEED) {
+      return { fallen: 0, material: undefined };
+    }
+    const reach = speed * STEP_SECONDS * BREAK_AHEAD_STEPS + BLADE_DEPTH;
+    const forward = new THREE.Vector3(Math.cos(vehicle.heading), 0, Math.sin(vehicle.heading));
+    const center = vehicle.position.clone().addScaledVector(forward, spec.length / 2 + reach / 2);
+    const refs = new Map<string, PieceRef>();
+    this.physics.world.intersectionsWithShape(
+      center,
+      vehicle.body.rotation(),
+      new RAPIER.Cuboid(reach / 2, spec.height / 2, spec.bladeWidth / 2),
+      (collider) => {
+        const ref = this.buildings.lookup(collider.handle);
+        if (ref) {
+          refs.set(`${ref.building.data.id}/${ref.index}/${ref.level ?? 0}`, ref);
+        }
+        return true;
+      },
+      undefined,
+      collisionGroups(Layer.vehicle, Layer.building),
+    );
+    const damage = ramDamage(spec.ram, speed, spec.topSpeed) * bladeFactor(vehicle);
+    const velocity = vehicle.impactVelocity;
+    let fallen = 0;
+    let material: Building['kind'] | undefined;
+    for (const ref of refs.values()) {
+      if (this.buildings.wouldBreak(ref, damage)) {
+        material = ref.building.kind;
+        fallen += this.buildings.damage(ref, damage, velocity, 0, true);
+      }
+    }
+    return { fallen, material };
   }
 
   /**
@@ -1079,7 +1228,7 @@ export class Game {
     }
     vehicle.impactCooldown = 0.18;
 
-    const damage = ramDamage(vehicle.spec.ram, speed, vehicle.spec.topSpeed);
+    const damage = ramDamage(vehicle.spec.ram, speed, vehicle.spec.topSpeed) * bladeFactor(vehicle);
     let fallen = 0;
     for (const ref of hits) {
       fallen += this.buildings.damage(ref, damage, before, 0, true);
@@ -1151,4 +1300,14 @@ export class Game {
       true,
     );
   }
+}
+
+/**
+ * The factor of the spiked blade. It counts when the vehicle rams forwards, not when it slides
+ * or scrapes into a wall sideways.
+ */
+function bladeFactor(vehicle: Vehicle): number {
+  const { x, z } = vehicle.impactVelocity;
+  const frontal = vehicle.forwardSpeed > BLADE_FRONT_SHARE * Math.hypot(x, z);
+  return frontal ? vehicle.spec.blade : 1;
 }
