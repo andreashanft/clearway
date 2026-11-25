@@ -21,6 +21,8 @@ export const Layer = {
   crate: 0x0010,
   prop: 0x0020,
   hauler: 0x0040,
+  /** Sections of buildings that fall as large blocks. */
+  block: 0x0080,
   bridge: 0x0100,
 } as const;
 
@@ -45,6 +47,7 @@ export interface CollisionEvent {
 export class PhysicsWorld {
   readonly world: RAPIER.World;
   private readonly eventQueue: RAPIER.EventQueue;
+  private hooks: RAPIER.PhysicsHooks | undefined;
 
   constructor() {
     this.world = new RAPIER.World({ x: 0, y: -GRAVITY, z: 0 });
@@ -58,7 +61,7 @@ export class PhysicsWorld {
    * @param onCollision Called for each contact that started or ended during the step.
    */
   step(onCollision?: (event: CollisionEvent) => void): void {
-    this.world.step(this.eventQueue);
+    this.world.step(this.eventQueue, this.hooks);
     this.eventQueue.drainCollisionEvents((handleA, handleB, started) => {
       if (!onCollision) {
         return;
@@ -70,6 +73,19 @@ export class PhysicsWorld {
         onCollision({ a, b, started });
       }
     });
+  }
+
+  /**
+   * Decides which pairs of colliders touch. Rapier asks only about pairs in which a collider has
+   * the active hook `FILTER_CONTACT_PAIRS`.
+   *
+   * @param allow Returns false when two colliders, given by their handles, pass through each other.
+   */
+  setContactFilter(allow: (a: number, b: number) => boolean): void {
+    this.hooks = {
+      filterContactPair: (a, b) => (allow(a, b) ? RAPIER.SolverFlags.COMPUTE_IMPULSE : null),
+      filterIntersectionPair: () => true,
+    };
   }
 
   /** Number of rigid bodies in the world, for the debug overlay. */

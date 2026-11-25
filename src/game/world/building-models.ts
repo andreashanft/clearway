@@ -50,6 +50,10 @@ export interface PieceStyle {
   height: number;
   /** A small rectangular house gets a gabled roof over this rectangle. */
   gable?: OrientedBox;
+  /** True when the top is a break through the building, not a roof. It gets the colour of a cut. */
+  broken?: boolean;
+  /** True when the geometry also needs a floor, for a section that falls and tumbles. */
+  closed?: boolean;
 }
 
 /**
@@ -112,7 +116,10 @@ export function buildPieceGeometry(
   if (style.gable) {
     plain.append(gableGeometry(style.gable, origin, top, roofHeight, style.colors));
   } else {
-    plain.cap(local, top, roof);
+    plain.cap(local, top, style.broken ? cut : roof);
+  }
+  if (style.closed) {
+    plain.cap(local, style.base, cut, true);
   }
 
   const geometry = new THREE.BufferGeometry();
@@ -193,18 +200,18 @@ class Surface {
     }
   }
 
-  /** Adds a flat roof over an anticlockwise polygon. */
-  cap(polygon: readonly Vec2[], height: number, color: THREE.Color): void {
+  /** Adds a flat roof over an anticlockwise polygon, or a floor that faces down with `downwards`. */
+  cap(polygon: readonly Vec2[], height: number, color: THREE.Color, downwards = false): void {
     const contour = polygon.map((p) => new THREE.Vector2(p[0], p[1]));
     const triangles = THREE.ShapeUtils.triangulateShape(contour, []);
     for (const [i0, i1, i2] of triangles) {
       const [a, b, c] = [polygon[i0], polygon[i1], polygon[i2]];
       // Anticlockwise in the X-Z plane faces down, so such a triangle is turned round.
       const down = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]) > 0;
-      for (const index of down ? [i0, i2, i1] : [i0, i1, i2]) {
+      for (const index of down !== downwards ? [i0, i2, i1] : [i0, i1, i2]) {
         const [x, z] = polygon[index];
         this.positions.push(x, height, z);
-        this.normals.push(0, 1, 0);
+        this.normals.push(0, downwards ? -1 : 1, 0);
         this.colors.push(color.r, color.g, color.b);
         this.uvs.push(x / PLAIN_UV_METRES, z / PLAIN_UV_METRES);
       }

@@ -1,7 +1,8 @@
 import * as THREE from 'three/webgpu';
 import { EventBus } from '../engine/events';
 import type { Input, InputState } from '../engine/input/input';
-import { PhysicsWorld } from '../engine/physics';
+import { STEP_SECONDS } from '../engine/loop';
+import { Layer, PhysicsWorld, collisionGroups } from '../engine/physics';
 import { CameraRig } from './camera';
 import type { ExplosionSource, FailCause, GameEvents, Phase } from './events';
 import { Hauler } from './hauler';
@@ -51,14 +52,18 @@ import { createScenery, crushHedges, type Scenery } from './world/scenery';
 import { TntCrates } from './world/tnt';
 import { createTerrain, flatHeightmap, loadHeightmap, type Terrain } from './world/terrain';
 
-/** A vehicle that breaks through a wall keeps this fraction of its speed. */
-const SMASH_THROUGH_SPEED = 0.82;
 /** A vehicle that a wall stops bounces back with this fraction of its speed. */
 const RECOIL_SPEED = 0.2;
-/** Seconds for which the world freezes on a hit, to give the hit weight. */
-const HIT_STOP_BREAK = 0.07;
+/**
+ * Seconds for which the world freezes when a wall stops a vehicle, to give the hit weight. A ram
+ * that breaks the wall does not freeze the world, so that the vehicle keeps its flow.
+ */
 const HIT_STOP_BLOCK = 0.035;
 const HIT_STOP_EXPLOSION = 0.09;
+/** The vehicle looks ahead this many simulation steps for walls that its ram breaks. */
+const BREAK_AHEAD_STEPS = 1.5;
+/** At most this many walls break ahead of the vehicle in one step. */
+const MAX_BREAKS_AHEAD = 4;
 /** Seconds between the destruction of a fuel tank and its explosion. */
 const TANK_FUSE_SECONDS = 0.25;
 
@@ -253,22 +258,14 @@ export class Game {
       this.scene.add(this.pickups.object);
     }
 
-    this.events.on('pieceDestroyed', ({ position, volume, chain }) => {
-      this.scoreBreak(position, volume, chain, false);
+    this.events.on('pieceDestroyed', ({ building, position, volume, chain }) => {
+      this.scoreBreak(position, volume, chain, building.tower);
     });
-    this.events.on('towerCollapsing', ({ building, position, chain }) => {
-      this.scoreBreak(
-        position.clone().setY(building.baseY + building.height * 0.6),
-        building.volume,
-        chain,
-        true,
-      );
+    this.events.on('sectionsFalling', ({ building, position, count, volume, chain }) => {
+      this.scoreBreak(position, volume, chain, building.tower);
       const distance = position.distanceTo(this.cameraRig.focusPoint);
-      this.cameraRig.addShake(clamp(1.4 - distance / 150, 0.3, 1.2));
-    });
-    this.events.on('towerFloor', ({ position }) => {
-      const distance = position.distanceTo(this.cameraRig.focusPoint);
-      this.cameraRig.addShake(clamp(0.5 - distance / 300, 0.05, 0.35));
+      const size = clamp(count / 6, 0.3, 1);
+      this.cameraRig.addShake(size * clamp(1 - distance / 200, 0.1, 0.8));
     });
     this.events.on('beaconLit', () => {
       this.score.add(BEACON_POINTS);
@@ -502,6 +499,9 @@ export class Game {
       }
     }
 
+    if (playing) {
+      this.breakAhead(vehicle);
+    }
     this.physics.step();
 
     this.resolveImpact(vehicle);
@@ -539,6 +539,7 @@ export class Game {
     this.tnt.sync(alpha, frameSeconds);
     this.cones?.sync(alpha);
     this.debris.sync(alpha);
+    this.buildings.sync(alpha);
     this.pickups?.sync(frameSeconds);
     this.markers.object.visible = this.showMarkers;
     this.markers.update(
@@ -973,8 +974,64 @@ export class Game {
   }
 
   /**
-   * Finds out whether a vehicle crashed into a building during the physics step, and deals the
-   * damage. A crash shows as a sudden loss of speed while the vehicle touches a building.
+   * Breaks the walls that the vehicle reaches during the next physics step and that its ram
+   * breaks. They are gone before the physics step, so they never slow the vehicle down.
+   */
+  private breakAhead(vehicle: Vehicle): void {
+    const velocity = vehicle.impactVelocity;
+    if (Math.hypot(velocity.x, velocity.z) < MIN_IMPACT_SPEED) {
+      return;
+    }
+    const world = this.physics.world;
+    const filter = collisionGroups(Layer.vehicle, Layer.building);
+    let fallen = 0;
+    let strongest = 0;
+    let material: Building['kind'] = 'house';
+    // Walls that the vehicle only grazes, so that the look-ahead finds the wall in front.
+    const grazed = new Set<number>();
+    for (let i = 0; i < MAX_BREAKS_AHEAD; i += 1) {
+      const hit = world.castShape(
+        vehicle.body.translation(),
+        vehicle.body.rotation(),
+        velocity,
+        vehicle.collider.shape,
+        0.05,
+        STEP_SECONDS * BREAK_AHEAD_STEPS,
+        true,
+        undefined,
+        filter,
+        vehicle.collider,
+        vehicle.body,
+        (collider) =>
+          !grazed.has(collider.handle) && this.buildings.lookup(collider.handle) !== undefined,
+      );
+      const ref = hit ? this.buildings.lookup(hit.collider.handle) : undefined;
+      if (!hit || !ref) {
+        break;
+      }
+      const normal = hit.normal1;
+      const approach = -(velocity.x * normal.x + velocity.y * normal.y + velocity.z * normal.z);
+      if (approach < MIN_IMPACT_SPEED) {
+        grazed.add(hit.collider.handle);
+        continue;
+      }
+      const damage = ramDamage(vehicle.spec.ram, approach, vehicle.spec.topSpeed);
+      if (!this.buildings.wouldBreak(ref, damage)) {
+        break;
+      }
+      material = ref.building.kind;
+      strongest = Math.max(strongest, approach);
+      fallen += this.buildings.damage(ref, damage, velocity, 0, true);
+    }
+    if (fallen > 0) {
+      this.announceRam(vehicle, strongest, material, true);
+    }
+  }
+
+  /**
+   * Finds out whether a wall stopped a vehicle during the physics step, and deals the damage. A
+   * crash shows as a sudden loss of speed while the vehicle touches a building. Walls that the ram
+   * breaks are mostly gone before the step, so this handles the walls that hold.
    */
   private resolveImpact(vehicle: Vehicle): void {
     if (vehicle.impactCooldown > 0) {
@@ -1003,9 +1060,10 @@ export class Game {
         const normal = manifold.normal();
         const speed = Math.abs(before.x * normal.x + before.y * normal.y + before.z * normal.z);
         approach = Math.max(approach, speed);
-        // A tower shares its hit points among its pieces, so a ram where two pieces meet counts once.
+        // A concave section has several colliders, so a ram where two of them meet counts once.
         const counted = hits.some(
-          (hit) => hit.building === ref.building && (ref.building.tower || hit.index === ref.index),
+          (hit) =>
+            hit.building === ref.building && hit.index === ref.index && hit.level === ref.level,
         );
         if (!counted) {
           hits.push(ref);
@@ -1021,7 +1079,6 @@ export class Game {
     }
     vehicle.impactCooldown = 0.18;
 
-    const material = hits[0].building.kind;
     const damage = ramDamage(vehicle.spec.ram, speed, vehicle.spec.topSpeed);
     let fallen = 0;
     for (const ref of hits) {
@@ -1029,24 +1086,34 @@ export class Game {
     }
 
     if (fallen > 0) {
-      vehicle.setVelocity(before.x * SMASH_THROUGH_SPEED, after.y, before.z * SMASH_THROUGH_SPEED);
+      // The wall broke after all: the vehicle drives on as if it had never touched it.
+      vehicle.setVelocity(before.x, after.y, before.z);
     } else {
       vehicle.setVelocity(-before.x * RECOIL_SPEED, after.y, -before.z * RECOIL_SPEED);
+      this.hitStop = HIT_STOP_BLOCK;
     }
+    this.announceRam(vehicle, speed, hits[0].building.kind, fallen > 0);
+  }
 
+  /** Shakes the camera, throws dust and announces the impact of a ram. */
+  private announceRam(
+    vehicle: Vehicle,
+    speed: number,
+    material: Building['kind'],
+    broke: boolean,
+  ): void {
     const strength = clamp(speed / 20, 0.25, 1);
     const position = vehicle.position.clone();
     position.x += Math.cos(vehicle.heading) * vehicle.spec.length * 0.5;
     position.z += Math.sin(vehicle.heading) * vehicle.spec.length * 0.5;
-    if (fallen === 0) {
+    if (!broke) {
       this.effects.dust(position, 2.5, 5);
       if (material === 'tower' || material === 'block') {
         this.effects.sparks(position, 10);
       }
     }
-    this.cameraRig.addShake(strength * (fallen > 0 ? 1 : 0.6));
-    this.hitStop = fallen > 0 ? HIT_STOP_BREAK : HIT_STOP_BLOCK;
-    this.events.emit('impact', { position, strength, material, broke: fallen > 0 });
+    this.cameraRig.addShake(strength * (broke ? 1 : 0.6));
+    this.events.emit('impact', { position, strength, material, broke });
   }
 
   /** Scores a break while the run counts, and announces the points where the break happened. */

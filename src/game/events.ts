@@ -17,27 +17,35 @@ export interface GameEvents {
     /** Strength from 0 to 1, for sound volume and camera shake. */
     strength: number;
     material: BuildingClass;
-    /** True when at least one piece fell, or a tower started to fall. */
+    /** True when at least one section broke. */
     broke: boolean;
   };
-  /** A building lost half of its hit points and shows cracks. */
+  /** A section of a building lost half of its hit points and shows cracks. */
   buildingCracked: { building: Building; position: THREE.Vector3 };
-  /** One piece of a low building fell. */
+  /** A section of a building broke, where it stood or after it fell. */
   pieceDestroyed: {
     building: Building;
     position: THREE.Vector3;
-    /** Volume of the piece in cubic metres. */
+    /** Volume of the section in cubic metres. */
     volume: number;
-    /** How many tower collapses led to the fall. 0 when the player broke the piece. */
+    /** How many collapses led to the break. 0 when the player's ram caused it. */
     chain: number;
   };
-  /** The base of a tower gave way, and the tower starts to sink. */
-  towerCollapsing: { building: Building; position: THREE.Vector3; chain: number };
-  /** One more floor of a falling tower reached the ground. */
-  towerFloor: { building: Building; position: THREE.Vector3; floor: number };
-  /** A falling tower has sunk completely. */
-  towerFell: { building: Building; position: THREE.Vector3 };
-  /** The last piece of a building fell, or a tower started to fall. */
+  /** A column lost a section, and the sections above it start to fall. */
+  sectionsFalling: {
+    building: Building;
+    /** The middle of the falling stack. */
+    position: THREE.Vector3;
+    /** Number of sections that fall. */
+    count: number;
+    /** Volume of the falling stack in cubic metres. */
+    volume: number;
+    /** How many collapses led to the fall. 0 when the player's ram caused it. */
+    chain: number;
+  };
+  /** A falling section hit the ground and broke. */
+  sectionLanded: { building: Building; position: THREE.Vector3; volume: number };
+  /** The bottom section of every column of a building has broken. */
   buildingDestroyed: { building: Building };
   /** A break earned points. */
   scored: {

@@ -20,31 +20,33 @@ The destruction felt weak in both earlier builds: a building took too many hits,
 - Hit points grow with the volume, to the power of 0.6, between 30 and 1,200. The reference house of 800 m³ has 100 hit points.
 - Each vehicle has a ram value: the damage of a ram at its top speed. A slower ram deals less, by the square of its share of the top speed. The bulldozer rams with 400, the flail car with 300 and the buggy with 200.
 - In a low building, a fallen piece passes 85 % of its spare damage on to the next piece along the ram, and weakens every neighbour by a quarter of its hit points. A fast ram therefore carves a corridor.
-- A building taller than 15 m is a tower. Its pieces share one pool of hit points. When the pool is empty, the tower sinks floor by floor into the ground and leans up to 14° away from the side that broke it. Dust and chunks burst out at every floor. Twice during the fall, it damages the buildings around it, centred on the side that it leans to, so towers can bring each other down.
-- Every break scores by its volume. Breaks within 3 seconds of each other form a combo, and every third break raises the multiplier, up to ×8. Each collapse that led to a break adds half the points again as a chain bonus.
+- Every piece is a column of stacked sections. A building of up to 15 m has one section per column. A taller building is a tower, and its columns have one section per four floors, about 12 m. Every section has its own hit points.
+- When a section breaks, the sections above it fall as loose blocks with physics. The stack starts to turn away from the ram, so it topples along the corridor that the ram cut. A falling section breaks into chunks and rubble when it lands. When it hits another building, it deals damage by the square of its speed along the contact, so towers can bring each other down. A falling section passes through the building that it fell from.
+- A building part that stands on another building, such as a tower on a podium, falls when the column under it is cut.
+- Every break scores by its volume. A falling stack scores once, by its whole volume, when it starts to fall. Breaks within 3 seconds of each other form a combo, and every third break raises the multiplier, up to ×8. Each building that passed the collapse on adds half the points again as a chain bonus.
 - The HUD shows the score at the bottom centre, the combo multiplier with a bar that drains, and pop-ups where buildings break. Breaks close together share one pop-up.
-- Pieces, towers, floors and the end of a fall have their own layered sounds. The combo chimes higher with each step.
+- Breaking sections, falling stacks and landing sections have their own layered sounds. At most four breaks within a quarter of a second make a sound. The combo chimes higher with each step.
 - The test yard has a downtown: a street of houses with a terrace and an L-shaped house, a block of flats around a courtyard, a tower of 40 floors, two more towers, an office block and an office tower.
 
 **Measured**
 
-- `clearway.measureRams()` rams a house of 756 m³ (92 hit points) at three quarters of the top speed. The bulldozer deals 226, the flail car 171 and the buggy 113, so every vehicle breaks it with one ram.
-- The 40-floor tower has 1,200 hit points. The bulldozer brings it down with three rams at top speed, the flail car with four and the buggy with six.
+- `clearway.measureRams()` rams a house of 756 m³ (97 hit points) at three quarters of the top speed. The bulldozer deals 223, the flail car 168 and the buggy 113, so every vehicle breaks it with one ram. After the break, every vehicle keeps 97 % or more of its speed.
+- A section of the 40-floor tower has 100 to 107 hit points. At top speed, every vehicle breaks the bottom section of the column that it hits and drives on at full speed, so it breaks every column in its line. A straight ram through the middle cuts 3 of the 9 columns, and 27 sections topple along the street within about 3 seconds. The 6 other columns stay.
 - A ram of the bulldozer at top speed into the block of flats carves through four pieces. The buggy carves through two.
-- When the 40-floor tower falls towards the 54 m tower, the 54 m tower falls too. Twelve buildings fell in that test.
-- During the fall of the 40-floor tower, a simulation step with drawing took 0.3 ms on average and 1.6 ms at most on a desktop computer, and at most 96 chunks were active.
+- A diagonal ram of the bulldozer from the north-west cuts all 9 columns of the 40-floor tower. The falling sections bring down the 54 m tower too.
+- During that collapse, at most 78 sections fell at once, and one simulation step took at most 3.9 ms on a desktop computer.
 
 **Stubbed**
 
 - The dust is made of the same flat-shaded particles as before. Large dust clouds can look like boulders.
-- The frame rate during a collapse was not measured on a phone.
+- The frame rate during a collapse was not measured on a phone. A falling section is a convex physics body, and a tower can drop more than 80 of them at once.
 - Rubble is decoration and has no collider, as before.
 
 **Test it**
 
 1. Open the game with `?yard` appended and drive south to the downtown.
-2. Ram the houses on the street, carve through the block of flats, and ram the base of the 40-floor tower until it falls.
-3. Hit the tower from the north-west, so that it leans onto the 54 m tower south-east of it.
+2. Ram the houses on the street, carve through the block of flats, and ram the base of the 40-floor tower at top speed.
+3. Hit the tower diagonally from the north-west, so that it topples onto the 54 m tower south-east of it.
 4. Watch the score, the combo and the pop-ups.
 5. Optional: open the address with `?yard&debug` appended and select **Measure rams**.
 
@@ -60,6 +62,21 @@ An independent review of the change found these defects, and the build fixes the
 - A cracking tower played one sound and one dust burst per piece.
 - A building part that stands on another kept floating after the building under it fell. It now falls with it, and its rubble lands on the ground.
 - A footprint without area made a building that counted as destroyed from the start. The game now leaves it out.
+
+**Playtest changes**
+
+The first playtest found three problems, and the build fixes them:
+
+- Every ram stopped the vehicle for a moment, also when it broke the house. The world froze for 0.07 s, and the vehicle lost 18 % of its speed. Now the vehicle looks one physics step ahead and breaks the walls that its ram breaks before the physics engine resolves the contact. A breaking ram neither freezes the world nor slows the vehicle. A wall that holds still stops the vehicle with a short freeze.
+- Chunks of debris blocked the vehicles and took their speed. Vehicles now drive through debris.
+- A falling tower filled the screen with one large sinking mass and dust, so you could not see what happened. A tower now breaks in sections, and only the columns that you hit come down.
+
+An independent review of these changes found four defects, and the build fixes them:
+
+- A falling section could crash the game when a collider next to it was removed in the same step.
+- A falling section damaged a concave section once per collider instead of once.
+- A section that broke in place because too many sections were falling scored twice.
+- A wall that the vehicle only grazed hid the wall in front of it from the look-ahead.
 
 **Deviations**
 

@@ -108,7 +108,7 @@ export class Vehicle {
         .setMass(spec.mass)
         .setFriction(0.2)
         .setRestitution(0)
-        .setCollisionGroups(collisionGroups(Layer.vehicle, solids | Layer.debris | Layer.hauler)),
+        .setCollisionGroups(collisionGroups(Layer.vehicle, solids | Layer.hauler)),
       this.body,
     );
 

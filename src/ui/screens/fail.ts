@@ -12,7 +12,7 @@ const TIPS: Record<FailCause, string> = {
   shed: 'A ram at speed drops a shed.',
   house: 'A ram at three quarters of the top speed drops a house.',
   block: 'Ram a large building where the Hauler will pass, and carve a way through.',
-  tower: 'Ram the base of a tower until it falls.',
+  tower: 'Ram the base of a tower at full speed. The floors above the hole topple over.',
   vehicle: "Keep your vehicle off the Hauler's line.",
   tnt: "Keep TNT crates off the Hauler's line.",
   explosion: 'Set TNT off before the Hauler is near.',

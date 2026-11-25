@@ -1,11 +1,11 @@
 import * as THREE from 'three/webgpu';
 import type { EventBus } from '../../engine/events';
-import { Layer, RAPIER, collisionGroups, type PhysicsWorld } from '../../engine/physics';
+import { GRAVITY, Layer, RAPIER, collisionGroups, type PhysicsWorld } from '../../engine/physics';
 import type { GameEvents } from '../events';
 import type { BuildingClass, BuildingColors, BuildingData, LevelData } from '../level';
 import { clamp, pointInPolygon, type Vec2 } from '../math';
 import { distanceToPolygon } from '../polygon';
-import { FLOOR_HEIGHT, classifyBuilding } from './building-class';
+import { classifyBuilding, sectionCount } from './building-class';
 import {
   buildPieceGeometry,
   createCrackTexture,
@@ -15,59 +15,111 @@ import {
 } from './building-models';
 import { applyPieceDamage, blastDamage, hitPoints, type PieceGraph } from './damage';
 import type { Debris } from './debris';
-import { EFFECT_COLORS, type Effects } from './effects';
+import type { Effects } from './effects';
 import { shade } from './mesh-builder';
 import { cutFootprint, type BuildingShape } from './pieces';
 
-/** Rubble pieces that stay where a piece fell. They are decoration and have no collider. */
-const RUBBLE_PER_PIECE = 6;
-/** A piece sheds at least and at most this many chunks when it falls. */
+/** Rubble pieces that stay where a section fell. They are decoration and have no collider. */
+const RUBBLE_PER_SECTION = 6;
+/** A section that breaks in place sheds at least and at most this many chunks. */
 const MIN_CHUNKS = 6;
 const MAX_CHUNKS = 14;
-/** A tower leans this far away from the side that broke it while it sinks, in radians. */
-const MAX_LEAN = (14 * Math.PI) / 180;
-/** The neighbours of a falling tower take damage at these shares of the collapse. */
-const COLLAPSE_WAVES = [0.35, 0.8];
+/** A falling section sheds this many chunks when it breaks, because many sections fall at once. */
+const BLOCK_CHUNKS = 5;
+/** At most this many sections fall at once. A section beyond that breaks where it stands. */
+const MAX_FALLING = 160;
+/**
+ * The collider of a falling section is this much smaller than the section on every side, in
+ * metres, so that the section starts free of the sections next to it.
+ */
+const BLOCK_INSET = 0.3;
+/**
+ * A falling stack of sections starts to turn at this share of the turn rate that a falling stick
+ * of its height reaches, so that it topples away from the ram.
+ */
+const TOPPLE_SHARE = 0.5;
+/** A falling section breaks after this many seconds at the latest. */
+const BLOCK_LIFE = 8;
+/** A falling section that rests on something for this many seconds breaks. */
+const BLOCK_REST_SECONDS = 0.6;
+/** A falling section slower than this, in m/s, counts as resting. */
+const BLOCK_REST_SPEED = 1.5;
+/**
+ * A falling section that hits a building at this speed, in m/s, deals its own hit points. The
+ * damage grows with the square of the speed, so that a section that slides past does little.
+ */
+const BLOCK_BREAK_SPEED = 12;
+/** A falling section deals at most this multiple of its own hit points. */
+const MAX_BLOCK_DAMAGE_SHARE = 1.5;
+/** A falling section slower than this, in m/s, deals no damage when it hits a building. */
+const MIN_BLOCK_SPEED = 2;
+/** Density of a falling section. Only the masses of sections and chunks against each other count. */
+const BLOCK_DENSITY = 20;
 
+/** One column of a building: a piece of the footprint and the sections stacked on it. */
 interface PieceState {
+  /** The sections of the column that still stand, as one mesh. Undefined when none stands. */
   mesh: THREE.Mesh | undefined;
-  /** One convex collider, or several for a concave piece. Empty once the piece has fallen. */
-  colliders: RAPIER.Collider[];
+  /**
+   * The colliders of every section, from the ground up. A concave piece has several colliders
+   * per section. The list of a section is empty once the section has fallen.
+   */
+  colliders: RAPIER.Collider[][];
   polygon: Vec2[];
-  /** Centre of the piece at half its height. */
+  /** Centre of the column at half the building's height. */
   center: THREE.Vector3;
-  /** Volume in cubic metres. */
+  /** Volume of one section in cubic metres. */
   volume: number;
+  /** Number of sections that still stand, counted from the bottom. */
+  top: number;
   cracked: boolean;
+  /** For a part above the ground: the column of another building that this column stands on. */
+  support: PieceRef | undefined;
+  /** The columns of other buildings that stand on this column. */
+  carries: PieceRef[];
 }
 
-/** Points at one piece of one building. */
+/** Points at one section of one building: the column and the level from the bottom. */
 export interface PieceRef {
   building: Building;
   index: number;
+  /** The section from the bottom of the column. 0 when left out. */
+  level?: number;
 }
 
-/** The fall of a tower, from the moment its base gave way. */
-interface Collapse {
-  elapsed: number;
-  duration: number;
-  /** Direction on the ground plane in which the tower leans. */
-  lean: Vec2;
-  /** Floors that have sunk into the ground so far. */
-  floors: number;
-  /** How many of the waves of damage to the neighbours have gone out. */
-  waves: number;
-  /** How many collapses led to this one. 0 when the player broke the tower directly. */
+/** A section that has lost what held it up and falls as a physics body. */
+interface FallingBlock {
+  building: Building;
+  mesh: THREE.Mesh;
+  body: RAPIER.RigidBody;
+  collider: RAPIER.Collider;
+  /** Volume in cubic metres. */
+  volume: number;
+  /** Width of the footprint and height of the section, for the chunks that it breaks into. */
+  reach: number;
+  height: number;
+  /** How many collapses led to this fall. 0 when the player's own ram cut the column. */
   chain: number;
-  done: boolean;
+  age: number;
+  /** Speed at the end of the previous step, so that a hit is judged by the speed before it. */
+  speed: number;
+  velocity: THREE.Vector3;
+  /** Seconds for which the section has rested on something. */
+  resting: number;
+  /** The building sections that this section has already hit, so that each takes one hit. */
+  struck: Set<string>;
+  previousPosition: THREE.Vector3;
+  position: THREE.Vector3;
+  previousRotation: THREE.Quaternion;
+  rotation: THREE.Quaternion;
 }
 
 /**
  * A destructible building.
  *
- * A low building is cut into pieces, and each piece has its own hit points and falls on its own.
- * A tower shares one pool of hit points among its pieces. When the pool is empty, the whole tower
- * sinks into the ground floor by floor.
+ * The footprint is cut into pieces, and each piece is a column of stacked sections. A low
+ * building has one section per column. A tower has one section per four floors. Every section has
+ * its own hit points. When a section breaks, the sections above it fall as loose blocks.
  */
 export class Building {
   readonly shape: BuildingShape;
@@ -82,17 +134,16 @@ export class Building {
   readonly center: Vec2;
   readonly object = new THREE.Group();
   readonly pieces: PieceState[] = [];
-  /** Full hit points of every piece. A tower's pieces share `towerMaxHp` instead. */
+  /** Number of sections in every column. */
+  readonly levels: number;
+  /** Height of one section in metres. */
+  readonly sectionHeight: number;
+  /** Full hit points of one section of every column. */
   readonly maxHp: number[];
-  /** Current hit points of every piece of a low building. */
-  readonly hp: number[];
-  readonly towerMaxHp: number;
-  towerHp: number;
-  collapse: Collapse | undefined;
-  /** Direction of the last ram on the ground plane, for the lean of a tower. */
-  lastPush: Vec2 = [0, 0];
-  /** The buildings that a part above the ground stands on. */
-  readonly supports: Building[] = [];
+  /** Current hit points of every section, by level from the bottom and then by column. */
+  readonly hp: number[][];
+  /** True once the `buildingDestroyed` event went out. */
+  reported = false;
 
   /** Height of the ground under the building. */
   readonly baseY: number;
@@ -111,22 +162,22 @@ export class Building {
     this.colors = data.colors ?? paletteColors(data.id, this.kind);
     this.center = this.shape.center;
     const storey = this.height - this.base;
-    this.maxHp = this.shape.pieces.map((piece) => hitPoints(piece.area * storey));
-    this.hp = [...this.maxHp];
-    this.towerMaxHp = hitPoints(this.shape.area * storey);
-    this.towerHp = this.towerMaxHp;
+    this.levels = sectionCount(storey);
+    this.sectionHeight = storey / this.levels;
+    this.maxHp = this.shape.pieces.map((piece) => hitPoints(piece.area * this.sectionHeight));
+    this.hp = Array.from({ length: this.levels }, () => [...this.maxHp]);
     this.object.name = `building-${data.id}`;
     this.object.position.set(this.center[0], this.baseY, this.center[1]);
   }
 
-  /** True while a piece still stands. */
+  /** True while the bottom section of a column still stands. */
   standing(index: number): boolean {
-    return this.tower ? this.towerHp > 0 : this.hp[index] > 0;
+    return this.hp[0][index] > 0;
   }
 
-  /** True when the building has fallen, or a tower has started to fall. */
+  /** True when the bottom section of every column has fallen. */
   get destroyed(): boolean {
-    return this.tower ? this.towerHp <= 0 : this.hp.every((value) => value <= 0);
+    return this.hp[0].every((value) => value <= 0);
   }
 
   /** The id that route obstacles are counted by: the group, or the building itself. */
@@ -139,7 +190,12 @@ export class Building {
     return this.shape.area * (this.height - this.base);
   }
 
-  /** The neighbours, hit points and centres of the pieces, for the spread of damage. */
+  /** Height of the bottom of a section above the building's ground, in metres. */
+  sectionBottom(level: number): number {
+    return this.base + level * this.sectionHeight;
+  }
+
+  /** The neighbours, hit points and centres of the columns, for the spread of damage. */
   get graph(): PieceGraph {
     return {
       maxHp: this.maxHp,
@@ -155,6 +211,8 @@ export class Buildings {
   readonly list: Building[] = [];
 
   private readonly byCollider = new Map<number, PieceRef>();
+  private readonly falling: FallingBlock[] = [];
+  private readonly blockByCollider = new Map<number, FallingBlock>();
   private readonly intact: THREE.Material[];
   private readonly cracked: THREE.Material[];
   private readonly textures: THREE.Texture[];
@@ -167,7 +225,7 @@ export class Buildings {
 
   constructor(
     level: LevelData,
-    heightAt: (x: number, z: number) => number,
+    private readonly heightAt: (x: number, z: number) => number,
     private readonly physics: PhysicsWorld,
     private readonly debris: Debris,
     private readonly effects: Effects,
@@ -187,7 +245,7 @@ export class Buildings {
       new THREE.MeshLambertMaterial({ vertexColors: true, map: cracks }),
     ];
 
-    let pieceTotal = 0;
+    let sectionTotal = 0;
     for (const data of level.buildings) {
       const building = new Building(data, heightAt);
       if (building.shape.pieces.length === 0) {
@@ -197,13 +255,13 @@ export class Buildings {
       this.createPieces(building);
       this.list.push(building);
       this.object.add(building.object);
-      pieceTotal += building.pieces.length;
+      sectionTotal += building.pieces.length * building.levels;
     }
 
     this.rubble = new THREE.InstancedMesh(
       new THREE.BoxGeometry(1, 1, 1),
       new THREE.MeshLambertMaterial(),
-      Math.max(1, pieceTotal * RUBBLE_PER_PIECE),
+      Math.max(1, sectionTotal * RUBBLE_PER_SECTION),
     );
     this.rubble.name = 'rubble';
     this.rubble.count = 0;
@@ -212,7 +270,7 @@ export class Buildings {
     this.dustPatches = new THREE.InstancedMesh(
       new THREE.CircleGeometry(1, 14).rotateX(-Math.PI / 2),
       new THREE.MeshLambertMaterial({ transparent: true, opacity: 0.42, depthWrite: false }),
-      Math.max(1, pieceTotal),
+      Math.max(1, sectionTotal),
     );
     this.dustPatches.name = 'rubble-dust';
     this.dustPatches.count = 0;
@@ -223,49 +281,59 @@ export class Buildings {
     this.dustPatches.setColorAt(0, this.color.setHex(0xffffff));
     this.object.add(this.dustPatches, this.rubble);
     this.linkSupports();
+    physics.setContactFilter((a, b) => this.allowContact(a, b));
   }
 
   /**
-   * Finds, for every part that starts above the ground, the buildings that it stands on. When one
-   * of them falls, the part falls with it.
+   * A falling section passes through the building that it fell from. Otherwise it would wedge
+   * between the columns next to it and fly off when the solver pushes it out.
+   */
+  private allowContact(a: number, b: number): boolean {
+    const block = this.blockByCollider.get(a) ?? this.blockByCollider.get(b);
+    if (!block) {
+      return true;
+    }
+    const other = this.blockByCollider.has(a) ? b : a;
+    return this.byCollider.get(other)?.building !== block.building;
+  }
+
+  /**
+   * Finds, for every column of a part that starts above the ground, the column of another
+   * building that it stands on. When that column is cut below the part, the part's column falls.
    */
   private linkSupports(): void {
     for (const part of this.list) {
       if (part.base <= 0.5) {
         continue;
       }
-      for (const support of this.list) {
-        if (
+      const supports = this.list.filter(
+        (support) =>
           support !== part &&
           support.base < part.base &&
           support.height >= part.base - 1 &&
-          pointInPolygon(part.center, support.shape.outline)
-        ) {
-          part.supports.push(support);
+          pointInPolygon(part.center, support.shape.outline),
+      );
+      part.pieces.forEach((piece, index) => {
+        const point: Vec2 = [piece.center.x, piece.center.z];
+        let best: PieceRef | undefined;
+        let bestDistance = Infinity;
+        for (const support of supports) {
+          support.pieces.forEach((candidate, candidateIndex) => {
+            const distance = distanceToPolygon(point, candidate.polygon);
+            const inside = pointInPolygon(point, candidate.polygon);
+            const score = inside ? -1 : distance;
+            if (score < bestDistance) {
+              bestDistance = score;
+              best = { building: support, index: candidateIndex };
+            }
+          });
         }
-      }
-    }
-    this.events.on('buildingDestroyed', ({ building }) => {
-      for (const part of this.list) {
-        if (!part.destroyed && part.supports.includes(building)) {
-          this.dropPart(part);
+        if (best) {
+          piece.support = best;
+          best.building.pieces[best.index].carries.push({ building: part, index });
         }
-      }
-    });
-  }
-
-  /** Brings down a part whose support fell: a tower part sinks, a low part breaks. */
-  private dropPart(part: Building): void {
-    const push = new THREE.Vector3();
-    if (part.tower) {
-      this.damage({ building: part, index: 0 }, part.towerHp, push, 1);
-      return;
+      });
     }
-    part.pieces.forEach((_, index) => {
-      if (part.standing(index)) {
-        this.damage({ building: part, index }, part.hp[index], push, 1);
-      }
-    });
   }
 
   /** Frees the materials and textures. They may not be on any mesh at the moment. */
@@ -278,7 +346,7 @@ export class Buildings {
     }
   }
 
-  /** Returns the building piece that a collider belongs to. */
+  /** Returns the building section that a collider belongs to. */
   lookup(colliderHandle: number): PieceRef | undefined {
     return this.byCollider.get(colliderHandle);
   }
@@ -288,88 +356,121 @@ export class Buildings {
     return this.list.find((building) => building.data.id === id);
   }
 
+  /** True when this much damage breaks a section that still stands. */
+  wouldBreak(ref: PieceRef, amount: number): boolean {
+    const hp = ref.building.hp[ref.level ?? 0][ref.index];
+    return hp > 0 && amount >= hp;
+  }
+
   /**
-   * Damages one piece. In a low building, the collapse can spread to other pieces. In a tower,
-   * the damage goes to the tower's shared hit points.
+   * Damages one section. The collapse can spread to the sections next to it on the same level,
+   * and the sections above a broken one fall.
    *
-   * @param push Velocity of the ram. The falling chunks inherit it, and a tower leans along it.
+   * @param push Velocity of the ram. The falling chunks inherit it, and the sections above topple
+   *   along it.
    * @param chain How many collapses led to this damage. 0 for the player's own ram.
    * @param ram True for a vehicle's ram. Only a ram carries its spare damage on through pieces.
-   * @returns How many pieces fell, or 1 when a tower started to fall.
+   * @returns How many sections broke on the level of the hit.
    */
   damage(ref: PieceRef, amount: number, push: THREE.Vector3, chain = 0, ram = false): number {
     const { building } = ref;
-    if (amount <= 0 || !building.standing(ref.index)) {
+    const level = ref.level ?? 0;
+    const hp = building.hp[level];
+    if (amount <= 0 || hp[ref.index] <= 0) {
       return 0;
-    }
-    if (Math.hypot(push.x, push.z) > 0.5) {
-      building.lastPush = [push.x, push.z];
-    }
-    if (building.tower) {
-      return this.damageTower(building, amount, chain);
     }
     const ramming = ram && chain === 0 && Math.hypot(push.x, push.z) > 0.5;
     const fallen = applyPieceDamage(
-      building.hp,
+      hp,
       building.graph,
       ref.index,
       amount,
       ramming ? [push.x, push.z] : undefined,
     );
     for (const index of fallen) {
-      this.dropPiece(building, index, push, chain);
+      this.cutColumn(building, index, level, push, chain, true);
     }
     building.pieces.forEach((piece, index) => {
-      const hp = building.hp[index];
-      if (hp > 0 && hp <= building.maxHp[index] / 2 && !piece.cracked) {
-        this.crackPiece(building, index);
+      const value = hp[index];
+      if (value > 0 && value <= building.maxHp[index] / 2 && !piece.cracked) {
+        this.crackPiece(building, index, level);
       }
     });
-    if (fallen.length > 0 && building.destroyed) {
-      this.events.emit('buildingDestroyed', { building });
-    }
     return fallen.length;
   }
 
-  /** Damages every piece within the radius of an explosion. */
-  blast(center: THREE.Vector3, radius: number, peak: number, chain = 0, spare?: Building): void {
+  /** Damages every section within the radius of an explosion. */
+  blast(center: THREE.Vector3, radius: number, peak: number, chain = 0): void {
     const push = new THREE.Vector3();
     const point: Vec2 = [center.x, center.z];
     for (const building of this.list) {
-      if (building === spare || building.destroyed) {
-        continue;
-      }
-      if (building.tower) {
-        const distance = distanceToPolygon(point, building.shape.outline);
-        const amount = blastDamage(peak, radius, distance);
-        if (amount > 0) {
-          push.set(building.center[0] - center.x, 0, building.center[1] - center.z);
-          push.normalize().multiplyScalar(9);
-          this.damage({ building, index: 0 }, amount, push, chain);
-        }
+      if (building.destroyed) {
         continue;
       }
       building.pieces.forEach((piece, index) => {
-        if (!building.standing(index)) {
+        const flat = distanceToPolygon(point, piece.polygon);
+        if (flat >= radius) {
           return;
         }
-        const amount = blastDamage(peak, radius, distanceToPolygon(point, piece.polygon));
-        if (amount > 0) {
-          push.copy(piece.center).sub(center).setY(0).normalize().multiplyScalar(9);
-          this.damage({ building, index }, amount, push, chain);
+        // A broken section lowers the top, so the loop stops at the new top.
+        for (let level = 0; level < piece.top; level += 1) {
+          const bottom = building.baseY + building.sectionBottom(level);
+          const top = bottom + building.sectionHeight;
+          const vertical = center.y < bottom ? bottom - center.y : Math.max(0, center.y - top);
+          const amount = blastDamage(peak, radius, Math.hypot(flat, vertical));
+          if (amount > 0) {
+            push.copy(piece.center).sub(center).setY(0).normalize().multiplyScalar(9);
+            this.damage({ building, index, level }, amount, push, chain);
+          }
         }
       });
     }
   }
 
-  /** Advances the towers that are falling. Call it once per simulation step. */
+  /** Advances the falling sections. Call it once per simulation step, after the physics step. */
   step(dt: number): void {
-    for (const building of this.list) {
-      const collapse = building.collapse;
-      if (collapse && !collapse.done) {
-        this.stepCollapse(building, collapse, dt);
+    for (let i = this.falling.length - 1; i >= 0; i -= 1) {
+      const block = this.falling[i];
+      block.age += dt;
+      block.previousPosition.copy(block.position);
+      block.previousRotation.copy(block.rotation);
+      block.position.copy(block.body.translation());
+      block.rotation.copy(block.body.rotation());
+      const contact = this.blockContacts(block);
+      const lost = block.position.y < block.building.baseY - 20;
+      block.resting = block.speed < BLOCK_REST_SPEED ? block.resting + dt : 0;
+      if (
+        contact.ground ||
+        lost ||
+        block.age >= BLOCK_LIFE ||
+        block.resting >= BLOCK_REST_SECONDS
+      ) {
+        this.falling.splice(i, 1);
+        this.shatterBlock(block);
+      }
+      // Damage after the block is settled, because the damage can cut more columns.
+      for (const hit of contact.hits) {
+        this.strikeWithBlock(block, hit);
+      }
+      if (this.falling.includes(block)) {
+        const velocity = block.body.linvel();
+        block.velocity.set(velocity.x, velocity.y, velocity.z);
+        block.speed = block.velocity.length();
       }
     }
+  }
+
+  /** Draws the falling sections between the previous and the current step. */
+  sync(alpha: number): void {
+    for (const block of this.falling) {
+      block.mesh.position.lerpVectors(block.previousPosition, block.position, alpha);
+      block.mesh.quaternion.slerpQuaternions(block.previousRotation, block.rotation, alpha);
+    }
+  }
+
+  /** Number of sections that are falling at the moment. */
+  get fallingCount(): number {
+    return this.falling.length;
   }
 
   /** Number of buildings that are completely destroyed. */
@@ -378,74 +479,87 @@ export class Buildings {
   }
 
   private createPieces(building: Building): void {
+    building.shape.pieces.forEach((piece, index) => {
+      const colliders: RAPIER.Collider[][] = [];
+      for (let level = 0; level < building.levels; level += 1) {
+        const bottom = building.baseY + building.sectionBottom(level);
+        const top = bottom + building.sectionHeight;
+        const section: RAPIER.Collider[] = [];
+        for (const part of convexParts(piece.polygon, piece.convex)) {
+          const points = new Float32Array(part.length * 6);
+          part.forEach(([x, z], i) => {
+            points.set([x, bottom, z, x, top, z], i * 6);
+          });
+          // A part of no area has no hull, so it gets no collider.
+          const desc = RAPIER.ColliderDesc.convexHull(points);
+          if (desc) {
+            const collider = this.physics.world.createCollider(
+              desc.setFriction(0.3).setCollisionGroups(collisionGroups(Layer.building, 0xffff)),
+            );
+            this.byCollider.set(collider.handle, { building, index, level });
+            section.push(collider);
+          }
+        }
+        colliders.push(section);
+      }
+      building.pieces.push({
+        mesh: undefined,
+        colliders,
+        polygon: piece.polygon,
+        center: new THREE.Vector3(
+          piece.center[0],
+          building.baseY + (building.base + building.height) / 2,
+          piece.center[1],
+        ),
+        volume: piece.area * building.sectionHeight,
+        top: building.levels,
+        cracked: false,
+        support: undefined,
+        carries: [],
+      });
+      this.buildStump(building, index);
+    });
+  }
+
+  /** Builds the mesh of the sections of a column that still stand. */
+  private buildStump(building: Building, index: number): void {
+    const piece = building.pieces[index];
+    this.removeMesh(building, piece);
+    if (piece.top === 0) {
+      return;
+    }
     const { shape } = building;
+    const whole = piece.top === building.levels;
     const gable =
-      building.kind === 'house' && shape.pieces.length === 1 && shape.rectangular
+      whole &&
+      building.base === 0 &&
+      building.kind === 'house' &&
+      shape.pieces.length === 1 &&
+      shape.rectangular
         ? shape.rect
         : undefined;
     const style: PieceStyle = {
       colors: building.colors,
       base: building.base,
-      height: building.height,
-      gable: building.base === 0 ? gable : undefined,
+      height: building.sectionBottom(piece.top),
+      gable,
+      broken: !whole,
     };
-    const bottom = building.baseY + building.base;
-    const top = building.baseY + building.height;
-    shape.pieces.forEach((piece, index) => {
-      const mesh = new THREE.Mesh(buildPieceGeometry(piece, building.center, style), this.intact);
-      mesh.castShadow = true;
-      mesh.receiveShadow = true;
-      building.object.add(mesh);
-
-      const colliders: RAPIER.Collider[] = [];
-      for (const part of convexParts(piece.polygon, piece.convex)) {
-        const points = new Float32Array(part.length * 6);
-        part.forEach(([x, z], i) => {
-          points.set([x, bottom, z, x, top, z], i * 6);
-        });
-        // A part of no area has no hull, so it gets no collider.
-        const desc = RAPIER.ColliderDesc.convexHull(points);
-        if (desc) {
-          const collider = this.physics.world.createCollider(
-            desc.setFriction(0.3).setCollisionGroups(collisionGroups(Layer.building, 0xffff)),
-          );
-          this.byCollider.set(collider.handle, { building, index });
-          colliders.push(collider);
-        }
-      }
-      building.pieces.push({
-        mesh,
-        colliders,
-        polygon: piece.polygon,
-        center: new THREE.Vector3(piece.center[0], (bottom + top) / 2, piece.center[1]),
-        volume: piece.area * (building.height - building.base),
-        cracked: false,
-      });
-    });
-  }
-
-  private damageTower(building: Building, amount: number, chain: number): number {
-    const before = building.towerHp;
-    building.towerHp = Math.max(0, before - amount);
-    if (building.towerHp > 0) {
-      if (building.towerHp <= building.towerMaxHp / 2 && !building.pieces[0]?.cracked) {
-        building.pieces.forEach((_, index) => this.crackPiece(building, index, true));
-        const position = new THREE.Vector3(
-          building.center[0],
-          building.baseY + 1,
-          building.center[1],
-        );
-        this.effects.dust(position, Math.sqrt(building.shape.area) * 0.5 + 3, 10);
-        this.events.emit('buildingCracked', { building, position });
-      }
-      return 0;
+    const mesh = new THREE.Mesh(
+      buildPieceGeometry(shape.pieces[index], building.center, style),
+      piece.cracked ? this.cracked : this.intact,
+    );
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    if (piece.cracked && !building.tower) {
+      mesh.position.y = -0.25;
     }
-    this.startCollapse(building, chain);
-    return 1;
+    building.object.add(mesh);
+    piece.mesh = mesh;
   }
 
-  /** Shows cracks on a piece. `quiet` leaves out the dust and the event, for a whole tower. */
-  private crackPiece(building: Building, index: number, quiet = false): void {
+  /** Shows cracks on a column, with a puff of dust at the damaged section. */
+  private crackPiece(building: Building, index: number, level: number): void {
     const piece = building.pieces[index];
     if (piece.cracked || !piece.mesh) {
       return;
@@ -457,20 +571,21 @@ export class Buildings {
       // around the building's centre, so the piece only moves down and does not tilt.
       piece.mesh.position.y = -0.25;
     }
-    if (quiet) {
-      return;
-    }
-    const position = new THREE.Vector3(piece.center.x, building.baseY + 1, piece.center.z);
+    const position = new THREE.Vector3(
+      piece.center.x,
+      building.baseY + building.sectionBottom(level) + 1,
+      piece.center.z,
+    );
     this.effects.dust(position, Math.sqrt(piece.volume) * 0.12 + 2, 6);
     this.events.emit('buildingCracked', { building, position });
   }
 
-  private removeCollider(piece: PieceState): void {
-    for (const collider of piece.colliders) {
+  private removeColliders(colliders: RAPIER.Collider[]): void {
+    for (const collider of colliders) {
       this.byCollider.delete(collider.handle);
       this.physics.world.removeCollider(collider, true);
     }
-    piece.colliders.length = 0;
+    colliders.length = 0;
   }
 
   private removeMesh(building: Building, piece: PieceState): void {
@@ -481,47 +596,333 @@ export class Buildings {
     }
   }
 
-  private dropPiece(building: Building, index: number, push: THREE.Vector3, chain: number): void {
+  /**
+   * Removes a column from a level upwards. With `shatter`, the section on that level breaks where
+   * it stands. The sections above it fall as loose blocks, and so do the parts that stand on it.
+   */
+  private cutColumn(
+    building: Building,
+    index: number,
+    level: number,
+    push: THREE.Vector3,
+    chain: number,
+    shatter: boolean,
+  ): void {
     const piece = building.pieces[index];
-    this.removeCollider(piece);
-    this.removeMesh(building, piece);
-    const height = building.height - building.base;
+    const top = piece.top;
+    if (level >= top) {
+      return;
+    }
+    for (let above = level; above < top; above += 1) {
+      building.hp[above][index] = 0;
+      this.removeColliders(piece.colliders[above]);
+    }
+    piece.top = level;
+    this.buildStump(building, index);
+
+    const pivotY = building.baseY + building.sectionBottom(level);
+    if (shatter) {
+      this.breakSection(building, index, level, push, chain);
+    }
+    const first = shatter ? level + 1 : level;
+    if (first < top) {
+      const stack = (top - level) * building.sectionHeight;
+      let count = 0;
+      for (let above = first; above < top; above += 1) {
+        if (this.spawnBlock(building, index, above, pivotY, stack, push, chain)) {
+          count += 1;
+        }
+      }
+      const middle =
+        pivotY + (shatter ? building.sectionHeight : 0) + (count * building.sectionHeight) / 2;
+      if (count > 0) {
+        this.events.emit('sectionsFalling', {
+          building,
+          position: new THREE.Vector3(piece.center.x, middle, piece.center.z),
+          count,
+          volume: count * piece.volume,
+          chain,
+        });
+      }
+    }
+
+    for (const carried of piece.carries) {
+      const part = carried.building;
+      if (part.pieces[carried.index].top > 0 && pivotY < part.baseY + part.base - 0.5) {
+        this.cutColumn(part, carried.index, 0, push, chain, false);
+      }
+    }
+    if (!building.reported && building.destroyed) {
+      building.reported = true;
+      this.events.emit('buildingDestroyed', { building });
+    }
+  }
+
+  /** Breaks one section where it stands: chunks fly, dust rises and rubble stays. */
+  private breakSection(
+    building: Building,
+    index: number,
+    level: number,
+    push: THREE.Vector3,
+    chain: number,
+  ): void {
+    const piece = building.pieces[index];
+    const height = building.sectionHeight;
     const reach = Math.sqrt(building.shape.pieces[index].area);
-    this.spawnChunks(building, piece, push, height, reach);
-    this.addRubble(building, index);
-    const ground = new THREE.Vector3(piece.center.x, building.baseY + 0.5, piece.center.z);
-    this.effects.dust(ground, reach * 0.7 + height * 0.25, 16);
-    if (building.kind === 'block') {
-      this.effects.sparks(piece.center, 8, 10);
+    const bottom = building.baseY + building.sectionBottom(level);
+    const center = new THREE.Vector3(piece.center.x, bottom + height / 2, piece.center.z);
+    const count = clamp(Math.round(piece.volume / 90), MIN_CHUNKS, MAX_CHUNKS);
+    this.spawnChunks(building, center, push, height, reach, count);
+    this.addRubble(building, piece.center.x, piece.center.z, reach);
+    this.effects.dust(
+      new THREE.Vector3(piece.center.x, bottom + 0.5, piece.center.z),
+      reach * 0.7 + height * 0.25,
+      16,
+    );
+    if (building.kind === 'block' || building.tower) {
+      this.effects.sparks(center, 8, 10);
     }
     this.events.emit('pieceDestroyed', {
       building,
-      position: piece.center,
+      position: center,
       volume: piece.volume,
       chain,
     });
   }
 
+  /**
+   * Turns one section into a loose block that falls. Returns false when too many sections fall
+   * already: the section then breaks where it stands. The whole stack above a cut starts to turn
+   * around the cut's edge on the far side of the ram, so that it topples away from the ram.
+   *
+   * @param pivotY Height of the cut.
+   * @param stack Height of the stack from the cut to its top, in metres.
+   */
+  private spawnBlock(
+    building: Building,
+    index: number,
+    level: number,
+    pivotY: number,
+    stack: number,
+    push: THREE.Vector3,
+    chain: number,
+  ): boolean {
+    if (this.falling.length >= MAX_FALLING) {
+      this.breakSection(building, index, level, push, chain);
+      return false;
+    }
+    const piece = building.pieces[index];
+    const shapePiece = building.shape.pieces[index];
+    const height = building.sectionHeight;
+    const bottom = building.sectionBottom(level);
+    const [cx, cz] = shapePiece.center;
+    const position = new THREE.Vector3(cx, building.baseY + bottom + height / 2, cz);
+
+    const geometry = buildPieceGeometry(shapePiece, shapePiece.center, {
+      colors: building.colors,
+      base: bottom,
+      height: bottom + height,
+      broken: level < building.levels - 1,
+      closed: true,
+    });
+    geometry.translate(0, -(bottom + height / 2), 0);
+    const mesh = new THREE.Mesh(geometry, piece.cracked ? this.cracked : this.intact);
+    mesh.castShadow = true;
+    mesh.position.copy(position);
+    this.object.add(mesh);
+
+    // Direction of the fall on the ground plane: along the ram, or anywhere without one.
+    const length = Math.hypot(push.x, push.z);
+    const angle = Math.random() * Math.PI * 2;
+    const dx = length > 0.5 ? push.x / length : Math.cos(angle);
+    const dz = length > 0.5 ? push.z / length : Math.sin(angle);
+    const reach = Math.sqrt(shapePiece.area);
+    const pivot = new THREE.Vector3(cx + dx * reach * 0.5, pivotY, cz + dz * reach * 0.5);
+    // A turn around the axis up × direction moves the top of the stack along the direction.
+    const rate = TOPPLE_SHARE * Math.sqrt((3 * GRAVITY) / Math.max(stack, height));
+    const spin = new THREE.Vector3(dz, 0, -dx).multiplyScalar(rate * (0.9 + Math.random() * 0.2));
+    const velocity = new THREE.Vector3()
+      .crossVectors(spin, new THREE.Vector3().subVectors(position, pivot))
+      .addScaledVector(push, 0.1);
+
+    const points: number[] = [];
+    for (const [x, z] of shapePiece.polygon) {
+      const ox = cx - x;
+      const oz = cz - z;
+      const distance = Math.hypot(ox, oz);
+      const inset = Math.min(BLOCK_INSET, distance * 0.3) / Math.max(distance, 1e-6);
+      const half = height / 2 - BLOCK_INSET;
+      points.push(x - cx + ox * inset, -half, z - cz + oz * inset);
+      points.push(x - cx + ox * inset, half, z - cz + oz * inset);
+    }
+    const body = this.physics.world.createRigidBody(
+      RAPIER.RigidBodyDesc.dynamic()
+        .setTranslation(position.x, position.y, position.z)
+        .setLinvel(velocity.x, velocity.y, velocity.z)
+        .setAngvel({ x: spin.x, y: spin.y, z: spin.z })
+        .setLinearDamping(0.05)
+        .setAngularDamping(0.2),
+    );
+    const desc =
+      RAPIER.ColliderDesc.convexHull(new Float32Array(points)) ??
+      RAPIER.ColliderDesc.cuboid(reach * 0.4, height / 2 - BLOCK_INSET, reach * 0.4);
+    const collider = this.physics.world.createCollider(
+      desc
+        .setDensity(BLOCK_DENSITY)
+        .setFriction(0.6)
+        .setRestitution(0.05)
+        .setActiveHooks(RAPIER.ActiveHooks.FILTER_CONTACT_PAIRS)
+        .setCollisionGroups(
+          collisionGroups(Layer.block, Layer.terrain | Layer.building | Layer.block | Layer.bridge),
+        ),
+      body,
+    );
+    const rotation = new THREE.Quaternion();
+    const block: FallingBlock = {
+      building,
+      mesh,
+      body,
+      collider,
+      volume: piece.volume,
+      reach,
+      height,
+      chain,
+      age: 0,
+      speed: velocity.length(),
+      velocity,
+      resting: 0,
+      struck: new Set(),
+      previousPosition: position.clone(),
+      position: position.clone(),
+      previousRotation: rotation.clone(),
+      rotation,
+    };
+    this.falling.push(block);
+    this.blockByCollider.set(collider.handle, block);
+    return true;
+  }
+
+  /**
+   * Returns what a falling section touches: whether it is on the ground, and the building
+   * sections that it touches for the first time. Other falling sections and chunks do not count.
+   */
+  private blockContacts(block: FallingBlock): {
+    ground: boolean;
+    hits: { ref: PieceRef; speed: number }[];
+  } {
+    const world = this.physics.world;
+    const result = {
+      ground: false,
+      hits: [] as { ref: PieceRef; speed: number }[],
+    };
+    const { velocity } = block;
+    world.contactPairsWith(block.collider, (other: RAPIER.Collider | null) => {
+      // Rapier lists the pairs of a collider removed in this step until the next step, and passes
+      // null for the removed collider.
+      if (!other) {
+        return;
+      }
+      const ref = this.byCollider.get(other.handle);
+      const ground = ((other.collisionGroups() >>> 16) & (Layer.terrain | Layer.bridge)) !== 0;
+      if (!ref && !ground) {
+        return;
+      }
+      // A concave section has several colliders. It takes one hit per falling section.
+      if (ref && block.struck.has(sectionKey(ref))) {
+        return;
+      }
+      let touching = false;
+      // The speed along the contact normal: a section that slides down past a wall barely hits it.
+      let speed = 0;
+      world.contactPair(block.collider, other, (manifold) => {
+        if (manifold.numContacts() > 0) {
+          touching = true;
+          const normal = manifold.normal();
+          speed = Math.max(
+            speed,
+            Math.abs(velocity.x * normal.x + velocity.y * normal.y + velocity.z * normal.z),
+          );
+        }
+      });
+      if (!touching) {
+        return;
+      }
+      if (ref) {
+        const key = sectionKey(ref);
+        const earlier = result.hits.find((hit) => sectionKey(hit.ref) === key);
+        if (earlier) {
+          earlier.speed = Math.max(earlier.speed, speed);
+        } else {
+          result.hits.push({ ref, speed });
+        }
+      } else {
+        result.ground = true;
+      }
+    });
+    return result;
+  }
+
+  /**
+   * Damages a building section that a falling section hit, by the speed of the hit along the
+   * contact normal. A falling section only touches other buildings, so the chain grows by one.
+   */
+  private strikeWithBlock(block: FallingBlock, hit: { ref: PieceRef; speed: number }): void {
+    const { ref, speed } = hit;
+    block.struck.add(sectionKey(ref));
+    if (speed < MIN_BLOCK_SPEED) {
+      return;
+    }
+    const share = Math.min(MAX_BLOCK_DAMAGE_SHARE, (speed / BLOCK_BREAK_SPEED) ** 2);
+    this.damage(ref, hitPoints(block.volume) * share, block.velocity, block.chain + 1);
+  }
+
+  /** Breaks a falling section into chunks where it landed. */
+  private shatterBlock(block: FallingBlock): void {
+    this.blockByCollider.delete(block.collider.handle);
+    this.physics.world.removeRigidBody(block.body);
+    this.object.remove(block.mesh);
+    block.mesh.geometry.dispose();
+
+    const { building } = block;
+    this.spawnChunks(
+      building,
+      block.position,
+      block.velocity.clone().multiplyScalar(0.3),
+      block.height,
+      block.reach,
+      BLOCK_CHUNKS,
+    );
+    const ground = this.heightAt(block.position.x, block.position.z);
+    const position = new THREE.Vector3(
+      block.position.x,
+      Math.max(ground, block.position.y - block.height / 2),
+      block.position.z,
+    );
+    this.effects.dust(position, block.reach * 0.6 + 3, 10);
+    this.addRubble(building, block.position.x, block.position.z, block.reach, ground);
+    this.events.emit('sectionLanded', { building, position, volume: block.volume });
+  }
+
   private spawnChunks(
     building: Building,
-    piece: PieceState,
+    center: THREE.Vector3,
     push: THREE.Vector3,
     height: number,
     reach: number,
+    count: number,
   ): void {
     const wall = Number.parseInt(building.colors.wall.slice(1), 16);
     const roof = Number.parseInt(building.colors.roof.slice(1), 16);
-    const count = clamp(Math.round(piece.volume / 90), MIN_CHUNKS, MAX_CHUNKS);
     const position = new THREE.Vector3();
     const size = new THREE.Vector3();
     const velocity = new THREE.Vector3();
     const spin = new THREE.Vector3();
     for (let i = 0; i < count; i += 1) {
-      const up = (0.15 + Math.random() * 0.8) * height;
+      const up = (Math.random() - 0.5) * height * 0.85;
       position.set(
-        piece.center.x + (Math.random() - 0.5) * reach * 0.8,
-        building.baseY + building.base + up,
-        piece.center.z + (Math.random() - 0.5) * reach * 0.8,
+        center.x + (Math.random() - 0.5) * reach * 0.8,
+        center.y + up,
+        center.z + (Math.random() - 0.5) * reach * 0.8,
       );
       const scale = 0.5 + Math.random() * 0.8;
       size.set(
@@ -529,15 +930,15 @@ export class Buildings {
         clamp(height * 0.3 * scale, 1, 4.5),
         clamp(reach * 0.3 * scale, 1.2, 5.5),
       );
-      // Chunks fly outwards from the middle of the piece, upwards, and along the push.
+      // Chunks fly outwards from the middle of the section, upwards, and along the push.
       velocity
-        .set(position.x - piece.center.x, 0, position.z - piece.center.z)
+        .set(position.x - center.x, 0, position.z - center.z)
         .normalize()
         .multiplyScalar(4 + Math.random() * 7)
         .addScaledVector(push, 0.5 + Math.random() * 0.4);
       velocity.y = 7 + Math.random() * 11;
       spin.set((Math.random() - 0.5) * 9, (Math.random() - 0.5) * 9, (Math.random() - 0.5) * 9);
-      const isRoof = up > height * 0.7;
+      const isRoof = !building.tower && up > height * 0.25;
       this.debris.spawn(
         position,
         size,
@@ -548,24 +949,22 @@ export class Buildings {
     }
   }
 
-  /** Leaves a dusty patch and a few half-buried pieces where a piece stood. */
-  private addRubble(building: Building, index: number): void {
-    const piece = building.shape.pieces[index];
+  /** Leaves a dusty patch and a few half-buried pieces on the ground. */
+  private addRubble(
+    building: Building,
+    x: number,
+    z: number,
+    reach: number,
+    ground = building.baseY,
+  ): void {
     const wall = shade(building.colors.wall, -0.12);
     const roof = shade(building.colors.roof, -0.08);
-    const reach = Math.sqrt(piece.area);
     const rotation = new THREE.Quaternion();
     const euler = new THREE.Euler();
-    // A part that stood on another building falls to the ground too.
-    const ground = building.baseY;
 
     if (this.patchCount < this.dustPatches.instanceMatrix.count) {
       this.matrix.compose(
-        new THREE.Vector3(
-          piece.center[0],
-          ground + 0.08 + this.patchCount * 0.002,
-          piece.center[1],
-        ),
+        new THREE.Vector3(x, ground + 0.08 + this.patchCount * 0.002, z),
         rotation.identity(),
         new THREE.Vector3(reach * 0.62, 1, reach * 0.62),
       );
@@ -581,16 +980,16 @@ export class Buildings {
 
     for (
       let i = 0;
-      i < RUBBLE_PER_PIECE && this.rubbleCount < this.rubble.instanceMatrix.count;
+      i < RUBBLE_PER_SECTION && this.rubbleCount < this.rubble.instanceMatrix.count;
       i += 1
     ) {
       const size = 0.8 + Math.random() * 1.8;
       euler.set(Math.random() * 0.5, Math.random() * Math.PI, Math.random() * 0.5);
       this.matrix.compose(
         new THREE.Vector3(
-          piece.center[0] + (Math.random() - 0.5) * reach * 0.8,
+          x + (Math.random() - 0.5) * reach * 0.8,
           ground + size * 0.12,
-          piece.center[1] + (Math.random() - 0.5) * reach * 0.8,
+          z + (Math.random() - 0.5) * reach * 0.8,
         ),
         rotation.setFromEuler(euler),
         new THREE.Vector3(size * (0.8 + Math.random()), size * 0.5, size),
@@ -605,133 +1004,11 @@ export class Buildings {
       this.rubble.instanceColor.needsUpdate = true;
     }
   }
+}
 
-  private startCollapse(building: Building, chain: number): void {
-    const [px, pz] = building.lastPush;
-    const length = Math.hypot(px, pz);
-    const angle = Math.random() * Math.PI * 2;
-    const lean: Vec2 =
-      length > 0.5 ? [px / length, pz / length] : [Math.cos(angle), Math.sin(angle)];
-    building.collapse = {
-      elapsed: 0,
-      // A tall tower takes longer, so that the floors visibly go one after another.
-      duration: 1.2 + (building.height - building.base) / 45,
-      lean,
-      floors: 0,
-      waves: 0,
-      chain,
-      done: false,
-    };
-    for (const piece of building.pieces) {
-      this.removeCollider(piece);
-    }
-    const position = new THREE.Vector3(building.center[0], building.baseY + 1, building.center[1]);
-    const radius = Math.sqrt(building.shape.area) * 0.6 + 6;
-    this.effects.ring(position, radius * 1.6, EFFECT_COLORS.dust);
-    this.effects.dust(position, radius, 30);
-    this.events.emit('towerCollapsing', { building, position, chain });
-    this.events.emit('buildingDestroyed', { building });
-  }
-
-  private stepCollapse(building: Building, collapse: Collapse, dt: number): void {
-    collapse.elapsed += dt;
-    const share = Math.min(1, collapse.elapsed / collapse.duration);
-    // The fall speeds up like a real one. A part on top of another building sinks all the way.
-    const depth = building.height * share ** 1.7;
-    building.object.position.y = building.baseY - depth;
-    const [lx, lz] = collapse.lean;
-    building.object.quaternion.setFromAxisAngle(
-      new THREE.Vector3(lz, 0, -lx),
-      MAX_LEAN * share ** 1.2,
-    );
-
-    const floors = Math.floor(depth / FLOOR_HEIGHT);
-    while (collapse.floors < floors) {
-      collapse.floors += 1;
-      this.burstFloor(building, collapse);
-    }
-    while (collapse.waves < COLLAPSE_WAVES.length && share >= COLLAPSE_WAVES[collapse.waves]) {
-      collapse.waves += 1;
-      this.hitNeighbours(building, collapse);
-    }
-    if (share >= 1) {
-      collapse.done = true;
-      building.pieces.forEach((piece, index) => {
-        this.removeMesh(building, piece);
-        this.addRubble(building, index);
-      });
-      const position = new THREE.Vector3(
-        building.center[0],
-        building.baseY + 1,
-        building.center[1],
-      );
-      this.effects.dust(position, Math.sqrt(building.shape.area) * 0.7 + 6, 24);
-      this.events.emit('towerFell', { building, position });
-    }
-  }
-
-  /** One floor reaches the ground: dust and chunks burst out around the base. */
-  private burstFloor(building: Building, collapse: Collapse): void {
-    const outline = building.shape.outline;
-    const [lx, lz] = collapse.lean;
-    const ground = building.baseY + 0.6;
-    const wall = Number.parseInt(building.colors.wall.slice(1), 16);
-    const position = new THREE.Vector3();
-    const velocity = new THREE.Vector3();
-    const size = new THREE.Vector3();
-    const spin = new THREE.Vector3();
-    // A cloud of dust rolls out around the base and hides where the floors sink into the ground.
-    const scale = clamp(Math.sqrt(building.shape.area) / 20, 0.6, 1.6);
-    const bursts = 5;
-    for (let i = 0; i < bursts; i += 1) {
-      const a = outline[Math.floor(Math.random() * outline.length)];
-      const b = outline[(outline.indexOf(a) + 1) % outline.length];
-      const t = Math.random();
-      position.set(a[0] + (b[0] - a[0]) * t, ground, a[1] + (b[1] - a[1]) * t);
-      const out = new THREE.Vector3(
-        position.x - building.center[0],
-        0,
-        position.z - building.center[1],
-      ).normalize();
-      velocity.copy(out).multiplyScalar(6 + Math.random() * 8);
-      velocity.x += lx * 5;
-      velocity.z += lz * 5;
-      velocity.y = 2 + Math.random() * 6;
-      this.effects.puff({
-        position,
-        velocity,
-        color: Math.random() > 0.5 ? EFFECT_COLORS.dust : EFFECT_COLORS.dustDark,
-        size: (4 + Math.random() * 4) * scale,
-        life: 1.8 + Math.random() * 1.2,
-        drag: 1.1,
-      });
-      if (i < 2 && collapse.floors % 2 === 0) {
-        size.set(1.2 + Math.random() * 1.8, 0.8 + Math.random() * 1.2, 1.2 + Math.random() * 1.8);
-        spin.set((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8);
-        velocity.y = 6 + Math.random() * 6;
-        this.debris.spawn(position, size, shade(wall, (Math.random() - 0.5) * 0.1), velocity, spin);
-      }
-    }
-    this.events.emit('towerFloor', {
-      building,
-      position: new THREE.Vector3(building.center[0], ground, building.center[1]),
-      floor: collapse.floors,
-    });
-  }
-
-  /** The falling tower damages the buildings around it, most on the side that it leans to. */
-  private hitNeighbours(building: Building, collapse: Collapse): void {
-    const storey = building.height - building.base;
-    const reach = storey * 0.25 * collapse.waves;
-    const center = new THREE.Vector3(
-      building.center[0] + collapse.lean[0] * reach,
-      building.baseY,
-      building.center[1] + collapse.lean[1] * reach,
-    );
-    const radius = 10 + storey * 0.35 + Math.sqrt(building.shape.area) * 0.3;
-    const peak = Math.min(700, 200 + storey * 4);
-    this.blast(center, radius, peak, collapse.chain + 1, building);
-  }
+/** A key that is the same for every collider of one section. */
+function sectionKey(ref: PieceRef): string {
+  return `${ref.building.data.id}/${ref.index}/${ref.level ?? 0}`;
 }
 
 /** Splits a piece into convex parts for its colliders: itself when convex, else its triangles. */

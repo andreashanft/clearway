@@ -51,7 +51,7 @@ export class ScoreKeeper {
    * Scores one break.
    *
    * @param volume Volume that fell, in cubic metres.
-   * @param chain How many tower collapses led to the break.
+   * @param chain How many buildings passed the collapse on before this break.
    */
   award(volume: number, chain: number): Award {
     const multiplier = this.multiplier;

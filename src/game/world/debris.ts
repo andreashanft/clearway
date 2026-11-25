@@ -21,8 +21,9 @@ interface Chunk {
 /**
  * Loose pieces of destroyed buildings.
  *
- * A chunk is a solid physics body for a few seconds, so that it tumbles and can be pushed. Then
- * it loses its collider and shrinks away. Rubble therefore never blocks the player or the Hauler.
+ * A chunk is a solid physics body for a few seconds, so that it tumbles and bounces off the
+ * ground and the buildings. Then it loses its collider and shrinks away. Vehicles drive through
+ * chunks, so debris never blocks the player or takes away speed.
  */
 export class Debris {
   readonly object: THREE.InstancedMesh;
@@ -102,7 +103,6 @@ export class Debris {
             Layer.terrain |
               Layer.building |
               Layer.debris |
-              Layer.vehicle |
               Layer.crate |
               Layer.bridge |
               Layer.hauler,

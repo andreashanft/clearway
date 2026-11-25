@@ -11,6 +11,9 @@ const IMPACT_SOUNDS: Record<BuildingClass, string[]> = {
 };
 /** A piece of at least this volume, in cubic metres, adds a deep boom to its fall. */
 const BIG_PIECE_VOLUME = 1500;
+/** At most this many breaks make a sound within one window of this many milliseconds. */
+const MAX_BREAK_SOUNDS = 4;
+const BREAK_SOUND_WINDOW_MS = 250;
 const COLLAPSE_SOUNDS = ['collapse-1', 'collapse-2', 'collapse-3'];
 const RUBBLE_SOUNDS = ['rubble-1', 'rubble-2', 'rubble-3'];
 const BLAST_SOUNDS = ['blast-1', 'blast-2', 'blast-3'];
@@ -81,7 +84,22 @@ export class SoundDirector {
     game.events.on('buildingCracked', ({ position }) => {
       this.audio.play(pick(['crack-1', 'crack-2']), { volume: 0.7 * near(position), rate: 0.8 });
     });
+    let breakWindowStart = 0;
+    let breaksInWindow = 0;
+    // A falling tower breaks many sections at once. Only the first few of them make a sound.
+    const allowBreakSound = (): boolean => {
+      const now = performance.now();
+      if (now - breakWindowStart > BREAK_SOUND_WINDOW_MS) {
+        breakWindowStart = now;
+        breaksInWindow = 0;
+      }
+      breaksInWindow += 1;
+      return breaksInWindow <= MAX_BREAK_SOUNDS;
+    };
     game.events.on('pieceDestroyed', ({ position, volume: size }) => {
+      if (!allowBreakSound()) {
+        return;
+      }
       const volume = near(position);
       const big = size >= BIG_PIECE_VOLUME;
       this.audio.play(pick(COLLAPSE_SOUNDS), {
@@ -93,25 +111,22 @@ export class SoundDirector {
         this.audio.play('boom', { volume: 0.55 * volume, rate: 1.2 });
       }
     });
-    game.events.on('towerCollapsing', ({ position }) => {
-      const volume = Math.max(0.4, near(position));
-      this.audio.play('boom', { volume });
-      this.audio.play('bass-drop', { volume: 0.8 * volume });
-      this.audio.play(pick(COLLAPSE_SOUNDS), { volume, rate: 0.65 });
-    });
-    game.events.on('towerFloor', ({ position, floor }) => {
-      // Every other floor rumbles, a little lower each time.
-      if (floor % 2 === 0) {
-        this.audio.play(pick(RUBBLE_SOUNDS), {
-          volume: 0.7 * Math.max(0.3, near(position)),
-          rate: Math.max(0.55, 1 - floor * 0.01),
-        });
+    game.events.on('sectionLanded', ({ position }) => {
+      if (!allowBreakSound()) {
+        return;
       }
+      const volume = near(position);
+      this.audio.play(pick(RUBBLE_SOUNDS), {
+        volume: 0.8 * volume,
+        rate: 0.7 + Math.random() * 0.2,
+      });
+      this.audio.play('boom', { volume: 0.4 * volume, rate: 0.9 + Math.random() * 0.2 });
     });
-    game.events.on('towerFell', ({ position }) => {
+    game.events.on('sectionsFalling', ({ position, count }) => {
+      // The groan of a column that gives way, deeper for a taller stack.
       const volume = Math.max(0.3, near(position));
-      this.audio.play(pick(COLLAPSE_SOUNDS), { volume, rate: 0.55 });
-      this.audio.play('boom', { volume: 0.7 * volume, rate: 0.8 });
+      this.audio.play('bass-drop', { volume: Math.min(0.8, 0.3 + count * 0.08) * volume });
+      this.audio.play(pick(COLLAPSE_SOUNDS), { volume: 0.7 * volume, rate: 0.6 });
     });
     let lastMultiplier = 1;
     game.events.on('scored', ({ multiplier }) => {

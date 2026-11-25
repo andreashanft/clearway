@@ -213,6 +213,11 @@ export interface RamRow {
   damage: number;
   /** True when one ram broke the house. */
   broke: boolean;
+  /**
+   * The lowest speed in the 0.3 seconds after the break, as a share of the speed before it. A ram
+   * that breaks the house should keep nearly all of the speed.
+   */
+  keptShare: number;
 }
 
 /**
@@ -242,7 +247,7 @@ export function measureRams(app: App): RamRow[] {
         building.center[0] < -130,
     );
     if (!house) {
-      return { vehicle: spec.name, ramKmh: 0, houseHp: 0, damage: 0, broke: false };
+      return { vehicle: spec.name, ramKmh: 0, houseHp: 0, damage: 0, broke: false, keptShare: 0 };
     }
     const [x, z] = house.center;
     const target = spec.topSpeed * 0.75;
@@ -252,11 +257,23 @@ export function measureRams(app: App): RamRow[] {
       damage = ramDamage(spec.ram, Math.hypot(vx, vz), spec.topSpeed);
     });
     vehicle.teleport([x, z - 30], Math.PI / 2);
+    let speedBefore = 0;
     run(game, 8, () => {
       setInput(app, 0, vehicle.forwardSpeed < target ? 1 : 0);
-      return !house.standing(0) || vehicle.position.z > z;
+      const done = !house.standing(0) || vehicle.position.z > z;
+      if (!done) {
+        speedBefore = vehicle.forwardSpeed;
+      }
+      return done;
     });
     off();
+    // Drive on at the same speed and record the lowest speed after the break.
+    let lowest = vehicle.forwardSpeed;
+    run(game, 0.3, () => {
+      setInput(app, 0, vehicle.forwardSpeed < target ? 1 : 0);
+      lowest = Math.min(lowest, vehicle.forwardSpeed);
+      return false;
+    });
     setInput(app, 0, 0);
     // Let the debris settle, so that it does not slow the next vehicle.
     run(game, 4.5, () => false);
@@ -266,6 +283,7 @@ export function measureRams(app: App): RamRow[] {
       houseHp: round(house.maxHp[0], 0),
       damage: round(damage, 0),
       broke: !house.standing(0),
+      keptShare: round(lowest / Math.max(speedBefore, 1e-6), 2),
     };
   });
   app.setVehicle(original);
