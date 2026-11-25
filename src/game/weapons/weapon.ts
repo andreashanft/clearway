@@ -32,8 +32,10 @@ export interface WeaponStatus {
   value: string;
   /** True when the action button does something now. */
   ready: boolean;
-  /** True while the weapon works, for example during a boost or while the flail spins. */
+  /** True while the weapon works, for example during a boost or while the flail is out. */
   active: boolean;
+  /** How loud the weapon sounds, from 0 to 1, for example by the speed of the flail's ball. */
+  intensity?: number;
 }
 
 /**
@@ -50,6 +52,8 @@ export interface Weapon {
    * @param pressed True in the step in which the action button went down.
    */
   step(dt: number, vehicle: Vehicle, held: boolean, pressed: boolean): void;
+  /** Finishes the step after the physics step, for a weapon with a physics body. */
+  settle?(vehicle: Vehicle): void;
   /** Draws the weapon between the previous and the current step. */
   sync(alpha: number, vehicle: Vehicle): void;
   status(): WeaponStatus;

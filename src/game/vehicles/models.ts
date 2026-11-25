@@ -192,8 +192,8 @@ function createDozer(spec: VehicleSpec): VehicleModel {
 }
 
 /**
- * The flail car: a wide all-terrain car with a flat roof. Two arms at the front carry the drum
- * that later swings the flail.
+ * The flail car: a wide all-terrain car with a flat roof. A winch at the back holds the chain of
+ * the flail.
  */
 function createFlailCar(spec: VehicleSpec): VehicleModel {
   const object = new THREE.Group();
@@ -219,18 +219,18 @@ function createFlailCar(spec: VehicleSpec): VehicleModel {
   addBox(object, [2.9, 0.14, 2.45], [-0.5, floor + 2.88, 0], paint(C.body));
   addBox(object, [1.2, 0.5, 2.2], [-2.0, floor + 2.2, 0], paint(C.bodyDeep));
   addCylinder(object, 0.16, 0.2, [-0.5, floor + 3.05, 0], paint(C.lamp, C.lamp), 8);
-  // Front arms and the flail drum
+  // Front bumper, and the winch for the flail's chain at the back
+  addBox(object, [0.3, 0.4, 2.6], [2.65, floor + 1.0, 0], paint(C.steel));
   for (const side of [-1, 1]) {
-    addBox(object, [1.5, 0.22, 0.22], [3.05, floor + 1.25, side * 1.0], paint(C.steel));
+    addBox(object, [0.6, 0.6, 0.18], [-2.75, floor + 1.15, side * 0.55], paint(C.steel));
   }
-  const drum = addCylinder(object, 0.3, 2.3, [3.7, floor + 1.25, 0], paint(C.steelLight), 10);
+  const drum = addCylinder(object, 0.28, 0.95, [-2.8, floor + 1.15, 0], paint(C.steelLight), 10);
   drum.rotation.x = Math.PI / 2;
 
   return {
     object,
     update(state) {
       animateWheels(wheels, state);
-      drum.rotation.y -= (state.forwardSpeed / 0.6) * state.frameSeconds;
     },
   };
 }

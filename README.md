@@ -64,13 +64,13 @@ The handbrake makes the vehicle slide. A fast turn at nearly full lock with the 
 
 Each vehicle has its own weapon on the action button:
 
-| Vehicle   | Weapon                                                                                                                                                                                                                      |
-| --------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Bulldozer | A press boosts the top speed by 60 % for 2 seconds. The next boost is ready 4 seconds later. The spiked blade is wider than the tracks and breaks everything in an 8 m strip in front of the bulldozer.                     |
-| Flail car | While you hold the button, a spiked ball spins around the car on a 7 m chain and breaks the buildings that it hits. A wall that holds throws the ball back. When you let go, the ball slows down and trails behind the car. |
-| Buggy     | A press fires a rocket straight ahead. The aim assist bends it towards the nearest building close to the line of fire. The buggy starts with 6 rockets and carries at most 12.                                              |
+| Vehicle   | Weapon                                                                                                                                                                                                                                                             |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Bulldozer | A press launches the bulldozer forwards, also from standstill, and boosts the top speed by 60 % for 2 seconds. The next boost is ready 4 seconds later. The spiked blade is wider than the tracks and breaks everything in an 8 m strip in front of the bulldozer. |
+| Flail car | A spiked ball hangs on a short chain behind the car. It swings out in turns and whips round in a slide, and it breaks the buildings that it hits hard enough. While you hold the button, the chain pays out to 10 m. When you let go, it winds in again.           |
+| Buggy     | A press fires a rocket straight ahead. The aim assist bends it towards the nearest building close to the line of fire. After 240 m, the rocket runs out of fuel, falls and explodes where it lands. The buggy starts with 6 rockets and carries at most 12.        |
 
-Ammunition crates with a yellow light beam give the buggy 4 rockets each. They show only while you drive the buggy. A crate at a fixed place comes back after 25 seconds, and large buildings sometimes drop a crate when they break. The HUD card and the **ACTION** button show the boost cooldown, the spin of the flail or the rockets left.
+Ammunition crates with a yellow light beam give the buggy 4 rockets each. They show only while you drive the buggy. A crate at a fixed place comes back after 25 seconds, and large buildings sometimes drop a crate when they break. The HUD card and the **ACTION** button show the boost cooldown, how far the flail's chain is out or the rockets left.
 
 The camera has two views. The chase view stays behind the vehicle. The fixed view looks down from a high point and keeps its direction.
 

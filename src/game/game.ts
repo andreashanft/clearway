@@ -361,6 +361,7 @@ export class Game {
           this.explode(position, radius, damage, source),
         groundAt: (x, z, fromY) => this.groundAt(x, z, fromY),
       },
+      this.activeVehicle,
       this.rockets,
     );
     this.scene.add(weapon.object);
@@ -596,6 +597,7 @@ export class Game {
     this.physics.step();
 
     this.resolveImpact(vehicle);
+    this.weapon.settle?.(vehicle);
     this.buildings.step(dt);
     this.score.update(dt);
     this.keepInBounds(vehicle);

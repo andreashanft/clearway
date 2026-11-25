@@ -238,10 +238,10 @@ export class SoundDirector {
         : 0;
     this.skid.set(sliding * 0.55, vehicle.spec.type === 'dozer' ? 0.7 : 0.9 + speed * 0.2);
 
-    // The flail's chain whistles while the ball spins, higher the faster it turns.
+    // The flail's ball whistles through the air, higher the faster it flies.
     const weapon = game.weaponStatus;
-    const spinning = vehicle.spec.type === 'flail' && driving ? weapon.meter : 0;
-    this.flail.set(spinning * 0.45, 0.6 + spinning * 0.6);
+    const swing = vehicle.spec.type === 'flail' && driving ? (weapon.intensity ?? 0) : 0;
+    this.flail.set(Math.max(0, swing - 0.2) * 0.6, 0.6 + swing * 0.6);
 
     // The Hauler rumbles louder the closer it is, and its alarm sounds in the last seconds.
     const { hauler } = game;

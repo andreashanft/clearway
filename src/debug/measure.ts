@@ -5,7 +5,6 @@ import type { VehicleType } from '../game/level';
 import { clamp, wrapAngle } from '../game/math';
 import { VEHICLE_TYPES } from '../game/vehicles/specs';
 import { HAULER_WIDTH } from '../game/route';
-import { CHAIN_LENGTH } from '../game/weapons/flail';
 import { ramDamage } from '../game/world/damage';
 import { REFERENCE_STREET_END_X, REFERENCE_STREET_START_X, REFERENCE_STREET_Z } from '../game/yard';
 
@@ -304,7 +303,7 @@ export interface StreetRow {
   cleared: boolean;
   /** Building sections in the strip that still stand at the end. */
   left: number;
-  /** Boosts, rockets or seconds of flail spin that the driver model used. */
+  /** Boosts, rockets or seconds with the flail's chain out that the driver model used. */
   weaponUses: number;
   /** Number of times that the driver drove along the street. */
   passes: number;
@@ -327,8 +326,8 @@ const CLEAR_HALF_WIDTH = HAULER_WIDTH / 2 + 0.4;
  * Drives each vehicle along the reference street of the test yard and measures how long it
  * takes to clear a strip as wide as the carrier's. A simple driver model steers towards the next
  * building section in the strip and uses the weapon: the bulldozer boosts when a section is near,
- * the flail spins all the time and the car slows down near a building, and the buggy fires when
- * a section lies ahead. At the end of the street, the driver turns and drives back for the
+ * the flail car lets its chain out near a building, and the buggy fires when a section lies
+ * ahead. At the end of the street, the driver turns and drives back for the
  * sections that it missed. A turn counts `TURN_SECONDS`.
  *
  * The measurement reloads the yard before each vehicle and once more at the end.
@@ -423,11 +422,8 @@ function driveStreet(app: App, game: Game): StreetRow {
     // Steer towards the next section, kept within the street.
     const next = ahead[0];
     const distance = along(next);
-    // Swerve only as far as the vehicle's reach needs: the blade, the flail or the body.
-    const reach =
-      vehicle.spec.type === 'flail'
-        ? CHAIN_LENGTH
-        : Math.max(vehicle.spec.width, vehicle.spec.bladeWidth) / 2;
+    // Swerve only as far as the vehicle's reach needs: the blade or the body.
+    const reach = Math.max(vehicle.spec.width, vehicle.spec.bladeWidth) / 2;
     // The gap between the centre of the street and the nearest edge of the section.
     const offset = next.near > z ? next.near - z : next.far < z ? next.far - z : 0;
     const swerve = Math.sign(offset) * Math.max(0, Math.abs(offset) - reach + 1);
@@ -438,14 +434,14 @@ function driveStreet(app: App, game: Game): StreetRow {
 
     const type = vehicle.spec.type;
     const status = game.weaponStatus;
-    let throttle = 1;
+    const throttle = 1;
     let held: boolean;
     if (type === 'flail') {
-      held = true;
-      uses += STEP_SECONDS;
-      // A flail driver slows down at a building, so that the ball has time to hit it.
-      if (distance < 25 && vehicle.forwardSpeed > vehicle.spec.topSpeed * 0.45) {
-        throttle = 0;
+      // The driver lets the chain out near buildings. The ball mostly follows behind on a
+      // straight line, so the car does most of the work with its rams.
+      held = distance < 35;
+      if (held) {
+        uses += STEP_SECONDS;
       }
     } else if (type === 'dozer') {
       held = distance < 30 && status.ready;

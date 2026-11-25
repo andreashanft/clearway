@@ -1,5 +1,5 @@
 import * as THREE from 'three/webgpu';
-import { Layer, RAPIER, collisionGroups } from '../../engine/physics';
+import { GRAVITY, Layer, RAPIER, collisionGroups } from '../../engine/physics';
 import { wrapAngle } from '../math';
 import type { Vehicle } from '../vehicles/vehicle';
 import { EFFECT_COLORS } from '../world/effects';
@@ -10,8 +10,13 @@ export const START_AMMO = 6;
 export const MAX_AMMO = 12;
 /** Speed of a rocket in m/s. */
 const ROCKET_SPEED = 90;
-/** A rocket that hits nothing explodes after this distance, in metres. */
+/**
+ * A rocket burns its fuel after this distance, in metres. Then it falls to the ground and
+ * explodes where it lands.
+ */
 const ROCKET_RANGE = 240;
+/** A rocket explodes after this many seconds at the latest, wherever it is. */
+const ROCKET_LIFE = 15;
 /** Radius and damage at the centre of a rocket's explosion. */
 export const ROCKET_RADIUS = 9;
 export const ROCKET_DAMAGE = 280;
@@ -33,6 +38,9 @@ interface Rocket {
   target: THREE.Vector3 | undefined;
   travelled: number;
   trail: number;
+  age: number;
+  /** Velocity once the fuel is gone and the rocket falls. Undefined while it burns. */
+  falling: THREE.Vector3 | undefined;
 }
 
 /**
@@ -126,6 +134,8 @@ export class Rockets implements Weapon {
       target: this.aim(vehicle),
       travelled: 0,
       trail: 0,
+      age: 0,
+      falling: undefined,
     });
     this.context.effects.puff({
       position,
@@ -184,14 +194,20 @@ export class Rockets implements Weapon {
 
   /** Moves a rocket by one step. Returns true when it exploded. */
   private fly(rocket: Rocket, vehicle: Vehicle, dt: number): boolean {
-    if (rocket.target) {
+    rocket.age += dt;
+    if (rocket.falling) {
+      // Out of fuel: the rocket falls and points along its path.
+      rocket.falling.y -= GRAVITY * dt;
+      rocket.falling.multiplyScalar(Math.exp(-0.2 * dt));
+      rocket.direction.copy(rocket.falling).normalize();
+    } else if (rocket.target) {
       this.desired.subVectors(rocket.target, rocket.position);
       // A rocket that has passed its target flies on straight instead of turning back.
       if (this.desired.dot(rocket.direction) <= 0) {
         rocket.target = undefined;
       }
     }
-    if (rocket.target) {
+    if (rocket.target && !rocket.falling) {
       this.desired.normalize();
       const angle = rocket.direction.angleTo(this.desired);
       if (angle > 1e-4) {
@@ -199,7 +215,7 @@ export class Rockets implements Weapon {
         rocket.direction.lerp(this.desired, share).normalize();
       }
     }
-    const distance = ROCKET_SPEED * dt;
+    const distance = (rocket.falling ? rocket.falling.length() : ROCKET_SPEED) * dt;
     const ray = new RAPIER.Ray(rocket.position, rocket.direction);
     const hit = this.context.physics.world.castRay(
       ray,
@@ -219,7 +235,7 @@ export class Rockets implements Weapon {
     rocket.position.addScaledVector(rocket.direction, distance);
     rocket.travelled += distance;
     rocket.trail += dt;
-    if (rocket.trail >= 0.03) {
+    if (!rocket.falling && rocket.trail >= 0.03) {
       rocket.trail = 0;
       this.context.effects.puff({
         position: rocket.position.clone().addScaledVector(rocket.direction, -0.8),
@@ -231,9 +247,23 @@ export class Rockets implements Weapon {
       });
     }
     const ground = this.context.groundAt(rocket.position.x, rocket.position.z, rocket.position.y);
-    if (rocket.travelled >= ROCKET_RANGE || rocket.position.y < ground) {
+    if (rocket.position.y < ground || rocket.age >= ROCKET_LIFE) {
+      rocket.position.y = Math.max(rocket.position.y, ground);
       this.context.explode(rocket.position.clone(), ROCKET_RADIUS, ROCKET_DAMAGE, 'rocket');
       return true;
+    }
+    if (!rocket.falling && rocket.travelled >= ROCKET_RANGE) {
+      // The fuel is gone: the flame goes out, and the rocket keeps its speed as it starts to fall.
+      rocket.falling = rocket.direction.clone().multiplyScalar(ROCKET_SPEED);
+      rocket.mesh.children[2].visible = false;
+      this.context.effects.puff({
+        position: rocket.position.clone(),
+        velocity: this.puffVelocity.set(0, 0.5, 0),
+        color: EFFECT_COLORS.smoke,
+        size: 0.9,
+        life: 0.8,
+        drag: 2,
+      });
     }
     return false;
   }

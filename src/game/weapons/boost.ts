@@ -7,10 +7,13 @@ import type { Weapon, WeaponContext, WeaponStatus } from './weapon';
 export const BOOST_SECONDS = 2;
 /** Seconds after the end of a boost before the next one. */
 export const BOOST_COOLDOWN = 4;
+/** Speed in m/s that a boost adds at once, so that it launches the bulldozer from standstill. */
+const BOOST_KICK = 6;
 
 /**
- * The bulldozer's boost: a press of the action button raises the top speed and the acceleration
- * for a moment. A faster ram deals more damage, so the boost also hits harder.
+ * The bulldozer's boost: a press of the action button launches the bulldozer forwards and raises
+ * its top speed and acceleration for a moment. The boost drives at full throttle, also from
+ * standstill. A faster ram deals more damage, so the boost also hits harder.
  */
 export class Boost implements Weapon {
   readonly object = new THREE.Group();
@@ -37,6 +40,7 @@ export class Boost implements Weapon {
     }
     if (pressed && this.left === 0 && this.cooldown === 0) {
       this.left = BOOST_SECONDS;
+      vehicle.push(BOOST_KICK);
       this.context.events.emit('weaponFired', {
         weapon: 'boost',
         position: vehicle.position.clone(),

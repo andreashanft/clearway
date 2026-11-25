@@ -21,6 +21,7 @@ function fakeVehicle(): Vehicle {
     heading: 0,
     spec: VEHICLE_SPECS.dozer,
     boosting: false,
+    push: () => undefined,
   } as unknown as Vehicle;
 }
 

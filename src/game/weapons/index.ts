@@ -1,4 +1,5 @@
 import type { VehicleType } from '../level';
+import type { Vehicle } from '../vehicles/vehicle';
 import { Boost } from './boost';
 import { Flail } from './flail';
 import { Rockets } from './rockets';
@@ -9,14 +10,20 @@ export type { Weapon, WeaponContext, WeaponStatus } from './weapon';
 /**
  * Creates the weapon of a vehicle type: the boost, the flail or the rocket launcher.
  *
+ * @param vehicle The vehicle that carries the weapon.
  * @param rockets Rockets in the launcher, so that a change of vehicle keeps them.
  */
-export function createWeapon(type: VehicleType, context: WeaponContext, rockets?: number): Weapon {
+export function createWeapon(
+  type: VehicleType,
+  context: WeaponContext,
+  vehicle: Vehicle,
+  rockets?: number,
+): Weapon {
   switch (type) {
     case 'dozer':
       return new Boost(context);
     case 'flail':
-      return new Flail(context);
+      return new Flail(context, vehicle);
     case 'buggy':
       return new Rockets(context, rockets);
   }

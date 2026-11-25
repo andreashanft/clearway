@@ -226,7 +226,10 @@ export class Vehicle {
       this.slide = nextSlide(spec, this.slide, forward, 0, NO_COMMAND, dt);
     } else if (this.grounded || supported) {
       const travelBefore = Math.atan2(sideways, forward);
-      forward = driveSpeed(this.boosting ? boosted(spec) : spec, forward, command, dt, sideways);
+      // A boost drives the vehicle forwards at full throttle, also from standstill.
+      const engine = this.boosting ? boosted(spec) : spec;
+      const pedals = this.boosting ? { ...command, throttle: 1 } : command;
+      forward = driveSpeed(engine, forward, pedals, dt, sideways);
       if (this.grounded) {
         forward -= SLOPE_GRAVITY * Math.sin(slopePitch) * dt;
         // A bank that is too steep stops the vehicle like a wall.
@@ -317,6 +320,22 @@ export class Vehicle {
   /** Sets the velocity of the body directly, for example to carry speed through a wall. */
   setVelocity(x: number, y: number, z: number): void {
     this.body.setLinvel({ x, y, z }, true);
+  }
+
+  /**
+   * Adds speed along the heading at once, for example at the start of a boost. The next step
+   * takes it from the body.
+   */
+  push(speed: number): void {
+    const velocity = this.body.linvel();
+    this.body.setLinvel(
+      {
+        x: velocity.x + Math.cos(this.heading) * speed,
+        y: velocity.y,
+        z: velocity.z + Math.sin(this.heading) * speed,
+      },
+      true,
+    );
   }
 
   /** Shows the model at a recorded pose, for the replay. It does not move the body. */
