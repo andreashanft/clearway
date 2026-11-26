@@ -3,24 +3,31 @@ import type { Vehicle } from '../vehicles/vehicle';
 import { EFFECT_COLORS } from '../world/effects';
 import type { Weapon, WeaponContext, WeaponStatus } from './weapon';
 
-/** Seconds that a boost lasts. */
+/** Seconds that a full tank of boost lasts while the action button is held. */
 export const BOOST_SECONDS = 2;
-/** Seconds after the end of a boost before the next one. */
-export const BOOST_COOLDOWN = 4;
-/** Speed in m/s that a boost adds at once, so that it launches the bulldozer from standstill. */
+/** Seconds that an empty tank takes to fill up again while the button is up. */
+export const BOOST_RECHARGE_SECONDS = 4;
+/** The boost starts only with at least this share of the tank, so that it does not flicker. */
+const MIN_START_SHARE = 0.08;
+/** Speed in m/s that the start of a boost adds at once, so that it launches from standstill. */
 const BOOST_KICK = 6;
+/** Seconds between two such launches, so that tapping the button does not stack them. */
+const KICK_INTERVAL = 1;
 
 /**
- * The bulldozer's boost: a press of the action button launches the bulldozer forwards and raises
- * its top speed and acceleration for a moment. The boost drives at full throttle, also from
- * standstill. A faster ram deals more damage, so the boost also hits harder.
+ * The bulldozer's boost. While the action button is held, the boost raises the top speed and the
+ * acceleration and drives at full throttle, also from standstill. It burns a tank that lasts
+ * `BOOST_SECONDS`. While the button is up, the tank fills up again, and a boost can start again
+ * before it is full. A faster ram deals more damage, so the boost also hits harder.
  */
 export class Boost implements Weapon {
   readonly object = new THREE.Group();
-  /** Seconds left of the running boost. */
-  private left = 0;
-  /** Seconds before the next boost. */
-  private cooldown = 0;
+  /** Share of the boost tank that is left, from 0 to 1. */
+  private tank = 1;
+  /** Seconds since the last launch. */
+  private sinceKick = Infinity;
+  /** True while the boost burns. */
+  private burning = false;
   private readonly position = new THREE.Vector3();
   private readonly velocity = new THREE.Vector3();
 
@@ -28,26 +35,30 @@ export class Boost implements Weapon {
     this.object.name = 'boost';
   }
 
-  step(dt: number, vehicle: Vehicle, _held: boolean, pressed: boolean): void {
-    // A remainder below a microsecond counts as zero, so that sums of steps end on time.
-    if (this.left > 0) {
-      this.left = this.left - dt > 1e-6 ? this.left - dt : 0;
-      if (this.left === 0) {
-        this.cooldown = BOOST_COOLDOWN;
-      }
-    } else {
-      this.cooldown = this.cooldown - dt > 1e-6 ? this.cooldown - dt : 0;
+  step(dt: number, vehicle: Vehicle, held: boolean): void {
+    this.sinceKick += dt;
+    const starting = held && !this.burning && this.tank >= MIN_START_SHARE;
+    const boosting = held && this.tank > 0 && (this.burning || starting);
+    if (boosting) {
+      // A remainder below a microsecond counts as empty, so that sums of steps end on time.
+      const left = this.tank - dt / BOOST_SECONDS;
+      this.tank = left > 1e-6 ? left : 0;
+    } else if (!held) {
+      this.tank = Math.min(1, this.tank + dt / BOOST_RECHARGE_SECONDS);
     }
-    if (pressed && this.left === 0 && this.cooldown === 0) {
-      this.left = BOOST_SECONDS;
-      vehicle.push(BOOST_KICK);
+    if (starting) {
+      if (this.sinceKick >= KICK_INTERVAL) {
+        vehicle.push(BOOST_KICK);
+        this.sinceKick = 0;
+      }
       this.context.events.emit('weaponFired', {
         weapon: 'boost',
         position: vehicle.position.clone(),
       });
     }
-    vehicle.boosting = this.left > 0;
-    if (vehicle.boosting) {
+    this.burning = boosting;
+    vehicle.boosting = boosting;
+    if (boosting) {
       this.exhaust(vehicle);
     }
   }
@@ -79,21 +90,12 @@ export class Boost implements Weapon {
   sync(): void {}
 
   status(): WeaponStatus {
-    if (this.left > 0) {
-      return {
-        label: 'BOOST',
-        meter: this.left / BOOST_SECONDS,
-        value: 'GO',
-        ready: false,
-        active: true,
-      };
-    }
     return {
       label: 'BOOST',
-      meter: 1 - this.cooldown / BOOST_COOLDOWN,
-      value: this.cooldown > 0 ? `${this.cooldown.toFixed(1)} S` : 'READY',
-      ready: this.cooldown === 0,
-      active: false,
+      meter: this.tank,
+      value: this.tank >= 1 ? 'READY' : `${Math.floor(this.tank * 100)} %`,
+      ready: this.tank >= MIN_START_SHARE,
+      active: this.burning,
     };
   }
 

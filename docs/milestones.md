@@ -14,7 +14,7 @@ Each vehicle gets its own way to destroy buildings on one action button: Space o
 
 **Works**
 
-- The bulldozer boosts on a press: it gains 6 m/s at once, and for 2 seconds it drives at full throttle with 60 % more top speed and 150 % more acceleration, also from standstill. The next boost is ready 4 seconds later. Flames burst from the exhaust stacks. A faster ram hits harder, by the usual square of the speed.
+- The bulldozer boosts while the button is held: it drives at full throttle with 60 % more top speed and 150 % more acceleration, also from standstill, and the start of a boost adds 6 m/s at once, at most once a second. The boost burns a tank that lasts 2 seconds. While the button is up, the tank fills up in 4 seconds, and a boost can start again with any part of it from 8 % up. From standstill, half a second of boost reaches 94 km/h. Flames burst from the exhaust stacks. A faster ram hits harder, by the usual square of the speed.
 - The bulldozer's spiked blade deals 50 % more damage with a forward ram. It is 7 m wide, wider than the tracks, and it breaks every section in an 8 m strip in front of the bulldozer before the physics step, so the bulldozer clears a lane as wide as the carrier's in one pass.
 - The flail car carries a spiked ball on a winch at its back. While the button is up, the ball sits on the car. While the button is held, the chain pays out to 7 m in a quarter of a second, and the ball becomes a physics body of 1,200 kg that swings out in turns and whips round in a slide. The ball does not turn, so it slides over the ground instead of rolling, and the chain always holds the same point of it. The tight chain pulls the car with 45 % of its impulse: after a turn with the chain out, the car swings 57° in the next second, against 14° with the ball docked, and it slows from 100 to 89 km/h in a full turn. When the button is up, the chain winds in within a third of a second and the ball docks again. The **Flail** panel of the debug overlay changes the ball's mass, the speeds of the chain and the share of the pull on the car while the game runs. A hit deals 150 damage at 16 m/s along the contact, by the square of the speed and at most 1.6 times that. A hit that breaks a section lets the ball fly on, and a wall that holds throws it back. A section takes one hit per 0.3 seconds. The ball pushes cones and crates and bounces off its own car.
 - The buggy fires a rocket on a press, at most one per 0.3 seconds. A rocket flies at 90 m/s and explodes on the first thing it hits. After 240 m its fuel is gone: the flame goes out, and the rocket falls in an arc and explodes where it lands. The explosion deals 280 damage at its centre within a radius of 9 m, and it does not freeze the game. The aim assist bends a rocket towards the standing column closest to the line of fire, within 18° and 170 m. The buggy starts with 6 rockets and carries at most 12. Two pods of tubes on the roll cage hold them.
@@ -29,7 +29,7 @@ Each vehicle gets its own way to destroy buildings on one action button: Space o
 
 | Vehicle   | Seconds to clear | Passes | Weapon use                 |
 | --------- | ---------------- | ------ | -------------------------- |
-| Bulldozer | 21.6             | 1      | 3 boosts                   |
+| Bulldozer | 21.0             | 1      | 3 boosts                   |
 | Flail car | 30.5             | 2      | 7.2 seconds with chain out |
 | Buggy     | 10.3             | 1      | 10 rockets                 |
 
@@ -64,7 +64,7 @@ An independent review of the change found these defects, and the build fixes the
 
 1. Open the game with `?yard` appended. Choose a vehicle with the keys 1, 2 and 3, or in the bar at the top.
 2. Drive to the reference street along the north edge, and clear it with each vehicle.
-3. With the bulldozer, press Space for a boost before a building, also from standstill.
+3. With the bulldozer, hold Space for a boost before a building, also from standstill, and let go to save the rest of the tank.
 4. With the flail car, hold Space to let the chain out, and swing the ball into the houses beside the street with turns and slides.
 5. With the buggy, fire at the tower, and collect the crate between the sheds and the block.
 6. Optional: open the address with `?yard&debug` appended, and select **Measure street**.
