@@ -338,6 +338,28 @@ export class Vehicle {
     );
   }
 
+  /**
+   * Applies an impulse at a point, for example the pull of a chain at the hitch. It changes the
+   * velocity and, by its lever around the middle, the turn rate. The next step takes both on.
+   *
+   * @param impulse Impulse in newton seconds. Only the part on the ground plane counts.
+   */
+  applyImpulse(impulse: THREE.Vector3, point: THREE.Vector3): void {
+    const { mass, length, width } = this.spec;
+    const velocity = this.body.linvel();
+    this.body.setLinvel(
+      { x: velocity.x + impulse.x / mass, y: velocity.y, z: velocity.z + impulse.z / mass },
+      true,
+    );
+    // The turn around the vertical axis: the moment of the impulse over the moment of inertia of
+    // a box. A positive turn rate turns clockwise from above, against the axis.
+    const rx = point.x - this.currentPosition.x;
+    const rz = point.z - this.currentPosition.z;
+    const moment = rz * impulse.x - rx * impulse.z;
+    const inertia = (mass * (length ** 2 + width ** 2)) / 12;
+    this.yawRate -= moment / inertia;
+  }
+
   /** Shows the model at a recorded pose, for the replay. It does not move the body. */
   showAt(position: THREE.Vector3, heading: number): void {
     this.object.position.copy(position);

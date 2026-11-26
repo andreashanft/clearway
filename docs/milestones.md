@@ -10,13 +10,13 @@ To test on a phone, start the development server with `npm run dev -- --host` an
 
 ### Milestone 3: weapons
 
-Each vehicle gets its own way to destroy buildings on one action button: Space on a keyboard, A on a gamepad and **ACTION** on touch. The user chose rockets that come from crates and from large buildings. After the first playtest, the flail hangs on a chain behind the car, and the button lets the chain out.
+Each vehicle gets its own way to destroy buildings on one action button: Space on a keyboard, A on a gamepad and **ACTION** on touch. The user chose rockets that come from crates and from large buildings. After two playtests, the flail ball sits on the back of the car, and the button lets it out on a chain.
 
 **Works**
 
 - The bulldozer boosts on a press: it gains 6 m/s at once, and for 2 seconds it drives at full throttle with 60 % more top speed and 150 % more acceleration, also from standstill. The next boost is ready 4 seconds later. Flames burst from the exhaust stacks. A faster ram hits harder, by the usual square of the speed.
 - The bulldozer's spiked blade deals 50 % more damage with a forward ram. It is 7 m wide, wider than the tracks, and it breaks every section in an 8 m strip in front of the bulldozer before the physics step, so the bulldozer clears a lane as wide as the carrier's in one pass.
-- The flail car drags a spiked ball on a chain from a winch at its back. The ball is a physics body: it rolls behind the car, swings out in turns and whips round in a slide. The chain is 3.5 m long. While the button is held, it pays out to 10 m at 14 m/s, and when the button is up, it winds in at 9 m/s. A hit deals 150 damage at 16 m/s along the contact, by the square of the speed and at most 1.6 times that. A hit that breaks a section lets the ball fly on, and a wall that holds throws it back. A section takes one hit per 0.3 seconds. The ball pushes cones and crates and bounces off its own car.
+- The flail car carries a spiked ball on a winch at its back. While the button is up, the ball sits on the car. While the button is held, the chain pays out to 7 m at 12 m/s, and the ball becomes a physics body of 600 kg that swings out in turns and whips round in a slide. The ball does not turn, so it slides over the ground instead of rolling, and the chain always holds the same point of it. The tight chain pulls the car with 45 % of its impulse: after a turn with the chain out, the car swings 20° further than with the ball docked, and it slows from 100 to 87 km/h in a full turn. When the button is up, the chain winds in at 9 m/s and the ball docks again. A hit deals 150 damage at 16 m/s along the contact, by the square of the speed and at most 1.6 times that. A hit that breaks a section lets the ball fly on, and a wall that holds throws it back. A section takes one hit per 0.3 seconds. The ball pushes cones and crates and bounces off its own car.
 - The buggy fires a rocket on a press, at most one per 0.3 seconds. A rocket flies at 90 m/s and explodes on the first thing it hits. After 240 m its fuel is gone: the flame goes out, and the rocket falls in an arc and explodes where it lands. The explosion deals 280 damage at its centre within a radius of 9 m, and it does not freeze the game. The aim assist bends a rocket towards the standing column closest to the line of fire, within 18° and 170 m. The buggy starts with 6 rockets and carries at most 12. Two pods of tubes on the roll cage hold them.
 - Ammunition crates give 4 rockets each. They show and work only while the buggy is the active vehicle. A crate at a fixed place comes back after 25 seconds. A break of at least 1,000 m³ drops a crate with a chance of its volume divided by 20,000, at most 35 %. At most 4 dropped crates lie around at once, and each disappears after 25 seconds.
 - The HUD card shows the weapon with a meter: the boost and its cooldown, the spin of the flail, or the rockets left. On touch, the **ACTION** button above **BRAKE** shows the same with a ring.
@@ -30,7 +30,7 @@ Each vehicle gets its own way to destroy buildings on one action button: Space o
 | Vehicle   | Seconds to clear | Passes | Weapon use                 |
 | --------- | ---------------- | ------ | -------------------------- |
 | Bulldozer | 21.6             | 1      | 3 boosts                   |
-| Flail car | 30.3             | 2      | 7.2 seconds with chain out |
+| Flail car | 30.5             | 2      | 7.2 seconds with chain out |
 | Buggy     | 10.3             | 1      | 10 rockets                 |
 
 The planned range for the street is 10 to 25 seconds. The bulldozer is slower than the buggy, because its top speed of 62 km/h stays as the user approved it in milestone 1. Its blade and its boost make up for part of that. The buggy is the fastest while it has rockets, and it used 10 of them on this short street, including one crate.

@@ -6,16 +6,21 @@ import type { PieceRef } from '../world/buildings';
 import { EFFECT_COLORS } from '../world/effects';
 import type { Weapon, WeaponContext, WeaponStatus } from './weapon';
 
-/** Length of the chain while the action button is up, in metres. */
-export const SHORT_CHAIN = 3.5;
-/** Length of the chain while the action button is held, in metres. */
-export const LONG_CHAIN = 10;
-/** How fast the chain pays out and winds in, in metres per second. */
-const EXTEND_RATE = 14;
-const RETRACT_RATE = 9;
 /** Radius and mass of the spiked ball. */
 const BALL_RADIUS = 0.9;
 const BALL_MASS = 600;
+/** Distance from the hitch to the middle of the ball while the ball sits on the car, in metres. */
+export const DOCKED_CHAIN = BALL_RADIUS + 0.15;
+/** Length of the chain while the action button is held, in metres. */
+export const LONG_CHAIN = 7;
+/** How fast the chain pays out and winds in, in metres per second. */
+const EXTEND_RATE = 12;
+const RETRACT_RATE = 9;
+/**
+ * Share of the chain's pull that reaches the car. Below 1, the car keeps more of its own line, so
+ * that the swinging ball tugs the car without throwing it around.
+ */
+const TUG_SHARE = 0.45;
 /** The hitch sits this far behind the middle of the car, and this high above the ground. */
 const HITCH_BACK = 2.9;
 const HITCH_HEIGHT = 1.1;
@@ -36,14 +41,19 @@ const ROPE_BOUNCE = 0.15;
 const LINKS = 14;
 
 /**
- * The flail car's morning star: a spiked ball on a chain behind the car. The ball is a physics
- * body. It rolls behind the car on a short chain, swings out in turns and whips round in a slide.
- * While the action button is held, the chain pays out and the ball swings wide. When it is
- * released, the chain winds in again. The ball breaks the buildings that it hits hard enough.
+ * The flail car's morning star: a spiked ball on a chain from a winch at the back of the car.
+ *
+ * The ball sits on the car while the action button is up. While the button is held, the chain
+ * pays out and the ball becomes a physics body that swings out in turns and whips round in a
+ * slide. The chain pulls the car too, so the ball's mass and momentum tug at the car. When the
+ * button is released, the chain winds in and the ball docks again. The ball breaks the buildings
+ * that it hits hard enough.
  */
 export class Flail implements Weapon {
   readonly object = new THREE.Group();
-  private length = SHORT_CHAIN;
+  private length = DOCKED_CHAIN;
+  /** True while the ball sits on the car. */
+  private docked = true;
   private readonly body: RAPIER.RigidBody;
   private readonly collider: RAPIER.Collider;
   private readonly cooldowns = new Map<string, number>();
@@ -53,8 +63,6 @@ export class Flail implements Weapon {
   private readonly materials: THREE.Material[] = [];
   private readonly previous = new THREE.Vector3();
   private readonly current = new THREE.Vector3();
-  private readonly previousRotation = new THREE.Quaternion();
-  private readonly currentRotation = new THREE.Quaternion();
   /** Velocity of the ball before the physics step, to judge the speed of a hit. */
   private readonly velocity = new THREE.Vector3();
   private readonly hitch = new THREE.Vector3();
@@ -64,6 +72,7 @@ export class Flail implements Weapon {
   private readonly rotation = new THREE.Quaternion();
   private readonly scale = new THREE.Vector3(1, 1, 1);
   private readonly zAxis = new THREE.Vector3(0, 0, 1);
+  private readonly yAxis = new THREE.Vector3(0, 1, 0);
 
   constructor(
     private readonly context: WeaponContext,
@@ -107,23 +116,21 @@ export class Flail implements Weapon {
     this.links.frustumCulled = false;
     this.object.add(this.links);
 
-    // The ball starts on the ground behind the car, at the end of the short chain.
-    this.placeHitch(vehicle, vehicle.position, vehicle.heading, this.hitch);
-    const back = new THREE.Vector3(-Math.cos(vehicle.heading), 0, -Math.sin(vehicle.heading));
-    const start = this.hitch.clone().addScaledVector(back, SHORT_CHAIN - 0.5);
-    start.y = context.groundAt(start.x, start.z, start.y + 2) + BALL_RADIUS;
+    // The ball starts on the car. It does not turn, so it slides instead of rolling like a wheel,
+    // and the chain stays fixed to the same point of the ball.
+    const start = this.dockPoint(vehicle, vehicle.position, vehicle.heading, new THREE.Vector3());
     this.body = context.physics.world.createRigidBody(
       RAPIER.RigidBodyDesc.dynamic()
         .setTranslation(start.x, start.y, start.z)
         .setLinearDamping(0.15)
-        .setAngularDamping(0.8)
+        .lockRotations()
         .setCcdEnabled(true),
     );
     // A prop, so that it hits buildings, cones, crates and its own car, which it bounces off.
     this.collider = context.physics.world.createCollider(
       RAPIER.ColliderDesc.ball(BALL_RADIUS)
         .setMass(BALL_MASS)
-        .setFriction(0.5)
+        .setFriction(0.35)
         .setRestitution(0.3)
         .setCollisionGroups(
           collisionGroups(
@@ -138,7 +145,10 @@ export class Flail implements Weapon {
   }
 
   step(dt: number, _vehicle: Vehicle, held: boolean): void {
-    const target = held ? LONG_CHAIN : SHORT_CHAIN;
+    if (held) {
+      this.docked = false;
+    }
+    const target = held ? LONG_CHAIN : DOCKED_CHAIN;
     const rate = held ? EXTEND_RATE : RETRACT_RATE;
     const gap = target - this.length;
     this.length += Math.sign(gap) * Math.min(rate * dt, Math.abs(gap));
@@ -152,7 +162,9 @@ export class Flail implements Weapon {
     }
     const linvel = this.body.linvel();
     this.velocity.set(linvel.x, linvel.y, linvel.z);
-    this.breakAhead();
+    if (!this.docked) {
+      this.breakAhead();
+    }
   }
 
   /**
@@ -226,6 +238,15 @@ export class Flail implements Weapon {
    * physics step, once the car has moved.
    */
   settle(vehicle: Vehicle): void {
+    if (this.docked) {
+      // The ball rides on the car.
+      const dock = this.dockPoint(vehicle, vehicle.position, vehicle.heading, this.hitch);
+      this.body.setTranslation(dock, true);
+      this.body.setLinvel(vehicle.impactVelocity, true);
+      this.velocity.copy(vehicle.impactVelocity);
+      this.record();
+      return;
+    }
     const world = this.context.physics.world;
     // The walls that the ball touches held its hit, or they would be gone already.
     const hits: { ref: PieceRef; speed: number }[] = [];
@@ -274,21 +295,45 @@ export class Flail implements Weapon {
         },
         true,
       );
-      // Take away the speed away from the hitch, relative to the moving car.
-      const car = vehicle.impactVelocity;
+      // The tight chain stops the ball moving away from the hitch, relative to the car, and pulls
+      // the car towards the ball by the same impulse: the ball's momentum tugs at the car.
+      const car = vehicle.body.linvel();
       const outward = (linvel.x - car.x) * nx + (linvel.y - car.y) * ny + (linvel.z - car.z) * nz;
       if (outward > 0) {
-        const cut = outward * (1 + ROPE_BOUNCE);
+        const impulse = (outward * (1 + ROPE_BOUNCE)) / (1 / BALL_MASS + 1 / vehicle.spec.mass);
+        const cut = impulse / BALL_MASS;
         this.body.setLinvel(
           { x: linvel.x - nx * cut, y: linvel.y - ny * cut, z: linvel.z - nz * cut },
           true,
         );
+        const pull = impulse * TUG_SHARE;
+        vehicle.applyImpulse(new THREE.Vector3(nx * pull, 0, nz * pull), this.hitch);
       }
     }
+    // Wound in: the ball docks on the car again.
+    if (this.length <= DOCKED_CHAIN + 0.01 && distance <= DOCKED_CHAIN + 0.6) {
+      this.docked = true;
+    }
+    this.record();
+  }
+
+  /** Records the ball's transform after the step, for interpolation. */
+  private record(): void {
     this.previous.copy(this.current);
     this.current.copy(this.body.translation());
-    this.previousRotation.copy(this.currentRotation);
-    this.currentRotation.copy(this.body.rotation());
+  }
+
+  /** Writes the point where the docked ball sits, just behind the winch. */
+  private dockPoint(
+    vehicle: Vehicle,
+    center: THREE.Vector3,
+    heading: number,
+    target: THREE.Vector3,
+  ): THREE.Vector3 {
+    this.placeHitch(vehicle, center, heading, target);
+    target.x -= Math.cos(heading) * DOCKED_CHAIN;
+    target.z -= Math.sin(heading) * DOCKED_CHAIN;
+    return target;
   }
 
   /** Writes the hitch point at the back of the car. */
@@ -306,14 +351,20 @@ export class Flail implements Weapon {
   }
 
   sync(alpha: number, vehicle: Vehicle): void {
-    this.ball.position.lerpVectors(this.previous, this.current, alpha);
-    this.ball.quaternion.slerpQuaternions(this.previousRotation, this.currentRotation, alpha);
-    const hitch = this.placeHitch(
-      vehicle,
-      vehicle.object.position,
-      -vehicle.object.rotation.y,
-      this.hitch,
-    );
+    const center = vehicle.object.position;
+    const heading = -vehicle.object.rotation.y;
+    if (this.docked) {
+      // Follow the drawn car exactly, so that the docked ball does not lag behind it.
+      this.dockPoint(vehicle, center, heading, this.ball.position);
+    } else {
+      this.ball.position.lerpVectors(this.previous, this.current, alpha);
+    }
+    const hitch = this.placeHitch(vehicle, center, heading, this.hitch);
+    // The chain holds the same point of the ball, so the ball faces the hitch.
+    this.ahead.subVectors(hitch, this.ball.position);
+    if (this.ahead.lengthSq() > 1e-6) {
+      this.ball.quaternion.setFromUnitVectors(this.yAxis, this.ahead.normalize());
+    }
     // A slack chain sags towards the ground.
     const span = hitch.distanceTo(this.ball.position);
     const sag = Math.sqrt(Math.max(0, this.length ** 2 - span ** 2)) * 0.5;
@@ -332,11 +383,11 @@ export class Flail implements Weapon {
   }
 
   status(): WeaponStatus {
-    const extension = (this.length - SHORT_CHAIN) / (LONG_CHAIN - SHORT_CHAIN);
+    const extension = (this.length - DOCKED_CHAIN) / (LONG_CHAIN - DOCKED_CHAIN);
     return {
       label: 'FLAIL',
       meter: extension,
-      value: extension > 0.98 ? 'LONG' : extension > 0.02 ? 'OUT' : 'SHORT',
+      value: this.docked ? 'READY' : extension > 0.98 ? 'LONG' : 'OUT',
       ready: true,
       active: extension > 0.5,
       intensity: Math.min(1, this.velocity.length() / LOUD_SPEED),
