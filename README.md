@@ -86,10 +86,11 @@ Each break scores points by the volume that fell. Breaks in quick succession rai
 
 The bar at the top of the yard switches the vehicle and the camera view, resets the yard and counts the cones that you knocked over. On a keyboard, the keys 1, 2 and 3 choose the vehicle and Backspace resets the yard.
 
-With `?debug` in the address, the debug overlay adds two panels:
+With `?debug` in the address, the debug overlay adds three panels:
 
 - **Handling** changes the tuning of the current vehicle while the game runs, for example the top speed, the turning circle, the grip and the slide. **Copy values** puts the values on the clipboard.
 - **Chase camera** changes the distance, the pitch and the field of view of the chase view.
+- **Flail** changes the mass of the flail car's ball, how fast its chain pays out and winds in, and how strongly the chain pulls the car.
 
 A reload of the page restores the built-in values. `src/game/vehicles/specs.ts` holds them.
 

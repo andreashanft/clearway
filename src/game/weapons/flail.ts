@@ -8,19 +8,26 @@ import type { Weapon, WeaponContext, WeaponStatus } from './weapon';
 
 /** Radius and mass of the spiked ball. */
 const BALL_RADIUS = 0.9;
-const BALL_MASS = 600;
 /** Distance from the hitch to the middle of the ball while the ball sits on the car, in metres. */
 export const DOCKED_CHAIN = BALL_RADIUS + 0.15;
 /** Length of the chain while the action button is held, in metres. */
 export const LONG_CHAIN = 7;
-/** How fast the chain pays out and winds in, in metres per second. */
-const EXTEND_RATE = 12;
-const RETRACT_RATE = 9;
 /**
- * Share of the chain's pull that reaches the car. Below 1, the car keeps more of its own line, so
- * that the swinging ball tugs the car without throwing it around.
+ * The tuning of the flail. The debug panel changes these values while the game runs, so the
+ * object is not frozen.
  */
-const TUG_SHARE = 0.45;
+export const FLAIL_TUNING = {
+  /** Mass of the ball in kilograms. */
+  ballMass: 1200,
+  /** How fast the chain pays out and winds in, in metres per second. */
+  extendRate: 24,
+  retractRate: 18,
+  /**
+   * Share of the chain's pull that reaches the car. Below 1, the car keeps more of its own line,
+   * so that the swinging ball tugs the car without throwing it around.
+   */
+  tugShare: 0.45,
+};
 /** The hitch sits this far behind the middle of the car, and this high above the ground. */
 const HITCH_BACK = 2.9;
 const HITCH_HEIGHT = 1.1;
@@ -54,6 +61,8 @@ export class Flail implements Weapon {
   private length = DOCKED_CHAIN;
   /** True while the ball sits on the car. */
   private docked = true;
+  /** The ball's mass that the collider has, in kilograms. */
+  private mass = FLAIL_TUNING.ballMass;
   private readonly body: RAPIER.RigidBody;
   private readonly collider: RAPIER.Collider;
   private readonly cooldowns = new Map<string, number>();
@@ -129,7 +138,7 @@ export class Flail implements Weapon {
     // A prop, so that it hits buildings, cones, crates and its own car, which it bounces off.
     this.collider = context.physics.world.createCollider(
       RAPIER.ColliderDesc.ball(BALL_RADIUS)
-        .setMass(BALL_MASS)
+        .setMass(FLAIL_TUNING.ballMass)
         .setFriction(0.35)
         .setRestitution(0.3)
         .setCollisionGroups(
@@ -148,8 +157,13 @@ export class Flail implements Weapon {
     if (held) {
       this.docked = false;
     }
+    // The debug panel can change the mass while the ball is in play.
+    if (this.mass !== FLAIL_TUNING.ballMass) {
+      this.mass = FLAIL_TUNING.ballMass;
+      this.collider.setMass(this.mass);
+    }
     const target = held ? LONG_CHAIN : DOCKED_CHAIN;
-    const rate = held ? EXTEND_RATE : RETRACT_RATE;
+    const rate = held ? FLAIL_TUNING.extendRate : FLAIL_TUNING.retractRate;
     const gap = target - this.length;
     this.length += Math.sign(gap) * Math.min(rate * dt, Math.abs(gap));
 
@@ -300,13 +314,14 @@ export class Flail implements Weapon {
       const car = vehicle.body.linvel();
       const outward = (linvel.x - car.x) * nx + (linvel.y - car.y) * ny + (linvel.z - car.z) * nz;
       if (outward > 0) {
-        const impulse = (outward * (1 + ROPE_BOUNCE)) / (1 / BALL_MASS + 1 / vehicle.spec.mass);
-        const cut = impulse / BALL_MASS;
+        const mass = FLAIL_TUNING.ballMass;
+        const impulse = (outward * (1 + ROPE_BOUNCE)) / (1 / mass + 1 / vehicle.spec.mass);
+        const cut = impulse / mass;
         this.body.setLinvel(
           { x: linvel.x - nx * cut, y: linvel.y - ny * cut, z: linvel.z - nz * cut },
           true,
         );
-        const pull = impulse * TUG_SHARE;
+        const pull = impulse * FLAIL_TUNING.tugShare;
         vehicle.applyImpulse(new THREE.Vector3(nx * pull, 0, nz * pull), this.hitch);
       }
     }

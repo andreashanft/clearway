@@ -8,6 +8,7 @@ import { DEG } from '../game/math';
 import { routePoint } from '../game/route';
 import { formatTime } from '../game/scoring';
 import type { VehicleSpec } from '../game/vehicles/specs';
+import { FLAIL_TUNING } from '../game/weapons/flail';
 import {
   measureHandling,
   measureRams,
@@ -165,6 +166,7 @@ export function installDebugTools(app: App): void {
 
   const handling = overlay.addPanel('Handling');
   addCameraPanel(overlay.addPanel('Chase camera'));
+  addFlailPanel(overlay.addPanel('Flail'));
 
   const apply = (game: Game): void => {
     game.invincibleHauler = switches.invincible;
@@ -328,4 +330,36 @@ function createRouteLine(game: Game): THREE.Object3D | undefined {
     group.add(mesh);
   }
   return group;
+}
+
+/** Sliders for the flail car's ball and chain. They apply at once, also to a ball in play. */
+function addFlailPanel(panel: DebugControls): void {
+  panel.addSlider(
+    'Ball mass kg',
+    { min: 200, max: 4000, step: 100, value: FLAIL_TUNING.ballMass },
+    (value) => {
+      FLAIL_TUNING.ballMass = value;
+    },
+  );
+  panel.addSlider(
+    'Extend m/s',
+    { min: 4, max: 60, step: 1, value: FLAIL_TUNING.extendRate },
+    (value) => {
+      FLAIL_TUNING.extendRate = value;
+    },
+  );
+  panel.addSlider(
+    'Retract m/s',
+    { min: 4, max: 60, step: 1, value: FLAIL_TUNING.retractRate },
+    (value) => {
+      FLAIL_TUNING.retractRate = value;
+    },
+  );
+  panel.addSlider(
+    'Pull on car',
+    { min: 0, max: 1, step: 0.05, value: FLAIL_TUNING.tugShare },
+    (value) => {
+      FLAIL_TUNING.tugShare = value;
+    },
+  );
 }
