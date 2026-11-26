@@ -362,4 +362,25 @@ function addFlailPanel(panel: DebugControls): void {
       FLAIL_TUNING.tugShare = value;
     },
   );
+  panel.addSlider(
+    'Launch swing ×',
+    { min: 0, max: 4, step: 0.1, value: FLAIL_TUNING.launchGain },
+    (value) => {
+      FLAIL_TUNING.launchGain = value;
+    },
+  );
+  panel.addSlider(
+    'Launch kick m/s',
+    { min: 0, max: 25, step: 1, value: FLAIL_TUNING.launchKick },
+    (value) => {
+      FLAIL_TUNING.launchKick = value;
+    },
+  );
+  panel.addSlider(
+    'Ball friction',
+    { min: 0, max: 1, step: 0.01, value: FLAIL_TUNING.friction },
+    (value) => {
+      FLAIL_TUNING.friction = value;
+    },
+  );
 }

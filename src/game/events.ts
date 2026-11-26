@@ -90,8 +90,8 @@ export interface GameEvents {
   hint: { text: string };
   /** The player switched to another vehicle. */
   vehicleChanged: { type: string };
-  /** The bulldozer started a boost, or the buggy fired a rocket. */
-  weaponFired: { weapon: 'boost' | 'rocket'; position: THREE.Vector3 };
+  /** The bulldozer started a boost, the flail car launched its ball, or the buggy fired a rocket. */
+  weaponFired: { weapon: 'boost' | 'rocket' | 'flail'; position: THREE.Vector3 };
   /** The flail's ball hit a building. */
   flailHit: { position: THREE.Vector3; broke: boolean };
   /** The buggy picked up an ammunition crate. */

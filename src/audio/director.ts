@@ -150,6 +150,9 @@ export class SoundDirector {
       if (weapon === 'boost') {
         this.audio.play('woosh', { volume: 0.9, rate: 0.7 });
         this.audio.play('bass-drop', { volume: 0.5, rate: 1.6 });
+      } else if (weapon === 'flail') {
+        this.audio.play('woosh', { volume: 0.8, rate: 1.3 });
+        this.audio.play('clank', { volume: 0.5, rate: 1.2 });
       } else {
         this.audio.play('rocket', { volume: 0.8, rate: 0.95 + Math.random() * 0.1 });
       }

@@ -338,6 +338,11 @@ export class Vehicle {
     );
   }
 
+  /** Turn rate in radians per second. Positive turns clockwise from above. */
+  get turnRate(): number {
+    return this.yawRate;
+  }
+
   /**
    * Applies an impulse at a point, for example the pull of a chain at the hitch. It changes the
    * velocity and, by its lever around the middle, the turn rate. The next step takes both on.

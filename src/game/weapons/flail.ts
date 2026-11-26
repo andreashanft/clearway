@@ -27,6 +27,15 @@ export const FLAIL_TUNING = {
    * so that the swinging ball tugs the car without throwing it around.
    */
   tugShare: 0.45,
+  /**
+   * At the launch, the ball leaves with this multiple of the speed at which the car's turn swings
+   * the back of the car. A slide therefore flings the ball out like a slingshot.
+   */
+  launchGain: 1.8,
+  /** At the launch, the winch throws the ball backwards with this speed, in m/s. */
+  launchKick: 8,
+  /** Friction of the ball on the ground. It is low, as for a ball that rolls. */
+  friction: 0.08,
 };
 /** The hitch sits this far behind the middle of the car, and this high above the ground. */
 const HITCH_BACK = 2.9;
@@ -61,8 +70,15 @@ export class Flail implements Weapon {
   private length = DOCKED_CHAIN;
   /** True while the ball sits on the car. */
   private docked = true;
-  /** The ball's mass that the collider has, in kilograms. */
+  /** The ball's mass and friction that the collider has. */
   private mass = FLAIL_TUNING.ballMass;
+  private friction = FLAIL_TUNING.friction;
+  /**
+   * How far the ball has rolled sideways around the chain's axis, in radians. The ball does not
+   * turn in the physics, so that the chain holds the same point; the drawing rolls it.
+   */
+  private roll = 0;
+  private previousRoll = 0;
   private readonly body: RAPIER.RigidBody;
   private readonly collider: RAPIER.Collider;
   private readonly cooldowns = new Map<string, number>();
@@ -82,6 +98,7 @@ export class Flail implements Weapon {
   private readonly scale = new THREE.Vector3(1, 1, 1);
   private readonly zAxis = new THREE.Vector3(0, 0, 1);
   private readonly yAxis = new THREE.Vector3(0, 1, 0);
+  private readonly rollRotation = new THREE.Quaternion();
 
   constructor(
     private readonly context: WeaponContext,
@@ -139,7 +156,7 @@ export class Flail implements Weapon {
     this.collider = context.physics.world.createCollider(
       RAPIER.ColliderDesc.ball(BALL_RADIUS)
         .setMass(FLAIL_TUNING.ballMass)
-        .setFriction(0.35)
+        .setFriction(FLAIL_TUNING.friction)
         .setRestitution(0.3)
         .setCollisionGroups(
           collisionGroups(
@@ -153,19 +170,30 @@ export class Flail implements Weapon {
     this.previous.copy(start);
   }
 
-  step(dt: number, _vehicle: Vehicle, held: boolean): void {
-    if (held) {
-      this.docked = false;
+  step(dt: number, vehicle: Vehicle, held: boolean): void {
+    if (held && this.docked) {
+      this.launch(vehicle);
     }
     // The debug panel can change the mass while the ball is in play.
     if (this.mass !== FLAIL_TUNING.ballMass) {
       this.mass = FLAIL_TUNING.ballMass;
       this.collider.setMass(this.mass);
     }
-    const target = held ? LONG_CHAIN : DOCKED_CHAIN;
-    const rate = held ? FLAIL_TUNING.extendRate : FLAIL_TUNING.retractRate;
-    const gap = target - this.length;
-    this.length += Math.sign(gap) * Math.min(rate * dt, Math.abs(gap));
+    if (this.friction !== FLAIL_TUNING.friction) {
+      this.friction = FLAIL_TUNING.friction;
+      this.collider.setFriction(this.friction);
+    }
+    if (held) {
+      // The chain pays out at least at the winch's rate, and as fast as the flying ball pulls it.
+      this.placeHitch(vehicle, vehicle.position, vehicle.heading, this.hitch);
+      const reach = this.hitch.distanceTo(this.body.translation());
+      this.length = Math.min(
+        LONG_CHAIN,
+        Math.max(this.length + FLAIL_TUNING.extendRate * dt, reach),
+      );
+    } else {
+      this.length = Math.max(DOCKED_CHAIN, this.length - FLAIL_TUNING.retractRate * dt);
+    }
 
     for (const [key, seconds] of this.cooldowns) {
       if (seconds <= dt) {
@@ -252,12 +280,13 @@ export class Flail implements Weapon {
    * physics step, once the car has moved.
    */
   settle(vehicle: Vehicle): void {
+    this.previousRoll = this.roll;
     if (this.docked) {
-      // The ball rides on the car.
+      // The ball rides on the car, and moves with it as the car turns.
       const dock = this.dockPoint(vehicle, vehicle.position, vehicle.heading, this.hitch);
+      this.dockVelocity(vehicle, dock, 1, this.velocity);
       this.body.setTranslation(dock, true);
-      this.body.setLinvel(vehicle.impactVelocity, true);
-      this.velocity.copy(vehicle.impactVelocity);
+      this.body.setLinvel(this.velocity, true);
       this.record();
       return;
     }
@@ -325,11 +354,53 @@ export class Flail implements Weapon {
         vehicle.applyImpulse(new THREE.Vector3(nx * pull, 0, nz * pull), this.hitch);
       }
     }
+    // The ball rolls with the part of its speed across the chain, around the chain's axis.
+    const settled = this.body.linvel();
+    const chainX = this.hitch.x - this.body.translation().x;
+    const chainZ = this.hitch.z - this.body.translation().z;
+    const chain = Math.hypot(chainX, chainZ);
+    if (chain > 1e-3) {
+      const across = (settled.x * -chainZ + settled.z * chainX) / chain;
+      this.roll += (across / BALL_RADIUS) * STEP_SECONDS;
+    }
     // Wound in: the ball docks on the car again.
     if (this.length <= DOCKED_CHAIN + 0.01 && distance <= DOCKED_CHAIN + 0.6) {
       this.docked = true;
     }
     this.record();
+  }
+
+  /**
+   * Lets the ball go from the car. It leaves with the speed of the back of the car, with the swing
+   * of the car's turn raised by the launch gain, and the winch throws it backwards.
+   */
+  private launch(vehicle: Vehicle): void {
+    this.docked = false;
+    const dock = this.dockPoint(vehicle, vehicle.position, vehicle.heading, this.hitch);
+    this.dockVelocity(vehicle, dock, FLAIL_TUNING.launchGain, this.velocity);
+    this.velocity.x -= Math.cos(vehicle.heading) * FLAIL_TUNING.launchKick;
+    this.velocity.z -= Math.sin(vehicle.heading) * FLAIL_TUNING.launchKick;
+    this.body.setTranslation(dock, true);
+    this.body.setLinvel(this.velocity, true);
+    this.context.events.emit('weaponFired', { weapon: 'flail', position: dock.clone() });
+  }
+
+  /**
+   * Writes the velocity of a point on the car: the car's own velocity, plus the swing of its turn
+   * around the middle, raised by `gain`.
+   */
+  private dockVelocity(
+    vehicle: Vehicle,
+    point: THREE.Vector3,
+    gain: number,
+    target: THREE.Vector3,
+  ): THREE.Vector3 {
+    // The turn rate counts clockwise from above, the opposite way round to the vertical axis.
+    const spin = -vehicle.turnRate * gain;
+    const rx = point.x - vehicle.position.x;
+    const rz = point.z - vehicle.position.z;
+    const car = vehicle.impactVelocity;
+    return target.set(car.x + spin * rz, car.y, car.z - spin * rx);
   }
 
   /** Records the ball's transform after the step, for interpolation. */
@@ -379,6 +450,9 @@ export class Flail implements Weapon {
     this.ahead.subVectors(hitch, this.ball.position);
     if (this.ahead.lengthSq() > 1e-6) {
       this.ball.quaternion.setFromUnitVectors(this.yAxis, this.ahead.normalize());
+      // Roll around the chain's axis, which is the ball's own vertical axis.
+      const roll = this.previousRoll + (this.roll - this.previousRoll) * alpha;
+      this.ball.quaternion.multiply(this.rollRotation.setFromAxisAngle(this.yAxis, roll));
     }
     // A slack chain sags towards the ground.
     const span = hitch.distanceTo(this.ball.position);
